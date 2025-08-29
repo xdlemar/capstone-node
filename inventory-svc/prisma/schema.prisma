@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Item {
+  id              BigInt  @id @default(autoincrement())
+  itemCode        String  @unique
+  description     String
+  uomCode         String
+  isLotTracked    Boolean @default(true)
+  isExpiryTracked Boolean @default(true)
+  fefoEnforced    Boolean @default(true)
+  safetyStock     Decimal @default(0) @db.Decimal(18, 2)
+  reorderMin      Decimal @default(0) @db.Decimal(18, 2)
+  reorderMax      Decimal @default(0) @db.Decimal(18, 2)
+  leadTimeDays    Int     @default(0)
+
+  lots     ItemLot[]
+  balances InventoryBalance[]
+  txns     InventoryTxn[]
+
+  @@map("items")
+}
+
+model Location {
+  id       BigInt  @id @default(autoincrement())
+  code     String  @unique
+  name     String
+  type     String
+  parentId BigInt?
+
+  bins             Bin[]
+  InventoryBalance InventoryBalance[]
+
+  @@map("locations")
+}
+
+model Bin {
+  id         BigInt @id @default(autoincrement())
+  locationId BigInt
+  code       String
+
+  location         Location           @relation(fields: [locationId], references: [id])
+  InventoryBalance InventoryBalance[]
+
+  @@unique([locationId, code])
+  @@map("bins")
+}
+
+model ItemLot {
+  id         BigInt    @id @default(autoincrement())
+  itemId     BigInt
+  lotNo      String
+  expiryDate DateTime?
+
+  item             Item               @relation(fields: [itemId], references: [id])
+  InventoryBalance InventoryBalance[]
+  InventoryTxn     InventoryTxn[]
+
+  @@unique([itemId, lotNo])
+  @@map("item_lots")
+}
+
+model InventoryBalance {
+  id         BigInt  @id @default(autoincrement())
+  itemId     BigInt
+  locationId BigInt
+  binId      BigInt?
+  lotId      BigInt?
+  onHand     Decimal @default(0) @db.Decimal(18, 2)
+  reserved   Decimal @default(0) @db.Decimal(18, 2)
+
+  item     Item     @relation(fields: [itemId], references: [id])
+  location Location @relation(fields: [locationId], references: [id])
+  bin      Bin?     @relation(fields: [binId], references: [id])
+  lot      ItemLot? @relation(fields: [lotId], references: [id])
+
+  @@unique([itemId, locationId, binId, lotId])
+  @@map("inventory_balances")
+}
+
+model InventoryTxn {
+  id      BigInt   @id @default(autoincrement())
+  txnTime DateTime @default(now())
+  type    String
+  itemId  BigInt
+  qty     Decimal  @db.Decimal(18, 2)
+  uomCode String
+
+  fromLocationId BigInt?
+  fromBinId      BigInt?
+  toLocationId   BigInt?
+  toBinId        BigInt?
+  lotId          BigInt?
+
+  referenceTable String?
+  referenceId    BigInt?
+  notes          String?
+
+  item Item     @relation(fields: [itemId], references: [id])
+  lot  ItemLot? @relation(fields: [lotId], references: [id])
+
+
+
+  @@index([itemId, txnTime])
+  @@map("inventory_txns")
+}

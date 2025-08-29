@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Supplier {
+  id            BigInt          @id @default(autoincrement())
+  code          String?         @unique
+  name          String
+  PurchaseOrder PurchaseOrder[]
+
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id         BigInt @id @default(autoincrement())
+  poNo       String @unique
+  supplierId BigInt
+  status     String @default("APPROVED")
+
+  supplier Supplier            @relation(fields: [supplierId], references: [id])
+  lines    PurchaseOrderLine[]
+  Grn      Grn[]
+
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id          BigInt  @id @default(autoincrement())
+  poId        BigInt
+  itemId      BigInt // Inventory item id (opaque foreign id)
+  qtyOrdered  Decimal
+  qtyReceived Decimal @default(0)
+  price       Decimal @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id])
+  grnLines      GrnLine[]
+
+  @@map("purchase_order_lines")
+}
+
+model Grn {
+  id         BigInt   @id @default(autoincrement())
+  grnNo      String   @unique
+  poId       BigInt
+  receivedAt DateTime @default(now())
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id])
+  lines         GrnLine[]
+
+  @@map("grns")
+}
+
+model GrnLine {
+  id          BigInt    @id @default(autoincrement())
+  grnId       BigInt
+  poLineId    BigInt
+  itemId      BigInt
+  uomCode     String
+  qtyReceived Decimal
+  lotNo       String
+  expiryDate  DateTime?
+  locationId  BigInt
+  binId       BigInt?
+
+  grn               Grn               @relation(fields: [grnId], references: [id])
+  purchaseOrderLine PurchaseOrderLine @relation(fields: [poLineId], references: [id])
+
+  @@map("grn_lines")
+}
