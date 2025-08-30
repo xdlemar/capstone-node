@@ -34,7 +34,7 @@ function authRequired(req, res, next) {
 
 app.get("/api/v1/health", (_req,res)=>res.json({ ok:true }));
 
-// DEV seed 3 users
+
 app.post("/api/v1/auth/dev-seed", async (_req,res)=>{
   try {
     const users = [
@@ -54,7 +54,7 @@ app.post("/api/v1/auth/dev-seed", async (_req,res)=>{
   } catch(e){ console.error(e); res.status(500).json({ message:String(e.message||e) }); }
 });
 
-// Register (optional for demo)
+
 app.post("/api/v1/auth/register", async (req,res)=>{
   const { email, name, password, role="STAFF" } = req.body || {};
   if(!email || !name || !password) return res.status(422).json({ message:"email, name, password required" });

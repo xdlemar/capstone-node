@@ -1,30 +1,42 @@
 import axios from "axios";
 
+const token = () => localStorage.getItem("token");
+
+function withAuth(instance) {
+  instance.interceptors.request.use(cfg => {
+    const t = token();
+    if (t) cfg.headers.Authorization = `Bearer ${t}`;
+    return cfg;
+  });
+  return instance;
+}
+
 export const auth = axios.create({
   baseURL: import.meta.env.VITE_AUTH_BASE_URL,
   headers: { "Content-Type": "application/json" }
 });
 
-export const inv = axios.create({
+export const inv  = withAuth(axios.create({
   baseURL: import.meta.env.VITE_INV_BASE_URL,
   headers: { "Content-Type": "application/json" }
-});
+}));
 
-export const prc = axios.create({
+export const prc  = withAuth(axios.create({
   baseURL: import.meta.env.VITE_PRC_BASE_URL,
   headers: { "Content-Type": "application/json" }
-});
+}));
 
-// attach JWT if present
-function attachToken(config){
-  const raw = localStorage.getItem("capstone_user");
-  if (raw) {
-    try {
-      const { token } = JSON.parse(raw);
-      if (token) config.headers.Authorization = `Bearer ${token}`;
-    } catch {}
-  }
-  return config;
-}
-inv.interceptors.request.use(attachToken);
-prc.interceptors.request.use(attachToken);
+export const alms = withAuth(axios.create({
+  baseURL: import.meta.env.VITE_ALMS_BASE_URL,
+  headers: { "Content-Type": "application/json" }
+}));
+
+export const dtrs = withAuth(axios.create({
+  baseURL: import.meta.env.VITE_DTRS_BASE_URL,
+  headers: { "Content-Type": "application/json" }
+}));
+
+export const plt  = withAuth(axios.create({
+  baseURL: import.meta.env.VITE_PLT_BASE_URL,
+  headers: { "Content-Type": "application/json" }
+}));

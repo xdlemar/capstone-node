@@ -1,10 +1,8 @@
-import { Navigate, Outlet } from 'react-router-dom'
-import { useAuthStore } from '../store/authStore'
+import { Navigate, Outlet } from "react-router-dom";
+import useAuth from "../hooks/useAuth";
 
-export default function ProtectedRoute({ roles = [] }){
-  const auth = useAuthStore(s=>s.user);
-  if(!auth) return <Navigate to="/login" replace />;
-  const role = auth.user?.role;
-  if(roles.length && !roles.includes(role)) return <Navigate to="/" replace />;
+export default function ProtectedRoute(){
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
   return <Outlet />;
 }

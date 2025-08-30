@@ -1,24 +1,48 @@
-import 'dotenv/config';
 import express from "express";
 import cors from "cors";
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
-import { authRequired, requireRole } from './auth.js';
+import jwt from "jsonwebtoken";
 
 BigInt.prototype.toJSON = function () { return this.toString(); };
 
 const prisma = new PrismaClient();
 const app = express();
 
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
+const WEB_ORIGIN = process.env.WEB_ORIGIN || "http://localhost:5173";
+app.use(cors({ origin: WEB_ORIGIN, credentials: false }));
 app.use(express.json());
 
 const INVENTORY_BASE = process.env.INVENTORY_BASE_URL || "http://localhost:4001/api/v1";
+const JWT_SECRET = process.env.JWT_SECRET || "dev"; // MUST match auth-svc
 
-// ---------- Health ----------
+// ---- RBAC (no DB users here, trust JWT.role) ----
+const ROLE_MATRIX = {
+  ADMIN: ["*"],
+  STAFF: [
+    "procurement.view","grn.create"
+  ],
+  IT: ["procurement.view"]
+};
+const hasPerm = (role, perm) => (ROLE_MATRIX[role]?.includes("*") || ROLE_MATRIX[role]?.includes(perm)) ?? false;
+
+function authRequired(req, res, next) {
+  const h = req.headers.authorization || "";
+  const token = h.startsWith("Bearer ") ? h.slice(7) : null;
+  if (!token) return res.status(401).json({ message: "Missing token" });
+  try { req.user = jwt.verify(token, JWT_SECRET); return next(); }
+  catch { return res.status(401).json({ message: "Invalid token" }); }
+}
+const requirePerm = (perm) => (req, res, next) => {
+  const role = req.user?.role;
+  if (!role) return res.status(401).json({ message: "Unauthorized" });
+  if (!hasPerm(role, perm)) return res.status(403).json({ message: "Forbidden" });
+  next();
+};
+
 app.get("/api/v1/health", (_req, res) => res.json({ ok: true }));
 
-// ---------- Seed (demo PO/Supplier/Line) ----------
+// Seed sample supplier/PO/line (demo only)
 app.post("/api/v1/seed", async (_req, res) => {
   try {
     const sup = await prisma.supplier.upsert({
@@ -31,7 +55,6 @@ app.post("/api/v1/seed", async (_req, res) => {
       update: {},
       create: { poNo: "PO-1001", supplierId: sup.id, status: "APPROVED" }
     });
-    // create a fresh line each seed so you can test multiple times
     const pol = await prisma.purchaseOrderLine.create({
       data: { poId: po.id, itemId: 0n, qtyOrdered: 100, price: 0 }
     });
@@ -42,8 +65,8 @@ app.post("/api/v1/seed", async (_req, res) => {
   }
 });
 
-// ---------- Link POLine -> item ----------
-app.post("/api/v1/polines/:id/item/:itemId", authRequired, requireRole('ADMIN','STAFF','IT'), async (req, res) => {
+// Link a PO line to an inventory itemId (requires procurement.view)
+app.post("/api/v1/polines/:id/item/:itemId", authRequired, requirePerm("procurement.view"), async (req, res) => {
   try {
     const pol = await prisma.purchaseOrderLine.update({
       where: { id: BigInt(req.params.id) },
@@ -56,7 +79,7 @@ app.post("/api/v1/polines/:id/item/:itemId", authRequired, requireRole('ADMIN','
   }
 });
 
-// ---------- Ping Inventory ----------
+// Ping Inventory
 app.get("/api/v1/ping-inventory", authRequired, async (_req, res) => {
   try {
     const r = await axios.get(`${INVENTORY_BASE}/health`, { timeout: 5000 });
@@ -67,10 +90,9 @@ app.get("/api/v1/ping-inventory", authRequired, async (_req, res) => {
   }
 });
 
-// ---------- GRN (Admins & Staff can receive) ----------
-app.post("/api/v1/grns", authRequired, requireRole('ADMIN','STAFF'), async (req, res) => {
+// Create GRN + post receipts to Inventory (requires grn.create)
+app.post("/api/v1/grns", authRequired, requirePerm("grn.create"), async (req, res) => {
   const body = req.body;
-
   if (!body?.poId || !Array.isArray(body.lines) || body.lines.length === 0) {
     return res.status(422).json({ message: "poId and lines[] are required" });
   }
@@ -112,7 +134,6 @@ app.post("/api/v1/grns", authRequired, requireRole('ADMIN','STAFF'), async (req,
           }
         });
 
-        // call inventory
         const payload = {
           itemId: ln.itemId,
           qty: ln.qtyReceived,
@@ -124,6 +145,7 @@ app.post("/api/v1/grns", authRequired, requireRole('ADMIN','STAFF'), async (req,
           referenceTable: "grn_lines",
           referenceId: Number(grn.id)
         };
+
         const r = await axios.post(`${INVENTORY_BASE}/receipts`, payload, { timeout: 8000 });
         if (r.status >= 300) throw new Error(`Inventory error ${r.status}`);
 
@@ -151,13 +173,12 @@ app.post("/api/v1/grns", authRequired, requireRole('ADMIN','STAFF'), async (req,
   }
 });
 
-// ---------- PO list/lines ----------
-app.get("/api/v1/pos", authRequired, requireRole('ADMIN','STAFF','IT'), async (_req, res) => {
+// PO views
+app.get("/api/v1/pos", authRequired, requirePerm("procurement.view"), async (_req, res) => {
   const pos = await prisma.purchaseOrder.findMany({ select: { id: true, poNo: true, status: true } });
   res.json(pos);
 });
-
-app.get("/api/v1/pos/:id/lines", authRequired, requireRole('ADMIN','STAFF','IT'), async (req, res) => {
+app.get("/api/v1/pos/:id/lines", authRequired, requirePerm("procurement.view"), async (req, res) => {
   const poId = BigInt(req.params.id);
   const lines = await prisma.purchaseOrderLine.findMany({
     where: { poId },
@@ -168,7 +189,7 @@ app.get("/api/v1/pos/:id/lines", authRequired, requireRole('ADMIN','STAFF','IT')
     itemId: Number(l.itemId),
     qtyOrdered: Number(l.qtyOrdered),
     qtyReceived: Number(l.qtyReceived),
-    remaining: Number(l.qtyOrdered) - Number(l.qtyReceived),
+    remaining: Number(l.qtyOrdered) - Number(l.qtyReceived)
   })));
 });
 

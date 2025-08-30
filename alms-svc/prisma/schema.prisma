@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssetStatus {
+  IN_SERVICE
+  MAINTENANCE
+  RETIRED
+}
+
+model Asset {
+  id         BigInt      @id @default(autoincrement())
+  tag        String      @unique
+  name       String
+  category   String?
+  locationId BigInt?
+  status     AssetStatus @default(IN_SERVICE)
+  maint      AssetMaint[]  // backref is defined in AssetMaint.asset
+  createdAt  DateTime    @default(now())
+
+  @@map("assets")
+  @@index([status])
+}
+
+model AssetMaint {
+  id           BigInt    @id @default(autoincrement())
+  assetId      BigInt
+  asset        Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  type         String
+  scheduledAt  DateTime?
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  @@map("asset_maint")
+  @@index([assetId])
+}

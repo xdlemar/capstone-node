@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskStatus { PLANNED IN_PROGRESS DONE }
+
+model Project {
+  id         BigInt      @id @default(autoincrement())
+  code       String      @unique
+  name       String
+  ownerDept  String?
+  startDate  DateTime?
+  endDate    DateTime?
+  tasks      ProjectTask[]
+  createdAt  DateTime    @default(now())
+  @@map("projects")
+}
+
+model ProjectTask {
+  id         BigInt     @id @default(autoincrement())
+  projectId  BigInt
+  title      String
+  status     TaskStatus @default(PLANNED)
+  dueDate    DateTime?
+  assignedTo String?
+  createdAt  DateTime   @default(now())
+  @@map("project_tasks")
+}

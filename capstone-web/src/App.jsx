@@ -1,20 +1,17 @@
-import AppRoutes from './routes/AppRoutes';
-import Topbar from './components/Topbar';
-import Sidebar from './components/Sidebar';
-import useAuth from './hooks/useAuth';
+import Sidebar from "./components/Sidebar";
+import Topbar from "./components/Topbar";
+import AppRoutes from "./routes/AppRoutes";
 
-export default function App() {
-  const { user } = useAuth();
-
+export default function App(){
   return (
-    <div className="shell">
-      <Topbar />
-      <div className="main">
-        {user && <Sidebar />} {/* show sidebar only when logged in */}
-        <div className="content">
+    <div className="layout">
+      <Sidebar />
+      <main className="main">
+        <Topbar />
+        <div className="container">
           <AppRoutes />
         </div>
-      </div>
+      </main>
     </div>
   );
 }

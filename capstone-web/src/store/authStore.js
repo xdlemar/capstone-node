@@ -1,18 +1,23 @@
 import { create } from "zustand";
 
-const key = "capstone_user";
-const saved = (() => {
-  try { return JSON.parse(localStorage.getItem(key)) || null; } catch { return null; }
-})();
+const persistKey = "auth_user";
 
-export const useAuthStore = create((set)=>({
-  user: saved, // { token, user:{id,name,email,role} }
-  login: (payload) => {
-    localStorage.setItem(key, JSON.stringify(payload));
-    set({ user: payload });
+export const useAuthStore = create((set, get) => ({
+  user: null,          // { id, name, email, role }
+  token: null,         // jwt
+  login: ({ user, token }) => {
+    localStorage.setItem("token", token);
+    localStorage.setItem(persistKey, JSON.stringify(user));
+    set({ user, token });
   },
   logout: () => {
-    localStorage.removeItem(key);
-    set({ user: null });
+    localStorage.removeItem("token");
+    localStorage.removeItem(persistKey);
+    set({ user: null, token: null });
+  },
+  hydrate: () => {
+    const token = localStorage.getItem("token");
+    const u = localStorage.getItem(persistKey);
+    if (token && u) set({ token, user: JSON.parse(u) });
   }
 }));
