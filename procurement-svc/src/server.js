@@ -146,7 +146,12 @@ app.post("/api/v1/grns", authRequired, requirePerm("grn.create"), async (req, re
           referenceId: Number(grn.id)
         };
 
-        const r = await axios.post(`${INVENTORY_BASE}/receipts`, payload, { timeout: 8000 });
+        // ✅ forward the user's token
+        const authHeader = req.headers.authorization || "";
+        const r = await axios.post(`${INVENTORY_BASE}/receipts`, payload, {
+          timeout: 8000,
+          headers: { Authorization: authHeader }
+        });
         if (r.status >= 300) throw new Error(`Inventory error ${r.status}`);
 
         await txp.purchaseOrderLine.update({
@@ -172,6 +177,7 @@ app.post("/api/v1/grns", authRequired, requirePerm("grn.create"), async (req, re
     res.status(isUpstream ? 502 : 500).json({ message: "Failed to post GRN", error: String(e.message || e) });
   }
 });
+
 
 // PO views
 app.get("/api/v1/pos", authRequired, requirePerm("procurement.view"), async (_req, res) => {
