@@ -1,22 +1,24 @@
+import 'dotenv/config';
 import express from "express";
 import cors from "cors";
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
+import { authRequired, requireRole } from './auth.js';
 
-// --- BigInt -> JSON (avoid "Do not know how to serialize a BigInt")
 BigInt.prototype.toJSON = function () { return this.toString(); };
 
 const prisma = new PrismaClient();
 const app = express();
-app.use(cors());
+
+app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json());
 
 const INVENTORY_BASE = process.env.INVENTORY_BASE_URL || "http://localhost:4001/api/v1";
 
-// Health
+// ---------- Health ----------
 app.get("/api/v1/health", (_req, res) => res.json({ ok: true }));
 
-// Seed demo supplier + PO + line (itemId to be set later)
+// ---------- Seed (demo PO/Supplier/Line) ----------
 app.post("/api/v1/seed", async (_req, res) => {
   try {
     const sup = await prisma.supplier.upsert({
@@ -29,6 +31,7 @@ app.post("/api/v1/seed", async (_req, res) => {
       update: {},
       create: { poNo: "PO-1001", supplierId: sup.id, status: "APPROVED" }
     });
+    // create a fresh line each seed so you can test multiple times
     const pol = await prisma.purchaseOrderLine.create({
       data: { poId: po.id, itemId: 0n, qtyOrdered: 100, price: 0 }
     });
@@ -39,8 +42,8 @@ app.post("/api/v1/seed", async (_req, res) => {
   }
 });
 
-// Set POLine.itemId to real Inventory Item.id
-app.post("/api/v1/polines/:id/item/:itemId", async (req, res) => {
+// ---------- Link POLine -> item ----------
+app.post("/api/v1/polines/:id/item/:itemId", authRequired, requireRole('ADMIN','STAFF','IT'), async (req, res) => {
   try {
     const pol = await prisma.purchaseOrderLine.update({
       where: { id: BigInt(req.params.id) },
@@ -53,8 +56,8 @@ app.post("/api/v1/polines/:id/item/:itemId", async (req, res) => {
   }
 });
 
-// Ping Inventory
-app.get("/api/v1/ping-inventory", async (_req, res) => {
+// ---------- Ping Inventory ----------
+app.get("/api/v1/ping-inventory", authRequired, async (_req, res) => {
   try {
     const r = await axios.get(`${INVENTORY_BASE}/health`, { timeout: 5000 });
     res.status(r.status).json({ ok: true, status: r.status });
@@ -64,11 +67,10 @@ app.get("/api/v1/ping-inventory", async (_req, res) => {
   }
 });
 
-// Create GRN and post receipts to Inventory; rollback on failure
-app.post("/api/v1/grns", async (req, res) => {
+// ---------- GRN (Admins & Staff can receive) ----------
+app.post("/api/v1/grns", authRequired, requireRole('ADMIN','STAFF'), async (req, res) => {
   const body = req.body;
 
-  // Basic validation
   if (!body?.poId || !Array.isArray(body.lines) || body.lines.length === 0) {
     return res.status(422).json({ message: "poId and lines[] are required" });
   }
@@ -80,29 +82,22 @@ app.post("/api/v1/grns", async (req, res) => {
 
   try {
     const result = await prisma.$transaction(async (txp) => {
-      // Ensure PO exists
       const po = await txp.purchaseOrder.findUnique({ where: { id: BigInt(body.poId) } });
       if (!po) throw new Error("PO not found");
 
-      // Create GRN header
       const grn = await txp.grn.create({
         data: { grnNo: `GRN-${Date.now()}`, poId: po.id, receivedAt: new Date() }
       });
 
       for (const ln of body.lines) {
-        const poLineId = BigInt(ln.poLineId);
-
-        // Validate PO line
-        const pol = await txp.purchaseOrderLine.findUnique({ where: { id: poLineId } });
+        const pol = await txp.purchaseOrderLine.findUnique({ where: { id: BigInt(ln.poLineId) } });
         if (!pol) throw new Error(`PO line not found: ${ln.poLineId}`);
 
-        // Optional: enforce not over-receiving
         const remaining = Number(pol.qtyOrdered) - Number(pol.qtyReceived);
         if (Number(ln.qtyReceived) > remaining) {
           throw new Error(`Qty received exceeds remaining for PO line ${ln.poLineId}`);
         }
 
-        // Create GRN line
         await txp.grnLine.create({
           data: {
             grnId: grn.id,
@@ -117,7 +112,7 @@ app.post("/api/v1/grns", async (req, res) => {
           }
         });
 
-        // Call Inventory /receipts
+        // call inventory
         const payload = {
           itemId: ln.itemId,
           qty: ln.qtyReceived,
@@ -127,20 +122,17 @@ app.post("/api/v1/grns", async (req, res) => {
           lotNo: ln.lotNo,
           expiryDate: ln.expiryDate ?? null,
           referenceTable: "grn_lines",
-          referenceId: Number(grn.id)   // opaque reference for traceability
+          referenceId: Number(grn.id)
         };
-
         const r = await axios.post(`${INVENTORY_BASE}/receipts`, payload, { timeout: 8000 });
         if (r.status >= 300) throw new Error(`Inventory error ${r.status}`);
 
-        // Update PO line received qty locally
         await txp.purchaseOrderLine.update({
           where: { id: pol.id },
           data: { qtyReceived: Number(pol.qtyReceived) + Number(ln.qtyReceived) }
         });
       }
 
-      // Optional: update PO status to PARTIALLY_RECEIVED or CLOSED
       const lines = await txp.purchaseOrderLine.findMany({ where: { poId: po.id } });
       const allReceived = lines.every(l => Number(l.qtyReceived) >= Number(l.qtyOrdered));
       await txp.purchaseOrder.update({
@@ -154,12 +146,31 @@ app.post("/api/v1/grns", async (req, res) => {
     res.status(201).json(result);
   } catch (e) {
     console.error(e);
-    // 502 → bad gateway if upstream (inventory) failed; 500 otherwise
     const isUpstream = /Inventory error|ECONNREFUSED|ECONNRESET|timeout/i.test(String(e.message));
     res.status(isUpstream ? 502 : 500).json({ message: "Failed to post GRN", error: String(e.message || e) });
   }
 });
 
-// --- Boot
+// ---------- PO list/lines ----------
+app.get("/api/v1/pos", authRequired, requireRole('ADMIN','STAFF','IT'), async (_req, res) => {
+  const pos = await prisma.purchaseOrder.findMany({ select: { id: true, poNo: true, status: true } });
+  res.json(pos);
+});
+
+app.get("/api/v1/pos/:id/lines", authRequired, requireRole('ADMIN','STAFF','IT'), async (req, res) => {
+  const poId = BigInt(req.params.id);
+  const lines = await prisma.purchaseOrderLine.findMany({
+    where: { poId },
+    select: { id: true, itemId: true, qtyOrdered: true, qtyReceived: true }
+  });
+  res.json(lines.map(l => ({
+    id: Number(l.id),
+    itemId: Number(l.itemId),
+    qtyOrdered: Number(l.qtyOrdered),
+    qtyReceived: Number(l.qtyReceived),
+    remaining: Number(l.qtyOrdered) - Number(l.qtyReceived),
+  })));
+});
+
 const PORT = process.env.PORT || 4002;
 app.listen(PORT, () => console.log(`procurement-svc listening on ${PORT}`));

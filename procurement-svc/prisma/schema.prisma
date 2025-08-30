@@ -72,3 +72,4 @@ model GrnLine {
 
   @@map("grn_lines")
 }
+

@@ -107,6 +107,7 @@ model InventoryTxn {
 
 
 
+
   @@index([itemId, txnTime])
   @@map("inventory_txns")
 }
