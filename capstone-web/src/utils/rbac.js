@@ -49,3 +49,12 @@ export function can(role, perm) {
 export function canAny(role, perms = []) {
   return perms.some(p => can(role, p));
 }
+
+/**
+ * Alias for Sidebar.jsx compatibility:
+ * Example: canAccess("ADMIN", ["perm1","perm2"])
+ */
+export function canAccess(role, perms = []) {
+  if (!Array.isArray(perms)) return can(role, perms);
+  return canAny(role, perms);
+}

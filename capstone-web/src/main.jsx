@@ -9,9 +9,9 @@ const qc = new QueryClient()
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <QueryClientProvider client={qc}>
-      <BrowserRouter>
+      
         <App />
-      </BrowserRouter>
+      
     </QueryClientProvider>
   </React.StrictMode>
 )

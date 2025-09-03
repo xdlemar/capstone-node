@@ -1,3 +1,20 @@
+import { useForm } from "react-hook-form";
+
 export default function IssueForm(){
-  return <div><h2>Issue (WIP)</h2><p>Wire this after you add /issues endpoint.</p></div>;
+  // placeholder UI for now
+  const { register, handleSubmit, reset } = useForm({ defaultValues:{ itemId:"", qty:"", toDept:"" }});
+  const onSubmit = (v)=>{ alert("Issue (stub): " + JSON.stringify(v)); reset(); };
+
+  return (
+    <div>
+      <h2>Issue Stock (Stub)</h2>
+      <p className="muted">Hook up to /issues endpoint later.</p>
+      <form onSubmit={handleSubmit(onSubmit)} className="grid">
+        <input {...register("itemId")} placeholder="Item ID"/>
+        <input {...register("qty")} placeholder="Qty"/>
+        <input {...register("toDept")} placeholder="To Dept/Ward"/>
+        <button>Record Issue</button>
+      </form>
+    </div>
+  );
 }

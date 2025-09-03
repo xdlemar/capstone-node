@@ -38,6 +38,50 @@ app.post("/api/v1/seed", async (_req, res) => {
     res.status(500).json({ message: String(e.message || e) });
   }
 });
+// inventory-svc/src/server.js  (add near other routes)
+app.get("/api/v1/alerts", async (_req, res) => {
+  try {
+    // Low stock: join balances with items and a pretend minQty (use 50 default or item.minQty if you have it)
+    const balances = await prisma.inventoryBalance.findMany({ take: 200 });
+    const itemIds = [...new Set(balances.map(b => b.itemId.toString()))].map(BigInt);
+    const items = await prisma.item.findMany({ where: { id: { in: itemIds } } });
+    const mapItem = new Map(items.map(i => [i.id.toString(), i]));
+
+    const lowStock = balances
+      .map(b => {
+        const i = mapItem.get(b.itemId.toString());
+        const minQty = (i?.minQty ?? 40); // adjust if you have a field
+        return {
+          itemId: Number(b.itemId),
+          itemCode: i?.itemCode ?? "",
+          onHand: Number(b.onHand),
+          minQty
+        };
+      })
+      .filter(r => r.onHand < r.minQty)
+      .slice(0, 5);
+
+    // Expiry soon: 60 days threshold
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 60);
+    const expiryLots = await prisma.itemLot.findMany({
+      where: { expiryDate: { lte: soon } },
+      take: 10
+    });
+    const expiry = expiryLots.map(l => ({
+      lotId: Number(l.id),
+      itemId: Number(l.itemId),
+      itemCode: mapItem.get(l.itemId.toString())?.itemCode ?? "",
+      lotNo: l.lotNo,
+      expiryDate: l.expiryDate
+    }));
+
+    res.json({ lowStock, expiry });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ message: String(e.message || e) });
+  }
+});
 
 // Receive stock (WRITE) — require login + role: ADMIN or STAFF
 app.post(

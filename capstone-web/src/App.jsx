@@ -1,17 +1,16 @@
-import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
+
+import { BrowserRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AppRoutes from "./routes/AppRoutes";
 
-export default function App(){
+const qc = new QueryClient();
+
+export default function App() {
   return (
-    <div className="layout">
-      <Sidebar />
-      <main className="main">
-        <Topbar />
-        <div className="container">
-          <AppRoutes />
-        </div>
-      </main>
-    </div>
+    <QueryClientProvider client={qc}>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
