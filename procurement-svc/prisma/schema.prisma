@@ -7,92 +7,130 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Supplier {
-  id             BigInt          @id @default(autoincrement())
-  name           String          @unique
-  contact        String?
-  rating         Int? // 1–5 manual for now
-  purchaseOrders PurchaseOrder[]
+enum PRStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CLOSED
+}
 
+enum POStatus {
+  OPEN
+  PARTIAL
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+enum AttachmentKind {
+  DR        // delivery receipt
+  INVOICE   // supplier invoice
+  OTHER
+}
+
+model Vendor {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @unique
+  email     String?
+  phone     String?
+  address   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  POs       PO[]
 }
 
-model PurchaseRequest {
-  id          BigInt    @id @default(autoincrement())
-  requesterId BigInt
-  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED | CONVERTED
-  neededBy    DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  items PRItem[]
+model PR {
+  id        BigInt     @id @default(autoincrement())
+  prNo      String     @unique
+  status    PRStatus   @default(DRAFT)
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  lines     PRLine[]
 }
 
-model PRItem {
-  id      BigInt  @id @default(autoincrement())
-  prId    BigInt
-  itemSku String
-  qty     Decimal
+model PRLine {
+  id        BigInt @id @default(autoincrement())
+  prId      BigInt
+  itemId    BigInt
+  qty       Int
+  unit      String
+  notes     String?
 
-  pr PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
+  PR   PR   @relation(fields: [prId], references: [id], onDelete: Cascade)
 }
 
-model PurchaseOrder {
+model PO {
   id         BigInt   @id @default(autoincrement())
-  supplierId BigInt
+  poNo       String   @unique
   prId       BigInt?
-  status     String   @default("OPEN") // OPEN | PARTIAL | RECEIVED | CLOSED | CANCELLED
-  approvedBy BigInt?
+  vendorId   BigInt
+  status     POStatus @default(OPEN)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  supplier Supplier  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  items    POItem[]
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+  PR     PR?    @relation(fields: [prId], references: [id])
+  lines  POLine[]
   receipts Receipt[]
+  attachments Attachment[]
 }
 
-model POItem {
-  id      BigInt  @id @default(autoincrement())
-  poId    BigInt
-  itemSku String
-  qty     Decimal
-  price   Decimal @default(0)
+model POLine {
+  id       BigInt @id @default(autoincrement())
+  poId     BigInt
+  itemId   BigInt
+  qty      Int
+  unit     String
+  price    Decimal @default(0)
+  notes    String?
 
-  po           PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
-  receiptItems ReceiptItem[]
+  PO  PO  @relation(fields: [poId], references: [id], onDelete: Cascade)
 }
 
 model Receipt {
   id         BigInt   @id @default(autoincrement())
   poId       BigInt
-  receivedBy BigInt
-  receivedAt DateTime @default(now())
+  drNo       String?
+  invoiceNo  String?
+  receivedAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  po    PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
-  lines ReceiptItem[]
-  files FileObject[]
+  PO     PO        @relation(fields: [poId], references: [id], onDelete: Cascade)
+  lines  ReceiptLine[]
+  attachments Attachment[]
+
+  /// prevent double-posting the same DR number for the same PO
+  @@unique([poId, drNo])
 }
 
-model ReceiptItem {
-  id          BigInt  @id @default(autoincrement())
-  receiptId   BigInt
-  poItemId    BigInt
-  qtyReceived Decimal
+model ReceiptLine {
+  id         BigInt @id @default(autoincrement())
+  receiptId  BigInt
+  itemId     BigInt
+  toLocId    BigInt
+  qty        Int
+  lotNo      String?
+  expiryDate DateTime?
 
-  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
-  poItem  POItem  @relation(fields: [poItemId], references: [id], onDelete: Restrict)
+  Receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
-model FileObject {
-  id         BigInt   @id @default(autoincrement())
+model Attachment {
+  id         BigInt        @id @default(autoincrement())
+  kind       AttachmentKind
+  fileName   String
+  storageKey String         // where the binary is stored (S3 key, local path, etc.)
+  mimeType   String?
+  size       Int?
+  uploadedAt DateTime       @default(now())
+
+  // either PO or Receipt (one of them must be set)
+  poId       BigInt?
   receiptId  BigInt?
-  name       String
-  mimeType   String
-  sizeBytes  Int
-  storageKey String // S3/local path
-  checksum   String
-  createdAt  DateTime @default(now())
 
-  receipt Receipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  PO      PO?      @relation(fields: [poId], references: [id], onDelete: Cascade)
+  Receipt Receipt? @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }

@@ -1,23 +1,19 @@
 {
   "name": "inventory-svc",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "type": "module",
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev --name init"
+    "prisma:migrate": "prisma migrate dev --name init",
+    "jobs:lowstock": "node src/jobs/lowStock.js",
+    "jobs:expiry": "node src/jobs/expiry.js"
   },
   "dependencies": {
     "@prisma/client": "^6.15.0",
     "cors": "^2.8.5",
-    "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2"
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "morgan": "^1.10.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10",
