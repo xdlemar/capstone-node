@@ -8,68 +8,91 @@ datasource db {
 }
 
 model Supplier {
-  id            BigInt          @id @default(autoincrement())
-  code          String?         @unique
-  name          String
-  PurchaseOrder PurchaseOrder[]
+  id             BigInt          @id @default(autoincrement())
+  name           String          @unique
+  contact        String?
+  rating         Int? // 1–5 manual for now
+  purchaseOrders PurchaseOrder[]
 
-  @@map("suppliers")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PurchaseRequest {
+  id          BigInt    @id @default(autoincrement())
+  requesterId BigInt
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED | CONVERTED
+  neededBy    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items PRItem[]
+}
+
+model PRItem {
+  id      BigInt  @id @default(autoincrement())
+  prId    BigInt
+  itemSku String
+  qty     Decimal
+
+  pr PurchaseRequest @relation(fields: [prId], references: [id], onDelete: Cascade)
 }
 
 model PurchaseOrder {
-  id         BigInt @id @default(autoincrement())
-  poNo       String @unique
-  supplierId BigInt
-  status     String @default("APPROVED")
-
-  supplier Supplier            @relation(fields: [supplierId], references: [id])
-  lines    PurchaseOrderLine[]
-  Grn      Grn[]
-
-  @@map("purchase_orders")
-}
-
-model PurchaseOrderLine {
-  id          BigInt  @id @default(autoincrement())
-  poId        BigInt
-  itemId      BigInt // Inventory item id (opaque foreign id)
-  qtyOrdered  Decimal
-  qtyReceived Decimal @default(0)
-  price       Decimal @default(0)
-
-  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id])
-  grnLines      GrnLine[]
-
-  @@map("purchase_order_lines")
-}
-
-model Grn {
   id         BigInt   @id @default(autoincrement())
-  grnNo      String   @unique
+  supplierId BigInt
+  prId       BigInt?
+  status     String   @default("OPEN") // OPEN | PARTIAL | RECEIVED | CLOSED | CANCELLED
+  approvedBy BigInt?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  supplier Supplier  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  items    POItem[]
+  receipts Receipt[]
+}
+
+model POItem {
+  id      BigInt  @id @default(autoincrement())
+  poId    BigInt
+  itemSku String
+  qty     Decimal
+  price   Decimal @default(0)
+
+  po           PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  receiptItems ReceiptItem[]
+}
+
+model Receipt {
+  id         BigInt   @id @default(autoincrement())
   poId       BigInt
+  receivedBy BigInt
   receivedAt DateTime @default(now())
 
-  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id])
-  lines         GrnLine[]
-
-  @@map("grns")
+  po    PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  lines ReceiptItem[]
+  files FileObject[]
 }
 
-model GrnLine {
-  id          BigInt    @id @default(autoincrement())
-  grnId       BigInt
-  poLineId    BigInt
-  itemId      BigInt
-  uomCode     String
+model ReceiptItem {
+  id          BigInt  @id @default(autoincrement())
+  receiptId   BigInt
+  poItemId    BigInt
   qtyReceived Decimal
-  lotNo       String
-  expiryDate  DateTime?
-  locationId  BigInt
-  binId       BigInt?
 
-  grn               Grn               @relation(fields: [grnId], references: [id])
-  purchaseOrderLine PurchaseOrderLine @relation(fields: [poLineId], references: [id])
-
-  @@map("grn_lines")
+  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  poItem  POItem  @relation(fields: [poItemId], references: [id], onDelete: Restrict)
 }
 
+model FileObject {
+  id         BigInt   @id @default(autoincrement())
+  receiptId  BigInt?
+  name       String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String // S3/local path
+  checksum   String
+  createdAt  DateTime @default(now())
+
+  receipt Receipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+}

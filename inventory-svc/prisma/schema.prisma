@@ -8,106 +8,82 @@ datasource db {
 }
 
 model Item {
-  id              BigInt  @id @default(autoincrement())
-  itemCode        String  @unique
-  description     String
-  uomCode         String
-  isLotTracked    Boolean @default(true)
-  isExpiryTracked Boolean @default(true)
-  fefoEnforced    Boolean @default(true)
-  safetyStock     Decimal @default(0) @db.Decimal(18, 2)
-  reorderMin      Decimal @default(0) @db.Decimal(18, 2)
-  reorderMax      Decimal @default(0) @db.Decimal(18, 2)
-  leadTimeDays    Int     @default(0)
+  id       BigInt  @id @default(autoincrement())
+  sku      String  @unique
+  name     String
+  unit     String
+  minQty   Decimal @default(0)
+  isActive Boolean @default(true)
 
-  lots     ItemLot[]
-  balances InventoryBalance[]
-  txns     InventoryTxn[]
+  batches    Batch[]
+  movements  StockMove[]
+  thresholds Threshold[]
 
-  @@map("items")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Location {
-  id       BigInt  @id @default(autoincrement())
-  code     String  @unique
-  name     String
-  type     String
-  parentId BigInt?
+  id   BigInt @id @default(autoincrement())
+  name String @unique
+  kind String // WAREHOUSE | ROOM | STERILE | etc.
 
-  bins             Bin[]
-  InventoryBalance InventoryBalance[]
+  // named back-relations for dual links from StockMove
+  asFromFor StockMove[] @relation("FromLoc")
+  asToFor   StockMove[] @relation("ToLoc")
 
-  @@map("locations")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  Threshold Threshold[]
 }
 
-model Bin {
-  id         BigInt @id @default(autoincrement())
-  locationId BigInt
-  code       String
-
-  location         Location           @relation(fields: [locationId], references: [id])
-  InventoryBalance InventoryBalance[]
-
-  @@unique([locationId, code])
-  @@map("bins")
-}
-
-model ItemLot {
+model Batch {
   id         BigInt    @id @default(autoincrement())
   itemId     BigInt
-  lotNo      String
+  lotNo      String?
   expiryDate DateTime?
+  qtyOnHand  Decimal   @default(0)
 
-  item             Item               @relation(fields: [itemId], references: [id])
-  InventoryBalance InventoryBalance[]
-  InventoryTxn     InventoryTxn[]
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  @@unique([itemId, lotNo])
-  @@map("item_lots")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  StockMove StockMove[]
+
+  @@index([itemId, expiryDate])
 }
 
-model InventoryBalance {
+model StockMove {
+  id         BigInt   @id @default(autoincrement())
+  itemId     BigInt
+  batchId    BigInt?
+  fromLocId  BigInt?
+  toLocId    BigInt?
+  qty        Decimal
+  reason     String // IN | OUT | ADJUSTMENT | DAMAGED | EXPIRED | RECEIPT | ISSUE
+  refType    String? // 'PO' | 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | ...
+  refId      BigInt?
+  eventId    String? // idempotency key
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  item    Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  batch   Batch?    @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  fromLoc Location? @relation("FromLoc", fields: [fromLocId], references: [id], onDelete: SetNull)
+  toLoc   Location? @relation("ToLoc", fields: [toLocId], references: [id], onDelete: SetNull)
+
+  @@index([itemId, occurredAt])
+  @@index([refType, refId])
+}
+
+model Threshold {
   id         BigInt  @id @default(autoincrement())
   itemId     BigInt
   locationId BigInt
-  binId      BigInt?
-  lotId      BigInt?
-  onHand     Decimal @default(0) @db.Decimal(18, 2)
-  reserved   Decimal @default(0) @db.Decimal(18, 2)
+  minQty     Decimal @default(0)
 
-  item     Item     @relation(fields: [itemId], references: [id])
-  location Location @relation(fields: [locationId], references: [id])
-  bin      Bin?     @relation(fields: [binId], references: [id])
-  lot      ItemLot? @relation(fields: [lotId], references: [id])
+  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
-  @@unique([itemId, locationId, binId, lotId])
-  @@map("inventory_balances")
-}
-
-model InventoryTxn {
-  id      BigInt   @id @default(autoincrement())
-  txnTime DateTime @default(now())
-  type    String
-  itemId  BigInt
-  qty     Decimal  @db.Decimal(18, 2)
-  uomCode String
-
-  fromLocationId BigInt?
-  fromBinId      BigInt?
-  toLocationId   BigInt?
-  toBinId        BigInt?
-  lotId          BigInt?
-
-  referenceTable String?
-  referenceId    BigInt?
-  notes          String?
-
-  item Item     @relation(fields: [itemId], references: [id])
-  lot  ItemLot? @relation(fields: [lotId], references: [id])
-
-
-
-
-  @@index([itemId, txnTime])
-  @@map("inventory_txns")
+  @@unique([itemId, locationId])
 }

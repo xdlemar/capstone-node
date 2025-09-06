@@ -7,19 +7,66 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  STAFF
-  IT
+model User {
+  id           BigInt  @id @default(autoincrement())
+  email        String  @unique
+  passwordHash String
+  isActive     Boolean @default(true)
+
+  sessions    Session[]
+  roles       UserRole[]
+  loginAudits LoginAudit[]
+  otps        OTP[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model User {
-  id           BigInt   @id @default(autoincrement())
-  email        String   @unique
-  name         String
-  role         Role     @default(STAFF)
-  passwordHash String
-  createdAt    DateTime @default(now())
+model Role {
+  id    BigInt     @id @default(autoincrement())
+  name  String     @unique // STAFF | MANAGER | ADMIN
+  users UserRole[]
+}
 
-  @@map("users")
+model UserRole {
+  userId BigInt
+  roleId BigInt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Session {
+  id               BigInt   @id @default(autoincrement())
+  userId           BigInt
+  refreshTokenHash String
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OTP {
+  id        BigInt    @id @default(autoincrement())
+  userId    BigInt
+  purpose   String // LOGIN | SENSITIVE_ACTION
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LoginAudit {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt?
+  emailTried String?
+  ip         String?
+  userAgent  String?
+  success    Boolean
+  at         DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 }

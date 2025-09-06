@@ -1,5 +1,3 @@
-// prisma/schema.prisma  (plt-svc)
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,39 +7,50 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum TaskStatus {
-  PLANNED
-  IN_PROGRESS
-  DONE
-}
-
 model Project {
-  id        BigInt    @id @default(autoincrement())
-  code      String    @unique
-  name      String
-  ownerDept String?
-  startDate DateTime?
-  endDate   DateTime?
-
-  tasks ProjectTask[]
-
+  id        BigInt   @id @default(autoincrement())
+  name      String   @unique
+  ownerId   BigInt?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("projects")
+  deliveries Delivery[]
 }
 
-model ProjectTask {
-  id BigInt @id @default(autoincrement())
-
-  projectId BigInt
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  title      String
-  status     TaskStatus @default(PLANNED)
-  dueDate    DateTime?
-  assignedTo String?
+model Delivery {
+  id         BigInt    @id @default(autoincrement())
+  projectId  BigInt
+  supplierId BigInt?
+  status     String    @default("PLANNED") // PLANNED | IN_TRANSIT | DELAYED | RECEIVED
+  trackingNo String?
+  eta        DateTime?
+  cost       Decimal?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@map("project_tasks")
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  events  DeliveryEvent[]
+  photos  DeliveryPhoto[]
+
+  @@index([status, eta])
+}
+
+model DeliveryEvent {
+  id         BigInt   @id @default(autoincrement())
+  deliveryId BigInt
+  status     String
+  note       String?
+  occurredAt DateTime @default(now())
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+}
+
+model DeliveryPhoto {
+  id         BigInt   @id @default(autoincrement())
+  deliveryId BigInt
+  fileKey    String // S3/local path
+  createdAt  DateTime @default(now())
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
 }

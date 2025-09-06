@@ -7,36 +7,81 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum AssetStatus {
-  IN_SERVICE
-  MAINTENANCE
-  RETIRED
-}
-
 model Asset {
-  id         BigInt      @id @default(autoincrement())
-  tag        String      @unique
-  name       String
-  category   String?
-  locationId BigInt?
-  status     AssetStatus @default(IN_SERVICE)
-  maint      AssetMaint[]  // backref is defined in AssetMaint.asset
-  createdAt  DateTime    @default(now())
+  id           BigInt    @id @default(autoincrement())
+  tagNo        String    @unique
+  name         String
+  locationId   BigInt?
+  purchaseDate DateTime?
+  purchaseCost Decimal?
+  status       String    @default("ACTIVE") // ACTIVE | UNDER_REPAIR | DISPOSED
 
-  @@map("assets")
-  @@index([status])
+  // relations
+  location   Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  events     AssetEvent[]
+  warranties Warranty[]
+  disposals  Disposal[]
+  plans      MaintenancePlan[] // back-rel for MaintenancePlan.asset
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model AssetMaint {
-  id           BigInt    @id @default(autoincrement())
-  assetId      BigInt
-  asset        Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  type         String
-  scheduledAt  DateTime?
-  completedAt  DateTime?
-  notes        String?
-  createdAt    DateTime  @default(now())
+model Location {
+  id   BigInt @id @default(autoincrement())
+  name String @unique
+  kind String // ROOM | WAREHOUSE | LAB | etc.
 
-  @@map("asset_maint")
-  @@index([assetId])
+  // back-rel for Asset.location
+  assets Asset[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AssetEvent {
+  id         BigInt   @id @default(autoincrement())
+  assetId    BigInt
+  type       String // TRANSFER | REPAIR | INSPECTION
+  note       String?
+  occurredAt DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+}
+
+model MaintenancePlan {
+  id      BigInt @id @default(autoincrement())
+  assetId BigInt
+  rule    String // e.g. "RRULE:FREQ=MONTHLY;INTERVAL=3"
+
+  asset Asset            @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  jobs  MaintenanceJob[]
+}
+
+model MaintenanceJob {
+  id          BigInt    @id @default(autoincrement())
+  planId      BigInt
+  dueAt       DateTime
+  status      String    @default("DUE") // DUE | DONE | OVERDUE
+  completedAt DateTime?
+
+  plan MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+}
+
+model Warranty {
+  id       BigInt    @id @default(autoincrement())
+  assetId  BigInt
+  provider String?
+  endDate  DateTime?
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+}
+
+model Disposal {
+  id      BigInt   @id @default(autoincrement())
+  assetId BigInt
+  method  String // DONATION | SCRAP | SALE
+  date    DateTime
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 }

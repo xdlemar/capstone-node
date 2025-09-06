@@ -7,38 +7,48 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum DocStatus {
-  DRAFT
-  IN_REVIEW
-  RELEASED
-  ARCHIVED
-}
-
 model Document {
-  id          BigInt        @id @default(autoincrement())
-  docNo       String        @unique
-  title       String
-  category    String?
-  status      DocStatus     @default(DRAFT)
-  ownerDept   String?
-  relatedPoId BigInt?
-  relatedGrnId BigInt?
-  moves       DocumentMove[]
-  createdAt   DateTime      @default(now())
+  id        BigInt   @id @default(autoincrement())
+  title     String
+  projectId BigInt? // NOTE: separate microservice => store ID, no FK
+  type      String? // DR | INVOICE | PO | POLICY | etc.
+  createdAt DateTime @default(now())
 
-  @@map("documents")
+  versions DocumentVersion[]
+  acls     DocumentACL[]
+  audits   DocumentAudit[]
 }
 
-model DocumentMove {
-  id     BigInt   @id @default(autoincrement())
-  docId  BigInt
-  doc    Document @relation(fields: [docId], references: [id], onDelete: Cascade)
-  action String
-  from   String?
-  to     String?
-  at     DateTime @default(now())
-  by     String?
+model DocumentVersion {
+  id         BigInt   @id @default(autoincrement())
+  documentId BigInt
+  versionNo  Int
+  fileKey    String
+  checksum   String
+  createdAt  DateTime @default(now())
 
-  @@map("document_moves")
-  @@index([docId])
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, versionNo])
+}
+
+model DocumentACL {
+  id         BigInt @id @default(autoincrement())
+  documentId BigInt
+  principal  String // user:id or role:name
+  role       String // VIEW | EDIT | OWNER
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([principal])
+}
+
+model DocumentAudit {
+  id         BigInt   @id @default(autoincrement())
+  documentId BigInt
+  userId     BigInt?
+  action     String // VIEW | UPLOAD | DELETE | SHARE | DOWNLOAD
+  at         DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 }
