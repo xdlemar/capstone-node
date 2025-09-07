@@ -4,13 +4,10 @@ const cors = require("cors");
 const morgan = require("morgan");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
-
 const app = express();
-
 // 1) Infra middlewares (do NOT add express.json here)
 app.use(cors());
 app.use(morgan("dev"));
-
 function authRequired(req, res, next) {
   const h = req.headers.authorization || "";
   const token = h.startsWith("Bearer ") ? h.slice(7) : "";
@@ -23,7 +20,6 @@ function authRequired(req, res, next) {
     return res.status(401).json({ error: "Invalid token" });
   }
 }
-
 // optional: common proxy error handler so requests don't "hang" forever
 function onProxyError(err, req, res) {
   console.error("[proxy-error]", err?.code || err?.message || err);
@@ -31,7 +27,6 @@ function onProxyError(err, req, res) {
     res.status(502).json({ error: "Upstream unavailable" });
   }
 }
-
 function proxy(target) {
   return createProxyMiddleware({
     target,
@@ -58,19 +53,14 @@ function proxy(target) {
     },
   });
 }
-
-// 2) Mount proxies BEFORE any body parser
 app.use("/api/auth", proxy(process.env.AUTH_URL)); // public
 app.use("/api/inventory", authRequired, proxy(process.env.INVENTORY_URL));
-// enable these when those services are up:
 app.use("/api/procurement", authRequired, proxy(process.env.PROCUREMENT_URL));
 // app.use("/api/alms", authRequired, proxy(process.env.ALMS_URL));
 // app.use("/api/dtrs", authRequired, proxy(process.env.DTRS_URL));
 // app.use("/api/plt", authRequired, proxy(process.env.PLT_URL));
-
 // 3) Only now parse JSON for any NON-proxied routes you add locally
 app.use(express.json({ limit: "1mb" }));
-
 app.get("/health", (_req, res) => res.json({ ok: true, svc: "gateway" }));
 
 const port = Number(process.env.PORT || 8080);

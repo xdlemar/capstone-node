@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/**
+ * =========================
+ * Core Master Data
+ * =========================
+ */
+
 model Item {
   id       BigInt  @id @default(autoincrement())
   sku      String  @unique
@@ -19,8 +25,11 @@ model Item {
   movements  StockMove[]
   thresholds Threshold[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  IssueLine    IssueLine[]
+  TransferLine TransferLine[]
+  CountLine    CountLine[]
 }
 
 model Location {
@@ -28,14 +37,29 @@ model Location {
   name String @unique
   kind String // WAREHOUSE | ROOM | STERILE | etc.
 
-  // named back-relations for dual links from StockMove
+  // StockMove dual links
   asFromFor StockMove[] @relation("FromLoc")
   asToFor   StockMove[] @relation("ToLoc")
 
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  Threshold Threshold[]
+  // Issue relations (use unique relation names!)
+  issuesFrom Issue[] @relation("IssueFromLoc")
+  issuesTo   Issue[] @relation("IssueToLoc")
+
+  // Transfer relations (use unique relation names!)
+  transfersFrom Transfer[] @relation("XferFromLoc")
+  transfersTo   Transfer[] @relation("XferToLoc")
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  Threshold    Threshold[]
+  CountSession CountSession[]
 }
+
+/**
+ * =========================
+ * Lots / Batches
+ * =========================
+ */
 
 model Batch {
   id         BigInt    @id @default(autoincrement())
@@ -46,12 +70,22 @@ model Batch {
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  StockMove StockMove[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  StockMove  StockMove[]
+  IssueAlloc IssueAlloc[]
 
+  // one batch row per (item, lot, expiry)
+  @@unique([itemId, lotNo, expiryDate])
   @@index([itemId, expiryDate])
+  @@index([itemId, lotNo])
 }
+
+/**
+ * =========================
+ * Stock Ledger (idempotent)
+ * =========================
+ */
 
 model StockMove {
   id         BigInt   @id @default(autoincrement())
@@ -60,10 +94,10 @@ model StockMove {
   fromLocId  BigInt?
   toLocId    BigInt?
   qty        Decimal
-  reason     String // IN | OUT | ADJUSTMENT | DAMAGED | EXPIRED | RECEIPT | ISSUE
-  refType    String? // 'PO' | 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | ...
+  reason     String // IN | OUT | ADJUSTMENT | DAMAGED | EXPIRED | RECEIPT | ISSUE | TRANSFER
+  refType    String? // 'PO' | 'RECEIPT' | 'DELIVERY' | 'TRANSFER' | 'ISSUE' | 'COUNT' | ...
   refId      BigInt?
-  eventId    String? // idempotency key
+  eventId    String?  @unique // idempotency key
   occurredAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
@@ -76,6 +110,12 @@ model StockMove {
   @@index([refType, refId])
 }
 
+/**
+ * =========================
+ * Reorder Thresholds
+ * =========================
+ */
+
 model Threshold {
   id         BigInt  @id @default(autoincrement())
   itemId     BigInt
@@ -86,4 +126,151 @@ model Threshold {
   location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
 
   @@unique([itemId, locationId])
+}
+
+/**
+ * =========================
+ * Alerts (Low Stock / Expiry)
+ * =========================
+ */
+
+enum NotificationType {
+  LOW_STOCK
+  EXPIRY
+}
+
+model Notification {
+  id         BigInt           @id @default(autoincrement())
+  type       NotificationType
+  itemId     BigInt
+  locationId BigInt?
+  message    String
+  createdAt  DateTime         @default(now())
+  resolvedAt DateTime?
+
+  @@index([type, itemId, locationId, resolvedAt])
+}
+
+/**
+ * =========================
+ * FEFO Issue (no barcode)
+ * =========================
+ */
+
+model Issue {
+  id        BigInt   @id @default(autoincrement())
+  issueNo   String   @unique
+  fromLocId BigInt
+  toLocId   BigInt
+  notes     String?
+  createdAt DateTime @default(now())
+
+  fromLoc Location    @relation("IssueFromLoc", fields: [fromLocId], references: [id], onDelete: Restrict)
+  toLoc   Location    @relation("IssueToLoc", fields: [toLocId], references: [id], onDelete: Restrict)
+  lines   IssueLine[]
+}
+
+model IssueLine {
+  id        BigInt  @id @default(autoincrement())
+  issueId   BigInt
+  itemId    BigInt
+  qtyReq    Decimal
+  qtyIssued Decimal @default(0)
+  notes     String?
+
+  issue  Issue        @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  item   Item         @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  allocs IssueAlloc[]
+}
+
+model IssueAlloc {
+  id          BigInt  @id @default(autoincrement())
+  issueLineId BigInt
+  batchId     BigInt
+  qty         Decimal
+
+  line  IssueLine @relation(fields: [issueLineId], references: [id], onDelete: Cascade)
+  batch Batch     @relation(fields: [batchId], references: [id], onDelete: Restrict)
+}
+
+/**
+ * =========================
+ * FEFO Transfer (no barcode)
+ * =========================
+ */
+
+model Transfer {
+  id         BigInt   @id @default(autoincrement())
+  transferNo String   @unique
+  fromLocId  BigInt
+  toLocId    BigInt
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  fromLoc Location       @relation("XferFromLoc", fields: [fromLocId], references: [id], onDelete: Restrict)
+  toLoc   Location       @relation("XferToLoc", fields: [toLocId], references: [id], onDelete: Restrict)
+  lines   TransferLine[]
+}
+
+model TransferLine {
+  id         BigInt  @id @default(autoincrement())
+  transferId BigInt
+  itemId     BigInt
+  qty        Decimal
+  notes      String?
+
+  transfer Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  item     Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+}
+
+/**
+ * =========================
+ * Cycle Counting (no scanner)
+ * =========================
+ */
+
+enum CountStatus {
+  OPEN
+  POSTED
+}
+
+model CountSession {
+  id         BigInt      @id @default(autoincrement())
+  sessionNo  String      @unique
+  locationId BigInt
+  status     CountStatus @default(OPEN)
+  notes      String?
+  createdAt  DateTime    @default(now())
+
+  location Location    @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  lines    CountLine[]
+}
+
+model CountLine {
+  id         BigInt  @id @default(autoincrement())
+  sessionId  BigInt
+  itemId     BigInt
+  countedQty Decimal
+  systemQty  Decimal
+  variance   Decimal
+  notes      String?
+
+  session CountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  item    Item         @relation(fields: [itemId], references: [id], onDelete: Restrict)
+}
+
+/**
+ * =========================
+ * Receiving Checklist (no barcode)
+ * =========================
+ */
+
+model ReceivingInspection {
+  id          BigInt   @id @default(autoincrement())
+  eventId     String   @unique // ties to StockMove.eventId of RECEIPT line
+  sealsIntact Boolean?
+  tempOk      Boolean?
+  receivedBy  String?
+  notes       String?
+  createdAt   DateTime @default(now())
 }

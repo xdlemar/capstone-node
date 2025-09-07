@@ -1,18 +1,59 @@
 const { prisma } = require("../prisma");
-require("dotenv").config();
 
-async function run() {
-  const days = Number(process.env.ALERT_EXPIRY_DAYS || 30);
-  const soon = new Date(Date.now() + days * 24 * 3600 * 1000);
-  const batches = await prisma.batch.findMany({
-    where: { expiryDate: { lte: soon } },
-    include: { item: true },
-    orderBy: { expiryDate: "asc" }
+const WINDOW_DAYS = Number(process.env.EXPIRY_WINDOW_DAYS || 30);
+
+async function ensureNotification(itemId, locationId, message) {
+  // for expiry notifications we don't tie to a specific location (global risk)
+  const existing = await prisma.notification.findFirst({
+    where: { type: "EXPIRY", itemId, locationId: null, resolvedAt: null },
   });
-  for (const b of batches) {
-    console.log(`[EXPIRY] ${b.item.sku} lot=${b.lotNo || "-"} exp=${b.expiryDate?.toISOString()}`);
-    // TODO: notifications
-  }
+  if (existing) return existing;
+
+  return prisma.notification.create({
+    data: {
+      type: "EXPIRY",
+      itemId,
+      locationId: null,
+      message,
+    },
+  });
 }
 
-run().finally(() => process.exit(0));
+async function run() {
+  console.log("=== EXPIRY CHECK START ===");
+  console.log(`Window: items expiring in <= ${WINDOW_DAYS} days`);
+
+  const now = new Date();
+  const to = new Date(now.getTime() + WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+  // Look at Batches with qtyOnHand > 0 and expiryDate in window
+  const batches = await prisma.batch.findMany({
+    where: {
+      qtyOnHand: { gt: "0" },
+      expiryDate: { not: null, gte: now, lte: to },
+    },
+    include: { item: true },
+    orderBy: { expiryDate: "asc" },
+  });
+
+  if (!batches.length) {
+    console.log("No batches near expiry.");
+    console.log("=== EXPIRY CHECK END ===");
+    process.exit(0);
+    return;
+  }
+
+  for (const b of batches) {
+    const msg = `EXPIRY item=${b.itemId.toString()} sku=${b.item.sku} lot=${b.lotNo ?? "-"} qty=${b.qtyOnHand.toString()} exp=${b.expiryDate?.toISOString().slice(0,10)}`;
+    console.log(`[EXPIRY] ${msg}`);
+    await ensureNotification(b.itemId, null, msg);
+  }
+
+  console.log("=== EXPIRY CHECK END ===");
+  process.exit(0);
+}
+
+run().catch((e) => {
+  console.error("Expiry job failed:", e);
+  process.exit(1);
+});

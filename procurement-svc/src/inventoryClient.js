@@ -1,17 +1,18 @@
-const axios = require("axios");
-const INVENTORY_URL = process.env.INVENTORY_URL || "http://localhost:4001";
+// Uses Node 18+ global fetch to call inventory-svc for stock moves.
+const BASE = process.env.INVENTORY_URL || "http://localhost:4001";
 
-/**
- * Post a stock move to inventory (direct call, bypass gateway).
- * Expects: { itemId, toLocId?, fromLocId?, qty, reason, refType, refId, eventId, batchId? }
- */
-async function postStockMove(move) {
-  const url = `${INVENTORY_URL}/stock-moves`;
-  const res = await axios.post(url, move, {
+async function postStockMove(body) {
+  const resp = await fetch(`${BASE}/stock-moves`, {
+    method: "POST",
     headers: { "content-type": "application/json" },
-    timeout: 15000
+    body: JSON.stringify(body),
   });
-  return res.data;
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`[inventoryClient] POST /stock-moves ${resp.status} ${text}`);
+  }
+  return resp.json();
 }
 
 module.exports = { postStockMove };

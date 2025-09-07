@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/**
+ * =========================
+ * Enums
+ * =========================
+ */
+
 enum PRStatus {
   DRAFT
   SUBMITTED
@@ -24,10 +30,16 @@ enum POStatus {
 }
 
 enum AttachmentKind {
-  DR        // delivery receipt
-  INVOICE   // supplier invoice
+  DR // delivery receipt
+  INVOICE // supplier invoice
   OTHER
 }
+
+/**
+ * =========================
+ * Vendors
+ * =========================
+ */
 
 model Vendor {
   id        BigInt   @id @default(autoincrement())
@@ -37,77 +49,100 @@ model Vendor {
   address   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  POs       PO[]
+
+  POs PO[]
 }
 
+/**
+ * =========================
+ * Purchase Requests
+ * =========================
+ */
+
 model PR {
-  id        BigInt     @id @default(autoincrement())
-  prNo      String     @unique
-  status    PRStatus   @default(DRAFT)
+  id        BigInt   @id @default(autoincrement())
+  prNo      String   @unique
+  status    PRStatus @default(DRAFT)
   notes     String?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  lines     PRLine[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines PRLine[]
+  PO    PO[]
 }
 
 model PRLine {
-  id        BigInt @id @default(autoincrement())
-  prId      BigInt
-  itemId    BigInt
-  qty       Int
-  unit      String
-  notes     String?
+  id     BigInt  @id @default(autoincrement())
+  prId   BigInt
+  itemId BigInt
+  qty    Int
+  unit   String
+  notes  String?
 
-  PR   PR   @relation(fields: [prId], references: [id], onDelete: Cascade)
+  PR PR @relation(fields: [prId], references: [id], onDelete: Cascade)
 }
 
-model PO {
-  id         BigInt   @id @default(autoincrement())
-  poNo       String   @unique
-  prId       BigInt?
-  vendorId   BigInt
-  status     POStatus @default(OPEN)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+/**
+ * =========================
+ * Purchase Orders
+ * =========================
+ */
 
-  vendor Vendor @relation(fields: [vendorId], references: [id])
-  PR     PR?    @relation(fields: [prId], references: [id])
-  lines  POLine[]
-  receipts Receipt[]
+model PO {
+  id        BigInt   @id @default(autoincrement())
+  poNo      String   @unique
+  prId      BigInt?
+  vendorId  BigInt
+  status    POStatus @default(OPEN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vendor      Vendor       @relation(fields: [vendorId], references: [id])
+  PR          PR?          @relation(fields: [prId], references: [id])
+  lines       POLine[]
+  receipts    Receipt[]
   attachments Attachment[]
 }
 
 model POLine {
-  id       BigInt @id @default(autoincrement())
-  poId     BigInt
-  itemId   BigInt
-  qty      Int
-  unit     String
-  price    Decimal @default(0)
-  notes    String?
+  id     BigInt  @id @default(autoincrement())
+  poId   BigInt
+  itemId BigInt
+  qty    Int
+  unit   String
+  price  Decimal @default(0)
+  notes  String?
 
-  PO  PO  @relation(fields: [poId], references: [id], onDelete: Cascade)
+  PO PO @relation(fields: [poId], references: [id], onDelete: Cascade)
 }
+
+/**
+ * =========================
+ * Receipts
+ * =========================
+ */
 
 model Receipt {
   id         BigInt   @id @default(autoincrement())
   poId       BigInt
   drNo       String?
   invoiceNo  String?
-  receivedAt DateTime  @default(now())
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  receivedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  PO     PO        @relation(fields: [poId], references: [id], onDelete: Cascade)
-  lines  ReceiptLine[]
+  PO          PO            @relation(fields: [poId], references: [id], onDelete: Cascade)
+  lines       ReceiptLine[]
   attachments Attachment[]
+  // (Optional) also prevent duplicate invoice numbers per PO:
+  @@unique([poId, invoiceNo])
 
-  /// prevent double-posting the same DR number for the same PO
+  // prevent double-posting same DR for a PO
   @@unique([poId, drNo])
 }
 
 model ReceiptLine {
-  id         BigInt @id @default(autoincrement())
+  id         BigInt    @id @default(autoincrement())
   receiptId  BigInt
   itemId     BigInt
   toLocId    BigInt
@@ -118,18 +153,24 @@ model ReceiptLine {
   Receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
 }
 
+/**
+ * =========================
+ * Attachment metadata
+ * =========================
+ */
+
 model Attachment {
-  id         BigInt        @id @default(autoincrement())
+  id         BigInt         @id @default(autoincrement())
   kind       AttachmentKind
   fileName   String
-  storageKey String         // where the binary is stored (S3 key, local path, etc.)
+  storageKey String // where the binary is stored (S3 key, local path, etc.)
   mimeType   String?
   size       Int?
   uploadedAt DateTime       @default(now())
 
   // either PO or Receipt (one of them must be set)
-  poId       BigInt?
-  receiptId  BigInt?
+  poId      BigInt?
+  receiptId BigInt?
 
   PO      PO?      @relation(fields: [poId], references: [id], onDelete: Cascade)
   Receipt Receipt? @relation(fields: [receiptId], references: [id], onDelete: Cascade)
