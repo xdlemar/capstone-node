@@ -1,0 +1,49 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host:  23.94.230.146   
+          username: loghe5242
+          key:      ${{ secrets.SSH_KEY }}
+          port:     2298
+          script_stop: true
+          script: |
+            set -e
+            cd /home/log1.health-ease-hospital.com
+            # If repo is already cloned:
+            if [ -d .git ]; then
+              git pull origin main
+            else
+              git clone https://github.com/xdlemar/capstone-node.git .
+            fi
+
+            # Install deps at the root (your package.json has the scripts)
+            npm ci
+
+            # Run DB migrations for both services using your secrets
+            INVENTORY_DB='${{ secrets.INVENTORY_DB }}' \
+            npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+
+            PROCUREMENT_DB='${{ secrets.PROCUREMENT_DB }}' \
+            npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+
+            AUTH_DB='${{ secrets.AUTH_DB }}' \
+            npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+
+            # (Optional) build frontend & restart services via PM2
+            # npm run build --workspace capstone-web
+            pm2 startOrReload ecosystem.config.js --update-env
+            pm2 save
+ 

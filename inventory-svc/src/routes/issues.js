@@ -3,6 +3,11 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const r = Router();
 
+/**
+ * POST /issues
+ * { issueNo, fromLocId, toLocId?, notes?, lines: [{ itemId, qty, notes? }] }
+ * FEFO-first; fallback to single no-batch move if no batches/stock tracked.
+ */
 r.post("/", async (req, res) => {
   try {
     const { issueNo, fromLocId, toLocId, notes, lines = [] } = req.body || {};
@@ -10,8 +15,8 @@ r.post("/", async (req, res) => {
       return res.status(400).json({ error: "issueNo, fromLocId, lines[] required" });
     }
 
-    const updated = await prisma.$transaction(async (p) => {
-      // 1) create issue + lines (qtyIssued = 0 initially)
+    // Run everything in a txn; return only the id, then refetch after updates
+    const issueId = await prisma.$transaction(async (p) => {
       const issue = await p.issue.create({
         data: {
           issueNo,
@@ -21,8 +26,8 @@ r.post("/", async (req, res) => {
           lines: {
             create: lines.map((ln) => ({
               itemId: BigInt(ln.itemId),
-              qtyReq: ln.qty,   // Decimal column
-              qtyIssued: 0,     // Decimal column
+              qtyReq: Number(ln.qty),
+              qtyIssued: 0,
               notes: ln.notes ?? null,
             })),
           },
@@ -30,21 +35,94 @@ r.post("/", async (req, res) => {
         include: { lines: true },
       });
 
-      // 2) create stock moves + set qtyIssued = qtyReq
+      // FEFO allocations per line
       for (const ln of issue.lines) {
-        await p.stockMove.create({
-          data: {
-            itemId: ln.itemId,
-            fromLocId: issue.fromLocId,
-            toLocId: issue.toLocId,
-            qty: ln.qtyReq,          // Decimal column
-            reason: "ISSUE",
-            refType: "ISSUE",
-            refId: issue.id,
-            eventId: `issue:${issue.id.toString()}:${ln.id.toString()}`,
-            occurredAt: new Date(),
-          },
+        let remaining = Number(ln.qtyReq);
+        if (remaining <= 0) continue;
+
+        const batches = await p.batch.findMany({
+          where: { itemId: ln.itemId },
+          orderBy: [{ expiryDate: "asc" }, { id: "asc" }],
+          select: { id: true, qtyOnHand: true },
         });
+
+        const totalAvail = batches.reduce((sum, b) => sum + Number(b.qtyOnHand || 0), 0);
+
+        if (batches.length === 0 || totalAvail <= 0) {
+          // Fallback: single stock move without batch
+          await p.stockMove.create({
+            data: {
+              itemId: ln.itemId,
+              fromLocId: issue.fromLocId,
+              toLocId: issue.toLocId,
+              qty: remaining,
+              reason: "ISSUE",
+              refType: "ISSUE",
+              refId: issue.id,
+              eventId: `issue:${issue.id.toString()}:${ln.id.toString()}:nobatch`,
+              occurredAt: new Date(),
+            },
+          });
+
+          await p.issueLine.update({
+            where: { id: ln.id },
+            data: { qtyIssued: ln.qtyReq },
+          });
+
+          continue;
+        }
+
+        for (const b of batches) {
+          if (remaining <= 0) break;
+          const available = Number(b.qtyOnHand || 0);
+          if (available <= 0) continue;
+
+          const take = Math.min(available, remaining);
+
+          await p.issueAlloc.create({
+            data: { issueLineId: ln.id, batchId: b.id, qty: take },
+          });
+
+          await p.stockMove.create({
+            data: {
+              itemId: ln.itemId,
+              batchId: b.id,
+              fromLocId: issue.fromLocId,
+              toLocId: issue.toLocId,
+              qty: take,
+              reason: "ISSUE",
+              refType: "ISSUE",
+              refId: issue.id,
+              eventId: `issue:${issue.id.toString()}:${ln.id.toString()}:batch:${b.id.toString()}`,
+              occurredAt: new Date(),
+            },
+          });
+
+          // If you track live qtyOnHand, update here.
+          // await p.batch.update({ where: { id: b.id }, data: { qtyOnHand: new Prisma.Decimal(available - take) } });
+
+          remaining -= take;
+        }
+
+        if (remaining > 0) {
+          // STRICT option:
+          // throw Object.assign(new Error("Insufficient stock"), { code: "FEFO_STOCK_OUT" });
+
+          // Default lenient remainder: finish without batch
+          await p.stockMove.create({
+            data: {
+              itemId: ln.itemId,
+              fromLocId: issue.fromLocId,
+              toLocId: issue.toLocId,
+              qty: remaining,
+              reason: "ISSUE",
+              refType: "ISSUE",
+              refId: issue.id,
+              eventId: `issue:${issue.id.toString()}:${ln.id.toString()}:remainder-nobatch`,
+              occurredAt: new Date(),
+            },
+          });
+        }
 
         await p.issueLine.update({
           where: { id: ln.id },
@@ -52,26 +130,27 @@ r.post("/", async (req, res) => {
         });
       }
 
-      // 3) re-read so we return the updated qtyIssued values
-      return p.issue.findUnique({
-        where: { id: issue.id },
-        include: { lines: true },
-      });
+      return issue.id; // return only id; we will refetch after txn
     });
 
-    // 4) normalize Decimal -> number for API response
+    // Refetch after all updates so lines reflect final qtyIssued
+    const created = await prisma.issue.findUnique({
+      where: { id: issueId },
+      include: { lines: true },
+    });
+
     res.status(201).json({
-      id: updated.id.toString(),
-      issueNo: updated.issueNo,
-      fromLocId: updated.fromLocId.toString(),
-      toLocId: updated.toLocId ? updated.toLocId.toString() : null,
-      notes: updated.notes,
-      createdAt: updated.createdAt,
-      lines: updated.lines.map((l) => ({
+      id: created.id.toString(),
+      issueNo: created.issueNo,
+      fromLocId: created.fromLocId.toString(),
+      toLocId: created.toLocId ? created.toLocId.toString() : null,
+      notes: created.notes,
+      createdAt: created.createdAt,
+      lines: created.lines.map((l) => ({
         id: l.id.toString(),
         issueId: l.issueId.toString(),
         itemId: l.itemId.toString(),
-        qtyReq: Number(l.qtyReq),
+        qtyReq: Number(l.qtyReq),     // <- ensure numbers in JSON
         qtyIssued: Number(l.qtyIssued),
         notes: l.notes,
       })),
@@ -79,6 +158,7 @@ r.post("/", async (req, res) => {
   } catch (err) {
     if (err?.code === "P2002") return res.status(409).json({ error: "Issue number already exists" });
     if (err?.code === "P2003") return res.status(400).json({ error: "Invalid fromLocId/toLocId foreign key" });
+    if (err?.code === "FEFO_STOCK_OUT") return res.status(409).json({ error: "Insufficient stock (FEFO)" });
     console.error("[POST /issues]", err);
     res.status(500).json({ error: "Internal error" });
   }
