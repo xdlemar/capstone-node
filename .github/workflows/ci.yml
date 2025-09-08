@@ -1,98 +1,25 @@
-name: ci
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: Masterogi09?  # plain (NOT encoded)
-        ports: [ "5432:5432" ]
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
-
-    env:
-      # URLs MUST use %3F for the '?'
-      INVENTORY_DB: postgresql://postgres:Masterogi09%3F@localhost:5432/inventory?schema=public
-      PROCUREMENT_DB: postgresql://postgres:Masterogi09%3F@localhost:5432/procurement?schema=public
-
-      JWT_SECRET: super_secret_dev
-      INVENTORY_URL: http://localhost:4001
-      PROCUREMENT_URL: http://localhost:4002
-
-      GATEWAY_URL: http://localhost:8080
-      ITEM_ID: 1
-      FROM_LOC_ID: 1
-      TO_LOC_ID: 2
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install deps (root & services)
-        run: |
-          npm ci
-          npm --prefix inventory-svc ci
-          npm --prefix procurement-svc ci
-          npm --prefix gateway ci
-
-      - name: Create DBs
-        run: |
-          psql postgresql://postgres:Masterogi09%3F@localhost:5432 -c 'CREATE DATABASE "inventory";'    || true
-          psql postgresql://postgres:Masterogi09%3F@localhost:5432 -c 'CREATE DATABASE "procurement";' || true
-
-      - name: Generate Prisma clients
-        run: npm run gen:clients
-
-      - name: Run migrations (explicit URLs)
-        run: |
-          DATABASE_URL="${{ env.INVENTORY_DB }}"    npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
-          DATABASE_URL="${{ env.PROCUREMENT_DB }}"  npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
-
       - name: Start services
         env:
           INVENTORY_DB: ${{ env.INVENTORY_DB }}
           PROCUREMENT_DB: ${{ env.PROCUREMENT_DB }}
           JWT_SECRET: ${{ env.JWT_SECRET }}
-          INVENTORY_URL: ${{ env.INVENTORY_URL }}
-          PROCUREMENT_URL: ${{ env.PROCUREMENT_URL }}
-          INVENTORY_PORT: 4001
-          PROCUREMENT_PORT: 4002
+          INVENTORY_URL: http://localhost:4001
+          PROCUREMENT_URL: http://localhost:4002
         run: |
-          export PORT=$INVENTORY_PORT  DATABASE_URL="$INVENTORY_DB"   && node inventory-svc/src/server.js &> inv.log &
-          export PORT=$PROCUREMENT_PORT DATABASE_URL="$PROCUREMENT_DB" && node procurement-svc/src/server.js &> proc.log &
-          export PORT=8080 INVENTORY_URL=$INVENTORY_URL PROCUREMENT_URL=$PROCUREMENT_URL JWT_SECRET=$JWT_SECRET && node gateway/src/index.js &> gw.log &
-          npx wait-on -t 60000 http://localhost:4001/health http://localhost:4002/health http://localhost:8080/health
+          # 1) start inventory + procurement
+          export PORT=4001 DATABASE_URL="$INVENTORY_DB"
+          node inventory-svc/src/server.js > inv.log 2>&1 &
 
-      - name: Seed minimal master data
-        run: node tests/seedInventory.js
+          export PORT=4002 DATABASE_URL="$PROCUREMENT_DB"
+          node procurement-svc/src/server.js > proc.log 2>&1 &
 
-      - name: Run tests
-        run: npm test
+          # 2) wait for both backends to be healthy
+          npx wait-on -t 60000 http://localhost:4001/health http://localhost:4002/health
 
-      - name: Smoke
-        run: npm run smoke
+          # 3) start gateway AFTER the backends are up
+          export PORT=8080 INVENTORY_URL="http://localhost:4001" PROCUREMENT_URL="http://localhost:4002" JWT_SECRET="$JWT_SECRET"
+          node gateway/src/index.js > gw.log 2>&1 &
 
-      - name: Upload logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: svc-logs
-          path: |
-            inv.log
-            proc.log
-            gw.log
+          # 4) now wait for the gateway
+          npx wait-on -t 60000 http://localhost:8080/health
+
