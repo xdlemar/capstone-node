@@ -46,3 +46,7 @@ coverage/
 
 # Cache
 .cache/
+
+#keypie
+.github/workflows/deploy.yml
+.github/workflows/ci.yml
