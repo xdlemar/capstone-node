@@ -28,7 +28,6 @@ function onProxyError(err, req, res) {
     res.status(502).json({ error: "Upstream unavailable" });
   }
 }
-
 function proxy(target) {
   return createProxyMiddleware({
     target,
