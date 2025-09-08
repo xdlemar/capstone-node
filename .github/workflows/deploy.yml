@@ -14,9 +14,17 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host:  23.94.230.146   
+          host:   23.94.230.146   
           username: loghe5242
-          key:      ${{ secrets.SSH_KEY }}
+          key:   -----BEGIN OPENSSH PRIVATE KEY-----
+                     b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+                     QyNTUxOQAAACADK8+hoVzGd2m/Qjg9OevoFn4JMdYpYH+CnmRIxTgpfgAAALAa91joGvdY
+                     6AAAAAtzc2gtZWQyNTUxOQAAACADK8+hoVzGd2m/Qjg9OevoFn4JMdYpYH+CnmRIxTgpfg
+                     AAAEDXJNDfq9K8cdnKnFcnL45JEmw3wB+x1lPJZm6j/okk5gMrz6GhXMZ3ab9COD056+gW
+                     fgkx1ilgf4KeZEjFOCl+AAAAJ2dpdGh1Yi1jaUBsb2cxLmhlYWx0aC1lYXNlLWhvc3BpdG
+                     FsLmNvbQECAwQFBg==
+                 -----END OPENSSH PRIVATE KEY-----
+
           port:     2298
           script_stop: true
           script: |
@@ -33,13 +41,13 @@ jobs:
             npm ci
 
             # Run DB migrations for both services using your secrets
-            INVENTORY_DB='${{ secrets.INVENTORY_DB }}' \
+            INVENTORY_DB='DATABASE_URL=postgresql://postgres:Masterpogi09%3F@localhost:5432/inventory_db?schema=public' \
             npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
 
-            PROCUREMENT_DB='${{ secrets.PROCUREMENT_DB }}' \
+            PROCUREMENT_DB='DATABASE_URL=postgresql://postgres:Masterpogi09%3F@localhost:5432/procurement_db?schema=public' \
             npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
 
-            AUTH_DB='${{ secrets.AUTH_DB }}' \
+            AUTH_DB='DATABASE_URL=postgresql://postgres:Masterpogi09%3F@localhost:5432/auth_db?schema=public' \
             npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
             # (Optional) build frontend & restart services via PM2
