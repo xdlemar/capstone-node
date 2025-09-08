@@ -63,6 +63,5 @@ app.use("/api/procurement", authRequired, proxy(process.env.PROCUREMENT_URL));
 // 3) Only now parse JSON for any NON-proxied routes you add locally
 app.use(express.json({ limit: "1mb" }));
 app.get("/health", (_req, res) => res.json({ ok: true, svc: "gateway" }));
-
 const port = Number(process.env.PORT || 8080);
 app.listen(port, () => console.log(`gateway on http://localhost:${port}`));

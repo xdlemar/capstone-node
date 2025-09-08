@@ -16,7 +16,7 @@ jobs:
         with:
           host:   23.94.230.146   
           username: loghe5242
-          key:  LEMAR
+          key:  SSH_KEY
           port:     2298
           script_stop: true
           script: |
@@ -33,13 +33,13 @@ jobs:
             npm ci
 
             # Run DB migrations for both services using your secrets
-            INVENTORY_DB='DATABASE_URL=postgresql://postgres:Masterpogi09%3F@localhost:5432/inventory_db?schema=public' \
+            INVENTORY_DB='DATABASE_URL=postgresql://postgres:Masterpogi09%3F@23.94.230.146:5432/inventory_db?schema=public' \
             npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
 
-            PROCUREMENT_DB='DATABASE_URL=postgresql://postgres:Masterpogi09%3F@localhost:5432/procurement_db?schema=public' \
+            PROCUREMENT_DB='DATABASE_URL=postgresql://postgres:Masterpogi09%3F@23.94.230.146:5432/procurement_db?schema=public' \
             npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
 
-            AUTH_DB='DATABASE_URL=postgresql://postgres:Masterpogi09%3F@localhost:5432/auth_db?schema=public' \
+            AUTH_DB='DATABASE_URL=postgresql://postgres:Masterpogi09%3F@23.94.230.146:5432/auth_db?schema=public' \
             npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
             # (Optional) build frontend & restart services via PM2
