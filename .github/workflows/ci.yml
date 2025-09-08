@@ -1,25 +1,129 @@
-      - name: Start services
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # <<< CHOOSE YOUR PASSWORD HERE >>>
+    # If you keep the default 'postgres', nothing else to change.
+    # If you set your own, e.g. Masterogi09?, then:
+    #   DB_PASS: Masterogi09?
+    #   DB_PASS_URL: Masterogi09%3F     (URL-encoded)
+    env:
+      DB_PASS: postgres
+      DB_PASS_URL: Masterpogi09?
+
+      # Shared service env
+      JWT_SECRET: super_secret_dev
+
+      # Health base URLs (used below)
+      INVENTORY_URL:   http://localhost:4001
+      PROCUREMENT_URL: http://localhost:4002
+      AUTH_URL:        http://localhost:4003
+      GATEWAY_URL:     http://localhost:8080
+
+      # DB URLs for each service (use the URL-encoded password)
+      INVENTORY_DB:  postgresql://postgres:Masterpogi09?@localhost:5432/inventory?schema=public
+      PROCUREMENT_DB: postgresql://postgres:Masterpogi09?@localhost:5432/procurement?schema=public
+      AUTH_DB:        postgresql://postgres:Masterpogi09?@localhost:5432/auth?schema=public
+
+    services:
+      postgres:
+        image: postgres:16
         env:
-          INVENTORY_DB: ${{ env.INVENTORY_DB }}
-          PROCUREMENT_DB: ${{ env.PROCUREMENT_DB }}
-          JWT_SECRET: ${{ env.JWT_SECRET }}
-          INVENTORY_URL: http://localhost:4001
-          PROCUREMENT_URL: http://localhost:4002
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: Masterpogi09?   # container uses the raw password
+        ports: [ "5432:5432" ]
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps (root & services)
         run: |
-          # 1) start inventory + procurement
+          npm ci
+          npm --prefix inventory-svc ci
+          npm --prefix procurement-svc ci
+          npm --prefix auth-svc ci
+          npm --prefix gateway ci
+
+      - name: Create DBs
+        run: |
+          psql postgresql://postgres:Masterpogi09?@localhost:5432 -c 'CREATE DATABASE "inventory";'   || true
+          psql postgresql://postgres:Masterpogi09?@localhost:5432 -c 'CREATE DATABASE "procurement";' || true
+          psql postgresql://postgres:Masterpogi09?@localhost:5432 -c 'CREATE DATABASE "auth";'        || true
+
+      - name: Generate Prisma clients
+        run: npm run gen:clients
+
+      - name: Run migrations (explicit URLs)
+        run: |
+          DATABASE_URL="$INVENTORY_DB"   npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+          DATABASE_URL="$PROCUREMENT_DB" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+          DATABASE_URL="$AUTH_DB"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+
+      - name: Start services (start backends first, then gateway)
+        run: |
+          # inventory
           export PORT=4001 DATABASE_URL="$INVENTORY_DB"
           node inventory-svc/src/server.js > inv.log 2>&1 &
 
+          # procurement
           export PORT=4002 DATABASE_URL="$PROCUREMENT_DB"
           node procurement-svc/src/server.js > proc.log 2>&1 &
 
-          # 2) wait for both backends to be healthy
-          npx wait-on -t 60000 http://localhost:4001/health http://localhost:4002/health
+          # auth
+          export PORT=4003 DATABASE_URL="$AUTH_DB"
+          node auth-svc/src/server.js > auth.log 2>&1 &
 
-          # 3) start gateway AFTER the backends are up
-          export PORT=8080 INVENTORY_URL="http://localhost:4001" PROCUREMENT_URL="http://localhost:4002" JWT_SECRET="$JWT_SECRET"
+          # wait for the three backends
+          npx wait-on -t 60000 \
+            "$INVENTORY_URL/health" \
+            "$PROCUREMENT_URL/health" \
+            "$AUTH_URL/health"
+
+          # gateway (depends on backends)
+          export PORT=8080 \
+                 INVENTORY_URL="$INVENTORY_URL" \
+                 PROCUREMENT_URL="$PROCUREMENT_URL" \
+                 AUTH_URL="$AUTH_URL" \
+                 JWT_SECRET="$JWT_SECRET"
           node gateway/src/index.js > gw.log 2>&1 &
 
-          # 4) now wait for the gateway
-          npx wait-on -t 60000 http://localhost:8080/health
+          # wait for gateway
+          npx wait-on -t 60000 "$GATEWAY_URL/health"
 
+      - name: Seed minimal master data
+        run: node tests/seedInventory.js
+
+      - name: Run tests
+        run: npm test
+
+      - name: Smoke
+        run: npm run smoke
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: svc-logs
+          path: |
+            inv.log
+            proc.log
+            auth.log
+            gw.log
