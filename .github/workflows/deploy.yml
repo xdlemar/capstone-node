@@ -16,15 +16,7 @@ jobs:
         with:
           host:   23.94.230.146   
           username: loghe5242
-          key:   -----BEGIN OPENSSH PRIVATE KEY-----
-                     b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
-                     QyNTUxOQAAACADK8+hoVzGd2m/Qjg9OevoFn4JMdYpYH+CnmRIxTgpfgAAALAa91joGvdY
-                     6AAAAAtzc2gtZWQyNTUxOQAAACADK8+hoVzGd2m/Qjg9OevoFn4JMdYpYH+CnmRIxTgpfg
-                     AAAEDXJNDfq9K8cdnKnFcnL45JEmw3wB+x1lPJZm6j/okk5gMrz6GhXMZ3ab9COD056+gW
-                     fgkx1ilgf4KeZEjFOCl+AAAAJ2dpdGh1Yi1jaUBsb2cxLmhlYWx0aC1lYXNlLWhvc3BpdG
-                     FsLmNvbQECAwQFBg==
-                 -----END OPENSSH PRIVATE KEY-----
-
+          key:  LEMAR
           port:     2298
           script_stop: true
           script: |
