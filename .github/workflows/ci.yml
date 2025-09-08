@@ -14,7 +14,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: Masterogi09?
+          POSTGRES_PASSWORD: Masterogi09?  # plain (NOT encoded)
         ports: [ "5432:5432" ]
         options: >-
           --health-cmd="pg_isready -U postgres"
@@ -23,21 +23,19 @@ jobs:
           --health-retries=20
 
     env:
-      # Databases per service
-      INVENTORY_DB: postgresql://postgres:Masterogi09?@localhost:5432/inventory?schema=public
-      PROCUREMENT_DB: postgresql://postgres:Masterogi09?@localhost:5432/procurement?schema=public
+      # URLs MUST use %3F for the '?'
+      INVENTORY_DB: postgresql://postgres:Masterogi09%3F@localhost:5432/inventory?schema=public
+      PROCUREMENT_DB: postgresql://postgres:Masterogi09%3F@localhost:5432/procurement?schema=public
 
-      # Service env
       JWT_SECRET: super_secret_dev
       INVENTORY_URL: http://localhost:4001
       PROCUREMENT_URL: http://localhost:4002
-      PORT: 8080 # for gateway (override locally in start step)
 
-      # Tests
       GATEWAY_URL: http://localhost:8080
       ITEM_ID: 1
       FROM_LOC_ID: 1
       TO_LOC_ID: 2
+
     steps:
       - uses: actions/checkout@v4
 
@@ -54,30 +52,29 @@ jobs:
 
       - name: Create DBs
         run: |
-          psql postgresql://postgres:Masterogi09?@localhost:5432 -c 'CREATE DATABASE "inventory";' || true
-          psql postgresql://postgres:Masterogi09?@localhost:5432 -c 'CREATE DATABASE "procurement";' || true
+          psql postgresql://postgres:Masterogi09%3F@localhost:5432 -c 'CREATE DATABASE "inventory";'    || true
+          psql postgresql://postgres:Masterogi09%3F@localhost:5432 -c 'CREATE DATABASE "procurement";' || true
 
       - name: Generate Prisma clients
         run: npm run gen:clients
 
-      - name: Run migrations
-        run: npm run db:migrate
+      - name: Run migrations (explicit URLs)
+        run: |
+          DATABASE_URL="${{ env.INVENTORY_DB }}"    npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+          DATABASE_URL="${{ env.PROCUREMENT_DB }}"  npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
 
       - name: Start services
         env:
-          # inject DATABASE_URL per process via shell export
           INVENTORY_DB: ${{ env.INVENTORY_DB }}
           PROCUREMENT_DB: ${{ env.PROCUREMENT_DB }}
-          PORT: 8080
           JWT_SECRET: ${{ env.JWT_SECRET }}
           INVENTORY_URL: ${{ env.INVENTORY_URL }}
           PROCUREMENT_URL: ${{ env.PROCUREMENT_URL }}
-          # service-specific ports
           INVENTORY_PORT: 4001
           PROCUREMENT_PORT: 4002
         run: |
-          export PORT=$INVENTORY_PORT DATABASE_URL=$INVENTORY_DB && node inventory-svc/src/server.js &> inv.log &
-          export PORT=$PROCUREMENT_PORT DATABASE_URL=$PROCUREMENT_DB && node procurement-svc/src/server.js &> proc.log &
+          export PORT=$INVENTORY_PORT  DATABASE_URL="$INVENTORY_DB"   && node inventory-svc/src/server.js &> inv.log &
+          export PORT=$PROCUREMENT_PORT DATABASE_URL="$PROCUREMENT_DB" && node procurement-svc/src/server.js &> proc.log &
           export PORT=8080 INVENTORY_URL=$INVENTORY_URL PROCUREMENT_URL=$PROCUREMENT_URL JWT_SECRET=$JWT_SECRET && node gateway/src/index.js &> gw.log &
           npx wait-on -t 60000 http://localhost:4001/health http://localhost:4002/health http://localhost:8080/health
 
