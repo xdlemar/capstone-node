@@ -16,7 +16,7 @@ jobs:
         with:
           host:   23.94.230.146   
           username: loghe5242
-          key:  SSH_KEY
+          key:  ${{ secrets.SSH_KEY }}
           port:     2298
           script_stop: true
           script: |

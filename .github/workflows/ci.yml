@@ -14,7 +14,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: Masterogi09%3F
+          POSTGRES_PASSWORD: Masterogi09?
         ports: [ "5432:5432" ]
         options: >-
           --health-cmd="pg_isready -U postgres"
@@ -24,8 +24,8 @@ jobs:
 
     env:
       # Databases per service
-      INVENTORY_DB: postgresql://postgres:Masterogi09%3F@localhost:5432/inventory?schema=public
-      PROCUREMENT_DB: postgresql://postgres:Masterogi09%3F@localhost:5432/procurement?schema=public
+      INVENTORY_DB: postgresql://postgres:Masterogi09?@localhost:5432/inventory?schema=public
+      PROCUREMENT_DB: postgresql://postgres:Masterogi09?@localhost:5432/procurement?schema=public
 
       # Service env
       JWT_SECRET: super_secret_dev
@@ -54,8 +54,8 @@ jobs:
 
       - name: Create DBs
         run: |
-          psql postgresql://postgres:postgres@localhost:5432 -c 'CREATE DATABASE "inventory";' || true
-          psql postgresql://postgres:postgres@localhost:5432 -c 'CREATE DATABASE "procurement";' || true
+          psql postgresql://postgres:Masterogi09?@localhost:5432 -c 'CREATE DATABASE "inventory";' || true
+          psql postgresql://postgres:Masterogi09?@localhost:5432 -c 'CREATE DATABASE "procurement";' || true
 
       - name: Generate Prisma clients
         run: npm run gen:clients
