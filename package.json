@@ -4,14 +4,15 @@
     "dotenv": "^17.2.2",
     "jest": "^30.1.3",
     "jsonwebtoken": "^9.0.2",
+    "prisma": "^6.15.0",
     "supertest": "^7.1.4"
-  }
-,
-
+  },
   "scripts": {
-    "test": "cross-env NODE_ENV=test jest --runInBand --testTimeout=60000"
+    "pretest": "node tests/seedInventory.js",
+    "test": "cross-env NODE_ENV=test jest --runInBand --testTimeout=60000",
+    "type": "module"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.15.0"
   }
-
-
 }
-

@@ -3,10 +3,6 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const r = Router();
 
-/**
- * POST /issues
- * { issueNo, fromLocId, toLocId?, notes?, lines: [{ itemId, qty, notes? }] }
- */
 r.post("/", async (req, res) => {
   try {
     const { issueNo, fromLocId, toLocId, notes, lines = [] } = req.body || {};
@@ -14,7 +10,8 @@ r.post("/", async (req, res) => {
       return res.status(400).json({ error: "issueNo, fromLocId, lines[] required" });
     }
 
-    const created = await prisma.$transaction(async (p) => {
+    const updated = await prisma.$transaction(async (p) => {
+      // 1) create issue + lines (qtyIssued = 0 initially)
       const issue = await p.issue.create({
         data: {
           issueNo,
@@ -24,8 +21,8 @@ r.post("/", async (req, res) => {
           lines: {
             create: lines.map((ln) => ({
               itemId: BigInt(ln.itemId),
-              qtyReq: ln.qty,            // <-- important
-              qtyIssued: 0,
+              qtyReq: ln.qty,   // Decimal column
+              qtyIssued: 0,     // Decimal column
               notes: ln.notes ?? null,
             })),
           },
@@ -33,14 +30,14 @@ r.post("/", async (req, res) => {
         include: { lines: true },
       });
 
-      // create stock move(s) now (ISSUE); simple total = sum(qtyReq)
+      // 2) create stock moves + set qtyIssued = qtyReq
       for (const ln of issue.lines) {
         await p.stockMove.create({
           data: {
             itemId: ln.itemId,
             fromLocId: issue.fromLocId,
             toLocId: issue.toLocId,
-            qty: ln.qtyReq,
+            qty: ln.qtyReq,          // Decimal column
             reason: "ISSUE",
             refType: "ISSUE",
             refId: issue.id,
@@ -49,39 +46,39 @@ r.post("/", async (req, res) => {
           },
         });
 
-        // record issued qty
         await p.issueLine.update({
           where: { id: ln.id },
           data: { qtyIssued: ln.qtyReq },
         });
       }
 
-      return issue;
+      // 3) re-read so we return the updated qtyIssued values
+      return p.issue.findUnique({
+        where: { id: issue.id },
+        include: { lines: true },
+      });
     });
 
+    // 4) normalize Decimal -> number for API response
     res.status(201).json({
-      id: created.id.toString(),
-      issueNo: created.issueNo,
-      fromLocId: created.fromLocId.toString(),
-      toLocId: created.toLocId ? created.toLocId.toString() : null,
-      notes: created.notes,
-      createdAt: created.createdAt,
-      lines: created.lines.map((l) => ({
+      id: updated.id.toString(),
+      issueNo: updated.issueNo,
+      fromLocId: updated.fromLocId.toString(),
+      toLocId: updated.toLocId ? updated.toLocId.toString() : null,
+      notes: updated.notes,
+      createdAt: updated.createdAt,
+      lines: updated.lines.map((l) => ({
         id: l.id.toString(),
         issueId: l.issueId.toString(),
         itemId: l.itemId.toString(),
-        qtyReq: l.qtyReq,
-        qtyIssued: l.qtyIssued,
+        qtyReq: Number(l.qtyReq),
+        qtyIssued: Number(l.qtyIssued),
         notes: l.notes,
       })),
     });
   } catch (err) {
-    if (err?.code === "P2002") {
-      return res.status(409).json({ error: "Issue number already exists" });
-    }
-    if (err?.code === "P2003") {
-      return res.status(400).json({ error: "Invalid fromLocId/toLocId foreign key" });
-    }
+    if (err?.code === "P2002") return res.status(409).json({ error: "Issue number already exists" });
+    if (err?.code === "P2003") return res.status(400).json({ error: "Invalid fromLocId/toLocId foreign key" });
     console.error("[POST /issues]", err);
     res.status(500).json({ error: "Internal error" });
   }

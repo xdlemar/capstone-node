@@ -134,9 +134,9 @@ model Receipt {
   PO          PO            @relation(fields: [poId], references: [id], onDelete: Cascade)
   lines       ReceiptLine[]
   attachments Attachment[]
+
   // (Optional) also prevent duplicate invoice numbers per PO:
   @@unique([poId, invoiceNo])
-
   // prevent double-posting same DR for a PO
   @@unique([poId, drNo])
 }
