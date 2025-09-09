@@ -9,35 +9,31 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # <<< CHOOSE YOUR PASSWORD HERE >>>
-    # If you keep the default 'postgres', nothing else to change.
-    # If you set your own, e.g. Masterogi09?, then:
-    #   DB_PASS: Masterogi09?
-    #   DB_PASS_URL: Masterogi09%3F     (URL-encoded)
+
     env:
       DB_PASS: postgres
-      DB_PASS_URL: Masterpogi09?
+      DB_PASS_URL: Masterpogi09%3F
 
-      # Shared service env
+  
       JWT_SECRET: super_secret_dev
 
-      # Health base URLs (used below)
+    
       INVENTORY_URL:   http://localhost:4001
       PROCUREMENT_URL: http://localhost:4002
       AUTH_URL:        http://localhost:4003
       GATEWAY_URL:     http://localhost:8080
 
-      # DB URLs for each service (use the URL-encoded password)
-      INVENTORY_DB:  postgresql://postgres:Masterpogi09?@localhost:5432/inventory_db?schema=public
-      PROCUREMENT_DB: postgresql://postgres:Masterpogi09?@localhost:5432/procurement_db?schema=public
-      AUTH_DB:        postgresql://postgres:Masterpogi09?@localhost:5432/auth_db?schema=public
+
+      INVENTORY_DB:  postgresql://postgres:Masterpogi09%3F@localhost:5432/inventory_db?schema=public
+      PROCUREMENT_DB: postgresql://postgres:Masterpogi09%3F@localhost:5432/procurement_db?schema=public
+      AUTH_DB:        postgresql://postgres:Masterpogi09%3F@localhost:5432/auth_db?schema=public
 
     services:
       postgres:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: Masterpogi09?   # container uses the raw password
+          POSTGRES_PASSWORD: Masterpogi09%3F   
         ports: [ "5432:5432" ]
         options: >-
           --health-cmd="pg_isready -U postgres"
@@ -64,31 +60,31 @@ jobs:
 
       - name: Create DBs
         run: |
-          psql postgresql://postgres:Masterpogi09?@localhost:5432 -c 'CREATE DATABASE "inventory_db";'   || true
-          psql postgresql://postgres:Masterpogi09?@localhost:5432 -c 'CREATE DATABASE "procurement_db";' || true
-          psql postgresql://postgres:Masterpogi09?@localhost:5432 -c 'CREATE DATABASE "auth_db";'        || true
+          psql postgresql://postgres:Masterpogi09%3F@localhost:5432 -c 'CREATE DATABASE "inventory";'   || true
+          psql postgresql://postgres:Masterpogi09%3F@localhost:5432 -c 'CREATE DATABASE "procurement";' || true
+          psql postgresql://postgres:Masterpogi09%3F@localhost:5432 -c 'CREATE DATABASE "auth";'        || true
 
       - name: Generate Prisma clients
         run: npm run gen:clients
 
       - name: Run migrations (explicit URLs)
         run: |
-          DATABASE_URL="postgresql://postgres:Masterpogi09?@localhost:5432/inventory_db?schema=public"   npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
-          DATABASE_URL="postgresql://postgres:Masterpogi09?@localhost:5432/procurement_db?schema=public" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
-          DATABASE_URL="postgresql://postgres:Masterpogi09?@localhost:5432/auth_db?schema=public"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+          DATABASE_URL="postgresql://postgres:Masterpogi09%3F@localhost:5432/inventory?schema=public"   npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+          DATABASE_URL="postgresql://postgres:Masterpogi09%3F@localhost:5432/procurement?schema=public" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+          DATABASE_URL="postgresql://postgres:Masterpogi09%3F@localhost:5432/auth?schema=public"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
       - name: Start services (start backends first, then gateway)
         run: |
           # inventory
-          export PORT=4001 DATABASE_URL="postgresql://postgres:Masterpogi09?@localhost:5432/inventory_db?schema=public"
+          export PORT=4001 DATABASE_URL="postgresql://postgres:Masterpogi09%3F@localhost:5432/inventory?schema=public"
           node inventory-svc/src/server.js > inv.log 2>&1 &
 
           # procurement
-          export PORT=4002 DATABASE_URL="postgresql://postgres:Masterpogi09?@localhost:5432/procurement_db?schema=public"
+          export PORT=4002 DATABASE_URL="postgresql://postgres:Masterpogi09%3F@localhost:5432/procurement?schema=public"
           node procurement-svc/src/server.js > proc.log 2>&1 &
 
           # auth
-          export PORT=4003 DATABASE_URL="postgresql://postgres:Masterpogi09?@localhost:5432/auth_db?schema=public"
+          export PORT=4003 DATABASE_URL="postgresql://postgres:Masterpogi09%3F@localhost:5432/auth?schema=public"
           node auth-svc/src/server.js > auth.log 2>&1 &
 
           # wait for the three backends
