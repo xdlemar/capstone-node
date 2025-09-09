@@ -3,69 +3,58 @@ name: Deploy to Server
 on:
   workflow_run:
     workflows: ["ci"]
-    types: [completed]
+    types:
+      - completed
 
 jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout (metadata only)
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host:     ${{ secrets.SERVER_IP }}
+          host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
-          key:      ${{ secrets.SSH_KEY }}
-          port:     2298
+          key: ${{ secrets.SSH_KEY }}
+          port: 2298
           script_stop: true
           script: |
-            set -euo pipefail
+            set -e
 
-            # ---- config paths ----
-            APP_DIR="${{ secrets.SERVER_PATH }}"     # e.g. /home/log1.health-ease-hospital.com
-            REPO_URL="https://github.com/xdlemar/capstone-node.git"
+            APP_DIR="/home/log1.health-ease-hospital.com/public_html"
 
-            echo "=> Ensuring target dir exists: $APP_DIR"
-            mkdir -p "$APP_DIR"
+            echo "==> Navigate to app dir"
+            cd $APP_DIR
 
-            echo "=> Clone or pull repo"
-            if [ -d "$APP_DIR/.git" ]; then
-              git -C "$APP_DIR" fetch --all
-              git -C "$APP_DIR" reset --hard origin/main
+            echo "==> Pull latest code"
+            if [ -d .git ]; then
+              git reset --hard
+              git pull origin main
             else
-              rm -rf "$APP_DIR/*" || true
-              git clone "$REPO_URL" "$APP_DIR"
+              git clone https://github.com/xdlemar/capstone-node.git .
             fi
 
-            echo "=> Show Node & npm"
-            node -v
-            npm -v
-
-            echo "=> Install dependencies inside repo"
-            cd "$APP_DIR"
+            echo "==> Install dependencies"
             npm ci
 
-            echo "=> Run migrations with Prisma (via npx)"
+            echo "==> Run migrations"
             DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" \
-              npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+            npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
 
             DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" \
-              npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+            npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
 
             DATABASE_URL="${{ secrets.AUTH_DB_URL }}" \
-              npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+            npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
-            echo "=> Start / Reload services with PM2 (if installed)"
+            echo "==> Restart with PM2"
             if command -v pm2 >/dev/null 2>&1; then
               pm2 startOrReload ecosystem.config.js --update-env || true
               pm2 save || true
-              pm2 status || true
             else
-              echo "PM2 not found. Install it with: npm i -g pm2"
+              echo "⚠️ PM2 not found on server!"
             fi
-
-            echo "✅ Deploy script finished."
