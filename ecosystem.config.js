@@ -29,7 +29,7 @@ module.exports = {
       script: "auth-svc/src/server.js",
       env: {
         NODE_ENV: "production",
-        PORT: 4002
+        PORT: 4000
       }
     }
   ]
