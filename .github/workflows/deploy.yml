@@ -7,6 +7,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -14,14 +15,15 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: 23.94.230.146
-          username: loghe5242
-          key: ${{ secrets.SSH_KEY }}   # your private key (PEM) stored in repo secrets
-          port: 2298
+          host:      ${{ secrets.SERVER_IP }}
+          username:  ${{ secrets.SERVER_USER }}
+          key:       ${{ secrets.SSH_KEY }}
+          port:      2298
           script_stop: true
           script: |
             set -e
-            cd /home/log1.health-ease-hospital.com
+
+            cd "${{ secrets.SERVER_PATH }}"
 
             if [ -d .git ]; then
               git pull origin main
@@ -29,20 +31,22 @@ jobs:
               git clone https://github.com/xdlemar/capstone-node.git .
             fi
 
-            # Node & pm2
-            npm i -g pm2 || true
+          
             npm ci
 
-            # Migrations (password encoded)
-            DATABASE_URL='postgresql://postgres:Masterpogi09%3F@23.94.230.146:5432/inventory_db?schema=public' \
-              npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+            
+            DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" \
+            npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
 
-            DATABASE_URL='postgresql://postgres:Masterpogi09%3F@23.94.230.146:5432/procurement_db?schema=public' \
-              npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" \
+            npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
 
-            DATABASE_URL='postgresql://postgres:Masterpogi09%3F@23.94.230.146:5432/auth_db?schema=public' \
-              npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.AUTH_DB_URL }}" \
+            npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
-            # Start / reload with PM2
-            pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js
-            pm2 save
+          
+
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 startOrReload ecosystem.config.js --update-env || true
+              pm2 save || true
+            fi
