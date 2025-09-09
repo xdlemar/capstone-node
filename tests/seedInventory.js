@@ -1,5 +1,5 @@
 // tests/seedInventory.js
-require('dotenv').config({ path: '/tests/.env.test' });
+require('dotenv').config({ path: '../tests/.env.test' });
 
 // 👇 point to the generated client under inventory-svc
 const { PrismaClient } = require('../inventory-svc/node_modules/@prisma/client');
