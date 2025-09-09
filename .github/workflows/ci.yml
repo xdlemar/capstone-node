@@ -124,8 +124,10 @@ jobs:
           }
 
 
-      - name: Seed minimal master data
-        run: node tests/seedInventory.js
+      - name: Seed minimal master data (set DATABASE_URL explicitly)
+        run: |
+          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
+          node tests/seedInventory.js
 
       - name: Run tests
         run: npm test
