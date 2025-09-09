@@ -17,78 +17,39 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.SERVER_IP }}
+          host:     ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: 2298
+          key:      ${{ secrets.SSH_KEY }}
+          port:     2298
           script_stop: true
           script: |
             set -euo pipefail
-            echo "==> Start remote deploy on $(hostname) as $(whoami)"
 
-            APP_DIR="/home/log1.health-ease-hospital.com"
+            # ---- config paths ----
+            APP_DIR="${{ secrets.SERVER_PATH }}"     # e.g. /home/log1.health-ease-hospital.com
             REPO_URL="https://github.com/xdlemar/capstone-node.git"
-            export NVM_DIR="$HOME/.nvm"
 
-            echo "==> Pre-flight: which tools are present?"
-            which git || true
-            which curl || true
-            which wget || true
-            which node || true
-            which npm || true
-            which pm2 || true
-
-            # --- Ensure Node.js 20 via nvm (no sudo required) ---
-            if ! command -v node >/dev/null 2>&1; then
-              echo "==> Node not found. Installing nvm + Node 20…"
-              mkdir -p "$NVM_DIR"
-
-              if command -v curl >/dev/null 2>&1; then
-                curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-              elif command -v wget >/dev/null 2>&1; then
-                wget -qO- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-              else
-                echo "ERROR: neither curl nor wget is available to fetch nvm."; exit 1
-              fi
-            fi
-
-            # Load nvm into this non-interactive shell
-            if [ -s "$NVM_DIR/nvm.sh" ]; then
-              . "$NVM_DIR/nvm.sh"
-            else
-              echo "ERROR: $NVM_DIR/nvm.sh not found after install."; exit 1
-            fi
-
-            # Install/use Node 20 and print versions
-            nvm install 20 >/dev/null
-            nvm use 20 >/dev/null
-            echo "==> Versions: node=$(node -v) npm=$(npm -v)"
-
-            # Ensure pm2 exists
-            if ! command -v pm2 >/dev/null 2>&1; then
-              echo "==> Installing pm2 globally…"
-              npm i -g pm2
-            fi
-            echo "==> pm2 version: $(pm2 -v || echo none)"
-
-            # --- Fetch code ---
+            echo "=> Ensuring target dir exists: $APP_DIR"
             mkdir -p "$APP_DIR"
-            cd "$APP_DIR"
 
-            if [ -d .git ]; then
-              echo "==> Updating repo…"
-              git remote set-url origin "$REPO_URL" || true
-              git fetch --all --prune
-              git reset --hard origin/main
+            echo "=> Clone or pull repo"
+            if [ -d "$APP_DIR/.git" ]; then
+              git -C "$APP_DIR" fetch --all
+              git -C "$APP_DIR" reset --hard origin/main
             else
-              echo "==> Cloning repo…"
-              git clone "$REPO_URL" .
+              rm -rf "$APP_DIR/*" || true
+              git clone "$REPO_URL" "$APP_DIR"
             fi
 
-            echo "==> Installing dependencies…"
+            echo "=> Show Node & npm"
+            node -v
+            npm -v
+
+            echo "=> Install dependencies inside repo"
+            cd "$APP_DIR"
             npm ci
 
-            echo "==> Running prisma migrations…"
+            echo "=> Run migrations with Prisma (via npx)"
             DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" \
               npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
 
@@ -98,9 +59,13 @@ jobs:
             DATABASE_URL="${{ secrets.AUTH_DB_URL }}" \
               npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
-            echo "==> Reloading services with PM2…"
-            pm2 startOrReload ecosystem.config.js --update-env || true
-            pm2 save || true
-            pm2 status || true
-            
-            echo "✅ Deploy complete."
+            echo "=> Start / Reload services with PM2 (if installed)"
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 startOrReload ecosystem.config.js --update-env || true
+              pm2 save || true
+              pm2 status || true
+            else
+              echo "PM2 not found. Install it with: npm i -g pm2"
+            fi
+
+            echo "✅ Deploy script finished."
