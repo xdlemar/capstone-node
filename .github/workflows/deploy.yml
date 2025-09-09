@@ -2,50 +2,77 @@ name: Deploy to Server
 
 on:
   workflow_run:
-    workflows: ["ci"]   
-    types:
-      - completed
+    workflows: ["ci"]
+    types: [completed]
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }} 
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout (metadata only)
         uses: actions/checkout@v4
 
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host:   ${{ secrets.SERVER_IP }}
+          host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
-          key:  ${{ secrets.SSH_KEY }}
+          key: ${{ secrets.SSH_KEY }}
           port: 2298
           script_stop: true
           script: |
-            cd /home/log1.health-ease-hospital.com
-            if [ -d .git ]; then
-              git pull origin main
+            set -euo pipefail
+
+            APP_DIR="/home/log1.health-ease-hospital.com"
+            REPO_URL="https://github.com/xdlemar/capstone-node.git"
+
+           
+            if ! command -v node >/dev/null 2>&1; then
+              echo "Installing Node.js 20 via nvm..."
+              export NVM_DIR="$HOME/.nvm"
+              mkdir -p "$NVM_DIR"
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+              . "$NVM_DIR/nvm.sh"
+              nvm install 20
+              nvm alias default 20
             else
-              git clone https://github.com/xdlemar/capstone-node.git .
+              echo "Node present: $(node -v)"
+            fi
+            if ! command -v pm2 >/dev/null 2>&1; then
+              echo "Installing pm2 globally..."
+              npm i -g pm2
             fi
 
-          
+           
+            if [ -s "$HOME/.nvm/nvm.sh" ]; then . "$HOME/.nvm/nvm.sh"; fi
+
+           
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
+            if [ -d .git ]; then
+              git fetch --all --prune
+              git reset --hard origin/main
+            else
+              git clone "$REPO_URL" .
+            fi
+
+           
             npm ci
 
             
             DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" \
-            npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+              npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
 
             DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" \
-            npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+              npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
 
             DATABASE_URL="${{ secrets.AUTH_DB_URL }}" \
-            npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+              npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
-          
+            
+            pm2 startOrReload ecosystem.config.js --update-env || true
+            pm2 save || true
 
-            if command -v pm2 >/dev/null 2>&1; then
-              pm2 startOrReload ecosystem.config.js --update-env || true
-              pm2 save || true
-            fi
+            echo "✅ Deploy complete."
