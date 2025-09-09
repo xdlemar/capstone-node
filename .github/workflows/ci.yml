@@ -123,7 +123,6 @@ jobs:
             echo "GATEWAY failed to become healthy. Last 200 lines:"; tail -n 200 gw.log; exit 1; 
           }
 
-
       - name: Seed minimal master data (set DATABASE_URL explicitly)
         run: |
           DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
