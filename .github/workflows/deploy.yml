@@ -41,6 +41,7 @@ jobs:
             echo "==> Install dependencies"
             npm ci
 
+            
             echo "==> Run migrations"
             DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" \
             npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
