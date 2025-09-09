@@ -132,14 +132,10 @@ jobs:
       - name: Run tests (set DATABASE_URL explicitly)
         run: |
           DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/procurement_db?schema=public" \  
           npm test
 
-      - name: Smoke (set DATABASE_URL explicitly)
-        run: |
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/procurement_db?schema=public" \
-          npm run smoke
+      - name: Smoke
+        run: npm run smoke
 
       - name: Upload logs on failure
         if: failure()
