@@ -25,6 +25,7 @@ jobs:
           script: |
             set -e
 
+            
             APP_DIR="/home/log1.health-ease-hospital.com/public_html"
 
             echo "==> Navigate to app dir"
