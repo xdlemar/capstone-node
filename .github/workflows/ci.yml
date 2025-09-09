@@ -1,5 +1,4 @@
 name: ci
-
 on:
   push:
     branches: [ main ]
@@ -10,27 +9,28 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      # DB in CI (single runner VM)
       DB_USER: postgres
-      DB_PASS: 'Masterpogi09?'       
+      DB_PASS: 'Masterpogi09?'         # raw for Postgres container & psql
       DB_HOST: localhost
       DB_PORT: 5432
+      DB_PASS_URL: 'Masterpogi09%3F'   # URL-encoded for DATABASE_URL
 
-      DB_PASS_URL: 'Masterpogi09%3F'  
-
-     
+      # Service URLs (inside runner)
       INVENTORY_URL:   http://localhost:4001
       PROCUREMENT_URL: http://localhost:4002
       AUTH_URL:        http://localhost:4003
       GATEWAY_URL:     http://localhost:8080
 
+      # Shared secret for gateway
       JWT_SECRET: super_secret_dev
 
     services:
       postgres:
         image: postgres:16
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: 'Masterpogi09?'  
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: 'Masterpogi09?'   # must match DB_PASS (raw)
         ports: [ "5432:5432" ]
         options: >-
           --health-cmd="pg_isready -U postgres"
@@ -77,25 +77,25 @@ jobs:
 
       - name: Start services (backends first, then gateway)
         run: |
-          # inventory
+          # inventory (4001)
           export PORT=4001 DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory?schema=public"
           node inventory-svc/src/server.js > inv.log 2>&1 &
 
-          # procurement
+          # procurement (4002)
           export PORT=4002 DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/procurement?schema=public"
           node procurement-svc/src/server.js > proc.log 2>&1 &
 
-          # auth
+          # auth (4003)
           export PORT=4003 DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/auth?schema=public"
           node auth-svc/src/server.js > auth.log 2>&1 &
 
           # wait for backends
-          npx wait-on -t 60000 \
+          npx -y wait-on -t 60000 \
             "${{ env.INVENTORY_URL }}/health" \
             "${{ env.PROCUREMENT_URL }}/health" \
             "${{ env.AUTH_URL }}/health"
 
-          # gateway (depends on backends)
+          # gateway (8080) depends on backends
           export PORT=8080 \
                  INVENTORY_URL="${{ env.INVENTORY_URL }}" \
                  PROCUREMENT_URL="${{ env.PROCUREMENT_URL }}" \
@@ -104,7 +104,7 @@ jobs:
           node gateway/src/index.js > gw.log 2>&1 &
 
           # wait for gateway
-          npx wait-on -t 60000 "${{ env.GATEWAY_URL }}/health"
+          npx -y wait-on -t 60000 "${{ env.GATEWAY_URL }}/health"
 
       - name: Seed minimal master data
         run: node tests/seedInventory.js
