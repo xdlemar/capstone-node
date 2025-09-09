@@ -3,15 +3,15 @@ name: Deploy to Server
 on:
   workflow_run:
     workflows: ["ci"]
-    types: [completed]
+    types:
+      - completed
 
 jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout (metadata only)
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Deploy via SSH
@@ -23,123 +23,39 @@ jobs:
           port: 2298
           script_stop: true
           script: |
-            set -euo pipefail
+            set -e
 
-            APP_DIR="${{ secrets.SERVER_PATH }}"
-            REPO_URL="https://github.com/${{ github.repository }}.git"
+            APP_DIR="/home/log1.health-ease-hospital.com/public_html"
 
-            echo "==> Ensure app dir"
-            mkdir -p "$APP_DIR"
+            echo "==> Navigate to app dir"
+            cd $APP_DIR
 
-            echo "==> Clone or pull"
-            if [ -d "$APP_DIR/.git" ]; then
-              git -C "$APP_DIR" fetch --all
-              git -C "$APP_DIR" reset --hard origin/main
+            echo "==> Pull latest code"
+            if [ -d .git ]; then
+              git reset --hard
+              git pull origin main
             else
-              rm -rf "$APP_DIR"/*
-              git clone "$REPO_URL" "$APP_DIR"
-              git -C "$APP_DIR" checkout main
+              git clone https://github.com/xdlemar/capstone-node.git .
             fi
 
-            echo "==> Node & deps"
-            cd "$APP_DIR"
-            if ! command -v node >/dev/null 2>&1; then
-              echo "Install Node via NVM"
-              export NVM_DIR="$HOME/.nvm"
-              mkdir -p "$NVM_DIR"
-              curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-              . "$NVM_DIR/nvm.sh"
-              nvm install 20
-              nvm use 20
-            else
-              echo "Node found: $(node -v)"
-            fi
-            # load nvm if present
-            [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" && nvm use 20 || true
-
+            echo "==> Install dependencies"
             npm ci
-            npm --prefix inventory-svc ci
-            npm --prefix procurement-svc ci
-            npm --prefix auth-svc ci
-            npm --prefix gateway ci
 
-            echo "==> Migrations (local Postgres)"
-            export DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}"
+            
+            echo "==> Run migrations"
+            DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" \
             npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
 
-            export DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}"
+            DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" \
             npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
 
-            export DATABASE_URL="${{ secrets.AUTH_DB_URL }}"
+            DATABASE_URL="${{ secrets.AUTH_DB_URL }}" \
             npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
-            echo "==> PM2 start/reload"
-            if ! command -v pm2 >/dev/null 2>&1; then
-              # user-space install to avoid sudo
-              npm i -g pm2 || true
-              [ -x "$(command -v pm2)" ] || { echo "PM2 not available, exiting"; exit 1; }
+            echo "==> Restart with PM2"
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 startOrReload ecosystem.config.js --update-env || true
+              pm2 save || true
+            else
+              echo "⚠️ PM2 not found on server!"
             fi
-
-            # inject env for services via ecosystem file
-            cat > "$APP_DIR/ecosystem.config.js" <<'EOF'
-            module.exports = {
-              apps: [
-                {
-                  name: "inventory",
-                  cwd: "./inventory-svc",
-                  script: "src/server.js",
-                  env: {
-                    PORT: "4001",
-                    DATABASE_URL: process.env.INVENTORY_DB_URL
-                  }
-                },
-                {
-                  name: "procurement",
-                  cwd: "./procurement-svc",
-                  script: "src/server.js",
-                  env: {
-                    PORT: "4002",
-                    DATABASE_URL: process.env.PROCUREMENT_DB_URL
-                  }
-                },
-                {
-                  name: "auth",
-                  cwd: "./auth-svc",
-                  script: "src/server.js",
-                  env: {
-                    JWT_SECRET: "super_secret_dev",
-                    JWT_EXPIRES: "8h",
-                    CORS_ORIGIN: "http://localhost:5173",
-                    PORT: "4000",
-                    DATABASE_URL: process.env.AUTH_DB_URL
-                  }
-                },
-                {
-                  name: "gateway",
-                  cwd: "./gateway",
-                  script: "src/index.js",
-                  env: {
-                    PORT: "8080",
-                    INVENTORY_URL: "http://localhost:4001",
-                    PROCUREMENT_URL: "http://localhost:4002",
-                    AUTH_URL: "http://localhost:4000",
-                    JWT_SECRET: "super_secret_dev"
-                  }
-                }
-              ]
-            }
-            EOF
-
-            # export secrets to environment before pm2 reads ecosystem
-            export INVENTORY_DB_URL="${{ secrets.INVENTORY_DB_URL }}"
-            export PROCUREMENT_DB_URL="${{ secrets.PROCUREMENT_DB_URL }}"
-            export AUTH_DB_URL="${{ secrets.AUTH_DB_URL }}"
-
-            pm2 startOrReload ecosystem.config.js --update-env || pm2 start ecosystem.config.js --update-env
-            pm2 save || true
-
-            echo "==> Health checks"
-            curl -fsS http://localhost:4001/health
-            curl -fsS http://localhost:4002/health
-            curl -fsS http://localhost:4000/health
-            curl -fsS http://localhost:8080/health
