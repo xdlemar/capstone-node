@@ -57,22 +57,22 @@ jobs:
 
       - name: Create DBs
         run: |
-          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "inventory";'   || true
-          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "procurement";' || true
-          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "auth";'        || true
+          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "inventory_db";'   || true
+          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "procurement_db";' || true
+          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "auth_db";'        || true
 
       - name: Generate Prisma clients
         run: npm run gen:clients
 
       - name: Run migrations (explicit URLs)
         run: |
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory?schema=public" \
+          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
           npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
 
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/procurement?schema=public" \
+          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/procurement_db?schema=public" \
           npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
 
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/auth?schema=public" \
+          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/auth_db?schema=public" \
           npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
       - name: Start services (backends first, then gateway)
@@ -81,16 +81,16 @@ jobs:
           DB_PASS_URL: ${{ env.DB_PASS_URL }}
           DB_HOST: ${{ env.DB_HOST }}
           DB_PORT: ${{ env.DB_PORT }}
-          INVENTORY_URL: ${{ env.INVENTORY_URL }}     # http://localhost:4001
-          PROCUREMENT_URL: ${{ env.PROCUREMENT_URL }} # http://localhost:4002
-          AUTH_URL: ${{ env.AUTH_URL }}               # http://localhost:4000
+          INVENTORY_URL: ${{ env.INVENTORY_URL }}     
+          PROCUREMENT_URL: ${{ env.PROCUREMENT_URL }} 
+          AUTH_URL: ${{ env.AUTH_URL }}               
           JWT_SECRET: ${{ env.JWT_SECRET }}
         run: |
           set -e
 
           # --- INVENTORY (4001) ---
           export PORT=4001 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/inventory?schema=public"
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/inventory_db?schema=public"
           node inventory-svc/src/server.js > inv.log 2>&1 &
           npx wait-on -t 120000 "${INVENTORY_URL}/health" || { 
             echo "INVENTORY failed to become healthy. Last 200 lines:"; tail -n 200 inv.log; exit 1; 
@@ -98,7 +98,7 @@ jobs:
 
           # --- PROCUREMENT (4002) ---
           export PORT=4002 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/procurement?schema=public"
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/procurement_db?schema=public"
           node procurement-svc/src/server.js > proc.log 2>&1 &
           npx wait-on -t 120000 "${PROCUREMENT_URL}/health" || { 
             echo "PROCUREMENT failed to become healthy. Last 200 lines:"; tail -n 200 proc.log; exit 1; 
@@ -106,7 +106,7 @@ jobs:
 
           # --- AUTH (4000) ---
           export PORT=4000 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/auth?schema=public"
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/auth_db?schema=public"
           node auth-svc/src/server.js > auth.log 2>&1 &
           npx wait-on -t 120000 "${AUTH_URL}/health" || { 
             echo "AUTH failed to become healthy. Last 200 lines:"; tail -n 200 auth.log; exit 1; 
