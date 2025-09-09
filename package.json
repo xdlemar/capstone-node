@@ -15,8 +15,8 @@
     "test": "cross-env NODE_ENV=test jest --runInBand --testTimeout=60000",
     "gen:clients": "npx prisma generate --schema=inventory-svc/prisma/schema.prisma && npx prisma generate --schema=procurement-svc/prisma/schema.prisma && npx prisma generate --schema=auth-svc/prisma/schema.prisma",
     "db:migrate": "dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma",
-    "start:ci": "concurrently -k -s first -n inv,proc,gw -c green,magenta,blue \"node inventory-svc/src/server.js\" \"node procurement-svc/src/server.js\" \"node gateway/src/index.js\"",
-    "wait:ci": "wait-on -t 30000 http://localhost:4001/health http://localhost:4002/health http://localhost:8080/health",
+    "start:ci": "concurrently -k -s first -n inv,proc,gw -c green,magenta,blue \"node inventory-svc/src/server.js\" \"node procurement-svc/src/server.js\" \"node gateway/src/index.js\" \"node gateway/src/index.js\"",
+    "wait:ci": "wait-on -t 30000 http://localhost:4001/health http://localhost:4002/health http://localhost:8080/health http://localhost:4000/health",
     "smoke": "node tests/smoke.js"
   },
   "dependencies": {
