@@ -76,35 +76,53 @@ jobs:
           npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
 
       - name: Start services (backends first, then gateway)
+        env:
+          DB_USER: ${{ env.DB_USER }}
+          DB_PASS_URL: ${{ env.DB_PASS_URL }}
+          DB_HOST: ${{ env.DB_HOST }}
+          DB_PORT: ${{ env.DB_PORT }}
+          INVENTORY_URL: ${{ env.INVENTORY_URL }}     # http://localhost:4001
+          PROCUREMENT_URL: ${{ env.PROCUREMENT_URL }} # http://localhost:4002
+          AUTH_URL: ${{ env.AUTH_URL }}               # http://localhost:4000
+          JWT_SECRET: ${{ env.JWT_SECRET }}
         run: |
-          # inventory (4001)
-          export PORT=4001 DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory?schema=public"
+          set -e
+
+          # --- INVENTORY (4001) ---
+          export PORT=4001 \
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/inventory?schema=public"
           node inventory-svc/src/server.js > inv.log 2>&1 &
+          npx wait-on -t 120000 "${INVENTORY_URL}/health" || { 
+            echo "INVENTORY failed to become healthy. Last 200 lines:"; tail -n 200 inv.log; exit 1; 
+          }
 
-          # procurement (4002)
-          export PORT=4002 DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/procurement?schema=public"
+          # --- PROCUREMENT (4002) ---
+          export PORT=4002 \
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/procurement?schema=public"
           node procurement-svc/src/server.js > proc.log 2>&1 &
+          npx wait-on -t 120000 "${PROCUREMENT_URL}/health" || { 
+            echo "PROCUREMENT failed to become healthy. Last 200 lines:"; tail -n 200 proc.log; exit 1; 
+          }
 
-          # auth (4000)
-          export PORT=4000 DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/auth?schema=public"
+          # --- AUTH (4000) ---
+          export PORT=4000 \
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/auth?schema=public"
           node auth-svc/src/server.js > auth.log 2>&1 &
+          npx wait-on -t 120000 "${AUTH_URL}/health" || { 
+            echo "AUTH failed to become healthy. Last 200 lines:"; tail -n 200 auth.log; exit 1; 
+          }
 
-          # wait for backends
-          npx -y wait-on -t 60000 \
-            "${{ env.INVENTORY_URL }}/health" \
-            "${{ env.PROCUREMENT_URL }}/health" \
-            "${{ env.AUTH_URL }}/health"
-
-          # gateway (8080) depends on backends
+          # --- GATEWAY (8080) ---
           export PORT=8080 \
-                 INVENTORY_URL="${{ env.INVENTORY_URL }}" \
-                 PROCUREMENT_URL="${{ env.PROCUREMENT_URL }}" \
-                 AUTH_URL="${{ env.AUTH_URL }}" \
-                 JWT_SECRET="${{ env.JWT_SECRET }}"
+                 INVENTORY_URL="${INVENTORY_URL}" \
+                 PROCUREMENT_URL="${PROCUREMENT_URL}" \
+                 AUTH_URL="${AUTH_URL}" \
+                 JWT_SECRET="${JWT_SECRET}"
           node gateway/src/index.js > gw.log 2>&1 &
+          npx wait-on -t 120000 "${GATEWAY_URL}/health" || { 
+            echo "GATEWAY failed to become healthy. Last 200 lines:"; tail -n 200 gw.log; exit 1; 
+          }
 
-          # wait for gateway
-          npx -y wait-on -t 60000 "${{ env.GATEWAY_URL }}/health"
 
       - name: Seed minimal master data
         run: node tests/seedInventory.js
