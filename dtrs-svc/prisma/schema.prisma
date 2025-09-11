@@ -1,3 +1,5 @@
+// dtrs-svc/prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,48 +9,122 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Document {
-  id        BigInt   @id @default(autoincrement())
-  title     String
-  projectId BigInt? // NOTE: separate microservice => store ID, no FK
-  type      String? // DR | INVOICE | PO | POLICY | etc.
-  createdAt DateTime @default(now())
-
-  versions DocumentVersion[]
-  acls     DocumentACL[]
-  audits   DocumentAudit[]
+/**
+ * ============== Enums ==============
+ */
+enum DocumentModule {
+  INVENTORY
+  PROCUREMENT
+  DELIVERY
+  PROJECT
+  ASSET
+  MAINTENANCE
+  OTHER
 }
 
-model DocumentVersion {
-  id         BigInt   @id @default(autoincrement())
-  documentId BigInt
-  versionNo  Int
-  fileKey    String
-  checksum   String
-  createdAt  DateTime @default(now())
+enum DocAction {
+  VIEW
+  DOWNLOAD
+  CREATE
+  UPDATE
+  DELETE
+  SIGN
+}
+
+enum SignatureMethod {
+  DRAWN
+  TYPED
+  UPLOADED
+  PKI
+}
+
+/**
+ * ============== Models ==============
+ */
+model Document {
+  id         BigInt         @id @default(autoincrement())
+  module     DocumentModule
+  title      String
+  storageKey String
+  mimeType   String?
+  size       Int?
+  checksum   String?
+  uploaderId BigInt?
+
+  // cross-service references as scalar IDs (no relations across services)
+  projectId  BigInt?
+  poId       BigInt?
+  receiptId  BigInt?
+  deliveryId BigInt?
+  assetId    BigInt?
+  woId       BigInt?
+
+  isArchived Boolean @default(false)
+
+  versions   DocVersion[]
+  signatures DocSignature[]
+  tags       DocTag[]
+  audits     DocAccessAudit[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([module, projectId])
+  @@index([poId])
+  @@index([receiptId])
+  @@index([deliveryId])
+  @@index([assetId])
+}
+
+model DocVersion {
+  id          BigInt   @id @default(autoincrement())
+  documentId  BigInt
+  versionNo   Int
+  storageKey  String
+  size        Int?
+  checksum    String?
+  createdAt   DateTime @default(now())
+  createdById BigInt?
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, versionNo])
 }
 
-model DocumentACL {
-  id         BigInt @id @default(autoincrement())
+model DocSignature {
+  id         BigInt          @id @default(autoincrement())
   documentId BigInt
-  principal  String // user:id or role:name
-  role       String // VIEW | EDIT | OWNER
+  signerId   BigInt?
+  method     SignatureMethod
+  signedAt   DateTime        @default(now())
+  storageKey String?
+  ip         String?
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  @@index([principal])
+  @@index([documentId, signerId])
 }
 
-model DocumentAudit {
-  id         BigInt   @id @default(autoincrement())
+model DocTag {
+  id         BigInt @id @default(autoincrement())
   documentId BigInt
-  userId     BigInt?
-  action     String // VIEW | UPLOAD | DELETE | SHARE | DOWNLOAD
-  at         DateTime @default(now())
+  name       String
 
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([name])
+}
+
+model DocAccessAudit {
+  id         BigInt    @id @default(autoincrement())
+  documentId BigInt
+  userId     BigInt?
+  action     DocAction
+  occurredAt DateTime  @default(now())
+  ip         String?
+  userAgent  String?
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, occurredAt])
 }

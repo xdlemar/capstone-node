@@ -3,8 +3,7 @@ name: Deploy to Server
 on:
   workflow_run:
     workflows: ["ci"]
-    types:
-      - completed
+    types: [ completed ]
 
 jobs:
   deploy:
@@ -14,7 +13,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-        
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -25,11 +23,11 @@ jobs:
           script_stop: true
           script: |
             set -e
-
             APP_DIR="/home/log1.health-ease-hospital.com/public_html"
 
             echo "==> Navigate to app dir"
-            cd $APP_DIR
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
 
             echo "==> Pull latest code"
             if [ -d .git ]; then
@@ -41,8 +39,14 @@ jobs:
 
             echo "==> Install dependencies"
             npm ci
+            npm --prefix inventory-svc ci
+            npm --prefix procurement-svc ci
+            npm --prefix auth-svc ci
+            npm --prefix gateway ci
+            npm --prefix plt-svc ci          
+            npm --prefix dtrs-svc ci         
+            npm --prefix alms-svc ci         
 
-            
             echo "==> Run migrations"
             DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" \
             npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
@@ -52,6 +56,15 @@ jobs:
 
             DATABASE_URL="${{ secrets.AUTH_DB_URL }}" \
             npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+
+            DATABASE_URL="${{ secrets.PLT_DB_URL }}" \
+            npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
+
+            DATABASE_URL="${{ secrets.DTRS_DB_URL }}" \
+            npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
+
+            DATABASE_URL="${{ secrets.ALMS_DB_URL }}" \
+            npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
 
             echo "==> Restart with PM2"
             if command -v pm2 >/dev/null 2>&1; then

@@ -10,16 +10,16 @@
     "supertest": "^7.1.4",
     "wait-on": "^7.2.0"
   },
+  "dependencies": {
+    "@prisma/client": "^6.15.0"
+  },
   "scripts": {
     "pretest": "node tests/seedInventory.js",
     "test": "cross-env NODE_ENV=test jest --runInBand --testTimeout=60000",
-    "gen:clients": "npx prisma generate --schema=inventory-svc/prisma/schema.prisma && npx prisma generate --schema=procurement-svc/prisma/schema.prisma && npx prisma generate --schema=auth-svc/prisma/schema.prisma",
-    "db:migrate": "dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma && npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma",
-    "start:ci": "concurrently -k -s first -n inv,proc,gw -c green,magenta,blue \"node inventory-svc/src/server.js\" \"node procurement-svc/src/server.js\" \"node gateway/src/index.js\" \"node gateway/src/index.js\"",
-    "wait:ci": "wait-on -t 30000 http://localhost:4001/health http://localhost:4002/health http://localhost:8080/health http://localhost:4000/health",
+    "gen:clients": "npx prisma generate --schema=inventory-svc/prisma/schema.prisma && npx prisma generate --schema=procurement-svc/prisma/schema.prisma && npx prisma generate --schema=auth-svc/prisma/schema.prisma && npx prisma generate --schema=plt-svc/prisma/schema.prisma && npx prisma generate --schema=dtrs-svc/prisma/schema.prisma && npx prisma generate --schema=alms-svc/prisma/schema.prisma",
+    "db:migrate": "dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma",
+    "start:ci": "concurrently -k -s first -n inv,proc,auth,plt,dtrs,alms,gw -c green,magenta,cyan,yellow,blue,red,white \"node inventory-svc/src/server.js\" \"node procurement-svc/src/server.js\" \"node auth-svc/src/server.js\" \"node plt-svc/src/server.js\" \"node dtrs-svc/src/server.js\" \"node alms-svc/src/server.js\" \"node gateway/src/index.js\"",
+    "wait:ci": "wait-on -t 60000 http://localhost:4001/health http://localhost:4002/health http://localhost:4000/health http://localhost:4005/health http://localhost:4006/health http://localhost:4007/health http://localhost:8080/health",
     "smoke": "node tests/smoke.js"
-  },
-  "dependencies": {
-    "@prisma/client": "^6.15.0"
   }
 }

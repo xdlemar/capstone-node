@@ -1,4 +1,3 @@
-// Uses Node 18+ global fetch to call inventory-svc for stock moves.
 const BASE = process.env.INVENTORY_URL || "http://localhost:4001";
 
 async function postStockMove(body) {

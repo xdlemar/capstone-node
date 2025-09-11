@@ -48,19 +48,17 @@ function proxy(target) {
         "x-user-roles",
         Array.isArray(u.roles) ? u.roles.join(",") : ""
       );
-      // NOTE: we intentionally DON'T touch req.body here.
-      // Because express.json() is mounted AFTER the proxies,
-      // the raw request body streams straight through (best for POST/PUT).
+    
     },
   });
 }
+
 app.use("/api/auth", proxy(process.env.AUTH_URL)); // public
 app.use("/api/inventory", authRequired, proxy(process.env.INVENTORY_URL));
 app.use("/api/procurement", authRequired, proxy(process.env.PROCUREMENT_URL));
-// app.use("/api/alms", authRequired, proxy(process.env.ALMS_URL));
-// app.use("/api/dtrs", authRequired, proxy(process.env.DTRS_URL));
-// app.use("/api/plt", authRequired, proxy(process.env.PLT_URL));
-// 3) Only now parse JSON for any NON-proxied routes you add locally
+app.use("/api/alms", authRequired, proxy(process.env.ALMS_URL));
+app.use("/api/dtrs", authRequired, proxy(process.env.DTRS_URL));
+app.use("/api/plt", authRequired, proxy(process.env.PLT_URL));
 app.use(express.json({ limit: "1mb" }));
 app.get("/health", (_req, res) => res.json({ ok: true, svc: "gateway" }));
 const port = Number(process.env.PORT || 8080);

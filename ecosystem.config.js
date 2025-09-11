@@ -32,5 +32,32 @@ module.exports = {
         PORT: 4000
       }
     }
+    ,
+     {
+      name: "plt-svc",
+      script: "plt-svc/src/server.js",
+      env: {
+        NODE_ENV: "production",
+        PORT: 4005
+      }
+    }
+     ,
+     {
+      name: "dtrs-svc",
+      script: "dtrs-svc/src/server.js",
+      env: {
+        NODE_ENV: "production",
+        PORT: 4006
+      }
+    }
+     ,
+     {
+      name: "alms-svc",
+      script: "alms-svc/src/server.js",
+      env: {
+        NODE_ENV: "production",
+        PORT: 4007
+      }
+    }
   ]
 };

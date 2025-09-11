@@ -7,81 +7,142 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AssetStatus {
+  ACTIVE
+  UNDER_MAINTENANCE
+  RETIRED
+  DISPOSED
+}
+
+enum MaintenanceType {
+  PREVENTIVE
+  CORRECTIVE
+  INSPECTION
+  CALIBRATION
+}
+
+enum WorkOrderStatus {
+  OPEN
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum DepreciationMethod {
+  STRAIGHT_LINE
+  DECLINING_BALANCE
+  NONE
+}
+
 model Asset {
-  id           BigInt    @id @default(autoincrement())
-  tagNo        String    @unique
-  name         String
-  locationId   BigInt?
-  purchaseDate DateTime?
-  purchaseCost Decimal?
-  status       String    @default("ACTIVE") // ACTIVE | UNDER_REPAIR | DISPOSED
+  id              BigInt      @id @default(autoincrement())
+  assetCode       String      @unique
+  itemId          BigInt?
+  serialNo        String?
+  category        String?
+  purchaseDate    DateTime?
+  acquisitionCost Decimal?
+  vendorId        BigInt?
+  warrantyUntil   DateTime?
+  status          AssetStatus @default(ACTIVE)
+  locationId      BigInt?
+  notes           String?
 
-  // relations
-  location   Location?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
-  events     AssetEvent[]
-  warranties Warranty[]
-  disposals  Disposal[]
-  plans      MaintenancePlan[] // back-rel for MaintenancePlan.asset
+  depreciation AssetDepreciation?
+  transfers    AssetTransfer[]
+  workOrders   MaintenanceWorkOrder[]
+  repairs      RepairLog[]
+  disposal     AssetDisposal?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  MaintenanceSchedule MaintenanceSchedule[]
+
+  @@index([serialNo])
+  @@index([locationId])
 }
 
-model Location {
-  id   BigInt @id @default(autoincrement())
-  name String @unique
-  kind String // ROOM | WAREHOUSE | LAB | etc.
-
-  // back-rel for Asset.location
-  assets Asset[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model AssetEvent {
-  id         BigInt   @id @default(autoincrement())
-  assetId    BigInt
-  type       String // TRANSFER | REPAIR | INSPECTION
-  note       String?
-  occurredAt DateTime @default(now())
+model AssetDepreciation {
+  id          BigInt             @id @default(autoincrement())
+  assetId     BigInt             @unique
+  method      DepreciationMethod @default(STRAIGHT_LINE)
+  lifeMonths  Int?
+  salvage     Decimal?
+  startedAt   DateTime?
+  accumulated Decimal            @default(0)
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 }
 
-model MaintenancePlan {
-  id      BigInt @id @default(autoincrement())
-  assetId BigInt
-  rule    String // e.g. "RRULE:FREQ=MONTHLY;INTERVAL=3"
+model MaintenanceSchedule {
+  id           BigInt          @id @default(autoincrement())
+  assetId      BigInt
+  type         MaintenanceType
+  intervalDays Int?
+  nextDue      DateTime?
+  notes        String?
 
-  asset Asset            @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  jobs  MaintenanceJob[]
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, nextDue])
 }
 
-model MaintenanceJob {
-  id          BigInt    @id @default(autoincrement())
-  planId      BigInt
-  dueAt       DateTime
-  status      String    @default("DUE") // DUE | DONE | OVERDUE
+model MaintenanceWorkOrder {
+  id          BigInt          @id @default(autoincrement())
+  woNo        String          @unique
+  assetId     BigInt
+  type        MaintenanceType
+  status      WorkOrderStatus @default(OPEN)
+  scheduledAt DateTime?
+  startedAt   DateTime?
   completedAt DateTime?
+  cost        Decimal         @default(0)
+  technician  String?
+  notes       String?
 
-  plan MaintenancePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  RepairLog RepairLog[]
+
+  @@index([assetId, status])
 }
 
-model Warranty {
-  id       BigInt    @id @default(autoincrement())
-  assetId  BigInt
-  provider String?
-  endDate  DateTime?
+model RepairLog {
+  id          BigInt   @id @default(autoincrement())
+  assetId     BigInt
+  woId        BigInt?
+  description String
+  repairedAt  DateTime @default(now())
+  cost        Decimal  @default(0)
+  notes       String?
+
+  asset     Asset                 @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  workOrder MaintenanceWorkOrder? @relation(fields: [woId], references: [id], onDelete: SetNull)
+
+  @@index([assetId, repairedAt])
+}
+
+model AssetTransfer {
+  id        BigInt   @id @default(autoincrement())
+  assetId   BigInt
+  fromLocId BigInt?
+  toLocId   BigInt
+  movedAt   DateTime @default(now())
+  notes     String?
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 }
 
-model Disposal {
-  id      BigInt   @id @default(autoincrement())
-  assetId BigInt
-  method  String // DONATION | SCRAP | SALE
-  date    DateTime
+model AssetDisposal {
+  id           BigInt   @id @default(autoincrement())
+  assetId      BigInt   @unique
+  disposedAt   DateTime @default(now())
+  reason       String?
+  proceeds     Decimal?
+  approvedById BigInt?
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 }
