@@ -37,6 +37,7 @@ jobs:
               git clone https://github.com/xdlemar/capstone-node.git .
             fi
 
+            
             echo "==> Install dependencies"
             npm ci
             npm --prefix inventory-svc ci
