@@ -5,9 +5,7 @@ module.exports = {
       script: "gateway/src/index.js",
       env: {
         NODE_ENV: "production",
-        PORT: 8080,
-        JWT_SECRET: process.env.JWT_SECRET,
-        AUTH_URL: "http://localhost:4000"
+        PORT: 8080
       }
     },
     {
@@ -31,9 +29,7 @@ module.exports = {
       script: "auth-svc/src/server.js",
       env: {
         NODE_ENV: "production",
-        PORT: 4000,
-        JWT_SECRET: process.env.JWT_SECRET,
-        JWT_EXPIRES: "8h"
+        PORT: 4000
       }
     }
     ,
