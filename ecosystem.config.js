@@ -5,7 +5,9 @@ module.exports = {
       script: "gateway/src/index.js",
       env: {
         NODE_ENV: "production",
-        PORT: 8080
+        PORT: 8080,
+        JWT_SECRET: process.env.JWT_SECRET,
+        AUTH_URL: "http://localhost:4000"
       }
     },
     {
@@ -40,9 +42,7 @@ module.exports = {
       script: "plt-svc/src/server.js",
       env: {
         NODE_ENV: "production",
-        PORT: 4005,
-        JWT_SECRET: process.env.JWT_SECRET,
-        AUTH_URL: "http://localhost:4000",
+        PORT: 4005
       }
     }
      ,
