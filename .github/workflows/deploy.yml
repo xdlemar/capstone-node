@@ -22,54 +22,88 @@ jobs:
           port: 2298
           script_stop: true
           script: |
-            set -e
-            APP_DIR="/home/log1.health-ease-hospital.com/public_html"
+              set -e
+              APP_DIR="/home/log1.health-ease-hospital.com/public_html"
+              mkdir -p "$APP_DIR"
+              cd "$APP_DIR"
 
-            echo "==> Navigate to app dir"
-            mkdir -p "$APP_DIR"
-            cd "$APP_DIR"
+              # pull code (same as yours) ...
+              if [ -d .git ]; then
+                git reset --hard
+                git pull origin main
+              else
+                git clone https://github.com/xdlemar/capstone-node.git .
+              fi
 
-            echo "==> Pull latest code"
-            if [ -d .git ]; then
-              git reset --hard
-              git pull origin main
-            else
-              git clone https://github.com/xdlemar/capstone-node.git .
-            fi
+              # deps (same as yours) ...
+              npm ci
+              npm --prefix inventory-svc ci
+              npm --prefix procurement-svc ci
+              npm --prefix auth-svc ci
+              npm --prefix gateway ci
+              npm --prefix plt-svc ci
+              npm --prefix dtrs-svc ci
+              npm --prefix alms-svc ci
 
-            echo "==> Install dependencies"
-            npm ci
-            npm --prefix inventory-svc ci
-            npm --prefix procurement-svc ci
-            npm --prefix auth-svc ci
-            npm --prefix gateway ci
-            npm --prefix plt-svc ci          
-            npm --prefix dtrs-svc ci         
-            npm --prefix alms-svc ci         
+              # prisma generate + migrate (optional generate, migrate stays same)
+              (cd auth-svc && npx prisma generate || true)
+              (cd inventory-svc && npx prisma generate || true)
+              (cd procurement-svc && npx prisma generate || true)
+              (cd plt-svc && npx prisma generate || true)
+              (cd dtrs-svc && npx prisma generate || true)
+              (cd alms-svc && npx prisma generate || true)
 
-            echo "==> Run migrations"
-            DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" \
-            npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}"  npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.AUTH_DB_URL }}"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.PLT_DB_URL }}"         npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.DTRS_DB_URL }}"        npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.ALMS_DB_URL }}"        npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
 
-            DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" \
-            npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+              # ---- NEW: ensure PM2 exists ----
+              if ! command -v pm2 >/dev/null 2>&1; then
+                echo "Installing PM2..."
+                npm i -g pm2
+                hash -r
+              fi
 
-            DATABASE_URL="${{ secrets.AUTH_DB_URL }}" \
-            npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+              # export runtime secrets so ecosystem.env can read them
+              export AUTH_DB_URL="${{ secrets.AUTH_DB_URL }}"
+              export INVENTORY_DB_URL="${{ secrets.INVENTORY_DB_URL }}"
+              export PROCUREMENT_DB_URL="${{ secrets.PROCUREMENT_DB_URL }}"
+              export PLT_DB_URL="${{ secrets.PLT_DB_URL }}"
+              export DTRS_DB_URL="${{ secrets.DTRS_DB_URL }}"
+              export ALMS_DB_URL="${{ secrets.ALMS_DB_URL }}"
+              export JWT_SECRET="${{ secrets.JWT_SECRET }}"
 
-            DATABASE_URL="${{ secrets.PLT_DB_URL }}" \
-            npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
+              # write/update PM2 ecosystem (same pattern you prefer)
+              cat > ecosystem.config.js <<'EOF'
+              module.exports = {
+                apps: [
+                  { name:"auth-svc", script:"auth-svc/src/index.js", env:{ PORT:4000, DATABASE_URL:process.env.AUTH_DB_URL, JWT_SECRET:process.env.JWT_SECRET, JWT_EXPIRES:"8h" } },
+                  { name:"inventory-svc", script:"inventory-svc/src/index.js", env:{ PORT:4001, DATABASE_URL:process.env.INVENTORY_DB_URL, ALERT_EXPIRY_DAYS:"30" } },
+                  { name:"procurement-svc", script:"procurement-svc/src/index.js", env:{ PORT:4002, DATABASE_URL:process.env.PROCUREMENT_DB_URL, INVENTORY_URL:"http://localhost:4001" } },
+                  { name:"plt-svc", script:"plt-svc/src/index.js", env:{ PORT:4005, DATABASE_URL:process.env.PLT_DB_URL } },
+                  { name:"dtrs-svc", script:"dtrs-svc/src/index.js", env:{ PORT:4006, DATABASE_URL:process.env.DTRS_DB_URL } },
+                  { name:"alms-svc", script:"alms-svc/src/index.js", env:{ PORT:4007, DATABASE_URL:process.env.ALMS_DB_URL } },
+                  { name:"gateway", script:"gateway/src/index.js", env:{ PORT:8080, JWT_SECRET:process.env.JWT_SECRET,
+                      AUTH_URL:"http://localhost:4000", INVENTORY_URL:"http://localhost:4001", PROCUREMENT_URL:"http://localhost:4002",
+                      ALMS_URL:"http://localhost:4007", DTRS_URL:"http://localhost:4006", PLT_URL:"http://localhost:4005" } }
+                ]
+              }
+              EOF
 
-            DATABASE_URL="${{ secrets.DTRS_DB_URL }}" \
-            npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
+              echo "==> Start/Reload with PM2"
+              pm2 startOrReload ecosystem.config.js --update-env
+              pm2 save
 
-            DATABASE_URL="${{ secrets.ALMS_DB_URL }}" \
-            npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
-            
-            echo "==> Restart with PM2"
-            if command -v pm2 >/dev/null 2>&1; then
-              pm2 startOrReload ecosystem.config.js --update-env || true
-              pm2 save || true
-            else
-              echo "⚠️ PM2 not found on server!"
-            fi
+              echo "==> Health checks"
+              curl -fsS http://localhost:8080/health
+              curl -fsS http://localhost:4000/health
+              curl -fsS http://localhost:4001/health
+              curl -fsS http://localhost:4002/health
+              curl -fsS http://localhost:4005/health
+              curl -fsS http://localhost:4006/health
+              curl -fsS http://localhost:4007/health
+
+              echo "✅ Deploy complete"
