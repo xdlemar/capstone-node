@@ -48,6 +48,7 @@ r.post("/", async (req, res) => {
           if (available <= 0) continue;
 
           const take = Math.min(available, remaining);
+          if (take <= 0) continue;
 
           await p.stockMove.create({
             data: {
@@ -64,8 +65,18 @@ r.post("/", async (req, res) => {
             },
           });
 
-          // (optional) adjust batch.qtyOnHand here similarly to issues
-          remaining -= take;
+          await p.batch.update({
+            where: { id: b.id },
+            data: {
+              qtyOnHand: {
+                decrement: String(take),
+              },
+            },
+          });
+
+          const nextAvailable = Math.max(0, available - take);
+          b.qtyOnHand = nextAvailable;
+          remaining = Math.max(0, remaining - take);
         }
 
         if (remaining > 0) {

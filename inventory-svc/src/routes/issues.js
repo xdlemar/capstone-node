@@ -49,27 +49,7 @@ r.post("/", async (req, res) => {
         const totalAvail = batches.reduce((sum, b) => sum + Number(b.qtyOnHand || 0), 0);
 
         if (batches.length === 0 || totalAvail <= 0) {
-          // Fallback: single stock move without batch
-          await p.stockMove.create({
-            data: {
-              itemId: ln.itemId,
-              fromLocId: issue.fromLocId,
-              toLocId: issue.toLocId,
-              qty: remaining,
-              reason: "ISSUE",
-              refType: "ISSUE",
-              refId: issue.id,
-              eventId: `issue:${issue.id.toString()}:${ln.id.toString()}:nobatch`,
-              occurredAt: new Date(),
-            },
-          });
-
-          await p.issueLine.update({
-            where: { id: ln.id },
-            data: { qtyIssued: ln.qtyReq },
-          });
-
-          continue;
+          throw Object.assign(new Error("Insufficient stock for issue"), { code: "FEFO_STOCK_OUT" });
         }
 
         for (const b of batches) {
@@ -78,6 +58,7 @@ r.post("/", async (req, res) => {
           if (available <= 0) continue;
 
           const take = Math.min(available, remaining);
+          if (take <= 0) continue;
 
           await p.issueAlloc.create({
             data: { issueLineId: ln.id, batchId: b.id, qty: take },
@@ -98,30 +79,22 @@ r.post("/", async (req, res) => {
             },
           });
 
-          // If you track live qtyOnHand, update here.
-          // await p.batch.update({ where: { id: b.id }, data: { qtyOnHand: new Prisma.Decimal(available - take) } });
+          await p.batch.update({
+            where: { id: b.id },
+            data: {
+              qtyOnHand: {
+                decrement: String(take),
+              },
+            },
+          });
 
-          remaining -= take;
+          const nextAvailable = Math.max(0, available - take);
+          b.qtyOnHand = nextAvailable;
+          remaining = Math.max(0, remaining - take);
         }
 
         if (remaining > 0) {
-          // STRICT option:
-          // throw Object.assign(new Error("Insufficient stock"), { code: "FEFO_STOCK_OUT" });
-
-          // Default lenient remainder: finish without batch
-          await p.stockMove.create({
-            data: {
-              itemId: ln.itemId,
-              fromLocId: issue.fromLocId,
-              toLocId: issue.toLocId,
-              qty: remaining,
-              reason: "ISSUE",
-              refType: "ISSUE",
-              refId: issue.id,
-              eventId: `issue:${issue.id.toString()}:${ln.id.toString()}:remainder-nobatch`,
-              occurredAt: new Date(),
-            },
-          });
+          throw Object.assign(new Error("Insufficient stock for issue"), { code: "FEFO_STOCK_OUT" });
         }
 
         await p.issueLine.update({
