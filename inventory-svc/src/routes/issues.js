@@ -105,23 +105,7 @@ r.post("/", async (req, res) => {
         }
 
         if (remaining > 0) {
-          // STRICT option:
-          // throw Object.assign(new Error("Insufficient stock"), { code: "FEFO_STOCK_OUT" });
-
-          // Default lenient remainder: finish without batch
-          await p.stockMove.create({
-            data: {
-              itemId: ln.itemId,
-              fromLocId: issue.fromLocId,
-              toLocId: issue.toLocId,
-              qty: remaining,
-              reason: "ISSUE",
-              refType: "ISSUE",
-              refId: issue.id,
-              eventId: `issue:${issue.id.toString()}:${ln.id.toString()}:remainder-nobatch`,
-              occurredAt: new Date(),
-            },
-          });
+          throw Object.assign(new Error("Insufficient stock"), { code: "FEFO_STOCK_OUT" });
         }
 
         await p.issueLine.update({
