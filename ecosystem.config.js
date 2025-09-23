@@ -29,7 +29,9 @@ module.exports = {
       script: "auth-svc/src/server.js",
       env: {
         NODE_ENV: "production",
-        PORT: 4000
+        PORT: 4000,
+        JWT_SECRET: process.env.JWT_SECRET,
+        JWT_EXPIRES: "8h"
       }
     }
     ,
@@ -38,7 +40,9 @@ module.exports = {
       script: "plt-svc/src/server.js",
       env: {
         NODE_ENV: "production",
-        PORT: 4005
+        PORT: 4005,
+        JWT_SECRET: process.env.JWT_SECRET,
+        AUTH_URL: "http://localhost:4000",
       }
     }
      ,
