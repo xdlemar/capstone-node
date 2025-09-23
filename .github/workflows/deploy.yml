@@ -32,12 +32,12 @@ jobs:
             echo "==> Pull latest code"
             if [ -d .git ]; then
               git reset --hard
-              git pull --rebase origin main
+              git pull --no-rebase origin main
             else
               git clone https://github.com/xdlemar/capstone-node.git .
             fi
 
-            
+
             echo "==> Install dependencies"
             npm ci
             npm --prefix inventory-svc ci
