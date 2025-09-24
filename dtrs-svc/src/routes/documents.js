@@ -1,25 +1,64 @@
 const router = require("express").Router();
 const { prisma } = require("../prisma");
 
+function toBigInt(value, field, { optional = false } = {}) {
+  if (value === undefined || value === null || value === "") {
+    if (optional) return null;
+    throw Object.assign(new Error(`${field} is required`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  try {
+    return BigInt(value);
+  } catch {
+    throw Object.assign(new Error(`Invalid ${field}`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+}
+
 // create document + initial version
-router.post("/", async (req, res, next) => {
+router.post("/", async (req, res) => {
   try {
     const {
-      module, title, storageKey, mimeType, size, checksum,
-      uploaderId, projectId, poId, receiptId, deliveryId, assetId, woId
-    } = req.body;
+      module,
+      title,
+      storageKey,
+      mimeType,
+      size,
+      checksum,
+      uploaderId,
+      projectId,
+      poId,
+      receiptId,
+      deliveryId,
+      assetId,
+      woId,
+    } = req.body || {};
 
+    if (!module || !title) {
+      return res.status(400).json({ error: "module and title are required" });
+    }
+
+    const uploader = toBigInt(uploaderId, "uploaderId", { optional: true });
     const doc = await prisma.document.create({
       data: {
-        module, title, storageKey, mimeType, size, checksum,
-        uploaderId: uploaderId ? BigInt(uploaderId) : null,
-        projectId:  projectId  ? BigInt(projectId)  : null,
-        poId:       poId       ? BigInt(poId)       : null,
-        receiptId:  receiptId  ? BigInt(receiptId)  : null,
-        deliveryId: deliveryId ? BigInt(deliveryId) : null,
-        assetId:    assetId    ? BigInt(assetId)    : null,
-        woId:       woId       ? BigInt(woId)       : null
-      }
+        module,
+        title,
+        storageKey,
+        mimeType,
+        size,
+        checksum,
+        uploaderId: uploader,
+        projectId: toBigInt(projectId, "projectId", { optional: true }),
+        poId: toBigInt(poId, "poId", { optional: true }),
+        receiptId: toBigInt(receiptId, "receiptId", { optional: true }),
+        deliveryId: toBigInt(deliveryId, "deliveryId", { optional: true }),
+        assetId: toBigInt(assetId, "assetId", { optional: true }),
+        woId: toBigInt(woId, "woId", { optional: true }),
+      },
     });
 
     await prisma.docVersion.create({
@@ -28,73 +67,125 @@ router.post("/", async (req, res, next) => {
         versionNo: 1,
         storageKey: storageKey || `placeholder:${doc.id}`,
         size: size || 0,
-        createdById: uploaderId ? BigInt(uploaderId) : null
-      }
+        createdById: uploader,
+      },
     });
 
     res.status(201).json(doc);
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[POST /documents]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 // list/search
-router.get("/", async (req, res, next) => {
+router.get("/", async (req, res) => {
   try {
-    const { module, projectId, poId, receiptId, deliveryId, assetId, woId, q, skip=0, take=50 } = req.query;
+    const {
+      module,
+      projectId,
+      poId,
+      receiptId,
+      deliveryId,
+      assetId,
+      woId,
+      q,
+      skip = 0,
+      take = 50,
+    } = req.query;
+
     const where = {
       module: module || undefined,
-      projectId: projectId ? BigInt(projectId) : undefined,
-      poId:      poId      ? BigInt(poId)      : undefined,
-      receiptId: receiptId ? BigInt(receiptId) : undefined,
-      deliveryId: deliveryId ? BigInt(deliveryId) : undefined,
-      assetId:   assetId   ? BigInt(assetId)   : undefined,
-      woId:      woId      ? BigInt(woId)      : undefined,
-      ...(q ? { OR: [{ title: { contains: q, mode: "insensitive" } }, { tags: { some: { name: { contains: q, mode: "insensitive" } } } }] } : {})
+      projectId: projectId ? toBigInt(projectId, "projectId", { optional: true }) : undefined,
+      poId: poId ? toBigInt(poId, "poId", { optional: true }) : undefined,
+      receiptId: receiptId ? toBigInt(receiptId, "receiptId", { optional: true }) : undefined,
+      deliveryId: deliveryId ? toBigInt(deliveryId, "deliveryId", { optional: true }) : undefined,
+      assetId: assetId ? toBigInt(assetId, "assetId", { optional: true }) : undefined,
+      woId: woId ? toBigInt(woId, "woId", { optional: true }) : undefined,
+      ...(q
+        ? {
+            OR: [
+              { title: { contains: q, mode: "insensitive" } },
+              { tags: { some: { name: { contains: q, mode: "insensitive" } } } },
+            ],
+          }
+        : {}),
     };
+
     const rows = await prisma.document.findMany({
-      where, include: { tags: true },
+      where,
+      include: { tags: true },
       orderBy: { createdAt: "desc" },
-      skip: Number(skip), take: Math.min(Number(take), 200)
+      skip: Number(skip),
+      take: Math.min(Number(take), 200),
     });
     res.json(rows);
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[GET /documents]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
-router.post("/:id/tags", async (req, res, next) => {
+router.post("/:id/tags", async (req, res) => {
   try {
-    const id = BigInt(req.params.id);
-    const tag = await prisma.docTag.create({ data: { documentId: id, name: req.body.name } });
+    const id = toBigInt(req.params.id, "id");
+    const name = (req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ error: "name is required" });
+    const tag = await prisma.docTag.create({ data: { documentId: id, name } });
     res.status(201).json(tag);
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[POST /documents/:id/tags]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
-router.post("/:id/signatures", async (req, res, next) => {
+router.post("/:id/signatures", async (req, res) => {
   try {
-    const id = BigInt(req.params.id);
-    const { signerId, method, storageKey, ip } = req.body;
+    const id = toBigInt(req.params.id, "id");
+    const { signerId, method, storageKey, ip } = req.body || {};
+    if (!method || !storageKey) {
+      return res.status(400).json({ error: "method and storageKey are required" });
+    }
     const sig = await prisma.docSignature.create({
       data: {
         documentId: id,
-        signerId: signerId ? BigInt(signerId) : null,
-        method, storageKey, ip
-      }
+        signerId: toBigInt(signerId, "signerId", { optional: true }),
+        method,
+        storageKey,
+        ip: ip || null,
+      },
     });
     res.status(201).json(sig);
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[POST /documents/:id/signatures]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
-router.post("/:id/audit", async (req, res, next) => {
+router.post("/:id/audit", async (req, res) => {
   try {
-    const id = BigInt(req.params.id);
-    const { userId, action, ip, userAgent } = req.body;
+    const id = toBigInt(req.params.id, "id");
+    const { userId, action, ip, userAgent } = req.body || {};
+    if (!action) return res.status(400).json({ error: "action is required" });
     const audit = await prisma.docAccessAudit.create({
       data: {
         documentId: id,
-        userId: userId ? BigInt(userId) : null,
-        action, ip, userAgent
-      }
+        userId: toBigInt(userId, "userId", { optional: true }),
+        action,
+        ip: ip || null,
+        userAgent: userAgent || null,
+      },
     });
     res.status(201).json(audit);
-  } catch (e) { next(e); }
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[POST /documents/:id/audit]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
 });
 
 module.exports = router;

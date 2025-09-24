@@ -1,34 +1,82 @@
 const { Router } = require("express");
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const { Prisma } = require("@prisma/client");
+const { prisma } = require("../prisma");
+
 const r = Router();
+
+function parseBigInt(value, field, { optional = false } = {}) {
+  if (value === undefined || value === null || value === "") {
+    if (optional) return null;
+    throw Object.assign(new Error(`${field} is required`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  try {
+    return BigInt(value);
+  } catch {
+    throw Object.assign(new Error(`Invalid ${field}`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+}
+
+function parseQty(value, field) {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw Object.assign(new Error(`${field} must be positive`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  return {
+    number: numeric,
+    decimal: typeof value === "string" ? value : numeric.toString(),
+  };
+}
 
 /**
  * POST /issues
- * { issueNo, fromLocId, toLocId?, notes?, lines: [{ itemId, qty, notes? }] }
+ * { issueNo, fromLocId, toLocId, notes?, lines: [{ itemId, qty, notes? }] }
  * FEFO-first; fallback to single no-batch move if no batches/stock tracked.
  */
 r.post("/", async (req, res) => {
   try {
     const { issueNo, fromLocId, toLocId, notes, lines = [] } = req.body || {};
-    if (!issueNo || !fromLocId || !Array.isArray(lines) || !lines.length) {
-      return res.status(400).json({ error: "issueNo, fromLocId, lines[] required" });
+    if (!issueNo || !fromLocId || !toLocId || !Array.isArray(lines) || !lines.length) {
+      return res.status(400).json({ error: "issueNo, fromLocId, toLocId, lines[] required" });
     }
+
+    const fromLocIdBig = parseBigInt(fromLocId, "fromLocId");
+    const toLocIdBig = parseBigInt(toLocId, "toLocId");
+
+    const normalizedLines = lines.map((ln, idx) => {
+      const lineNo = idx + 1;
+      const itemId = parseBigInt(ln.itemId, `lines[${lineNo}].itemId`);
+      const qty = parseQty(ln.qty, `lines[${lineNo}].qty`);
+      return {
+        itemId,
+        qtyNumber: qty.number,
+        qtyDecimal: qty.decimal,
+        notes: ln.notes ?? null,
+      };
+    });
 
     // Run everything in a txn; return only the id, then refetch after updates
     const issueId = await prisma.$transaction(async (p) => {
       const issue = await p.issue.create({
         data: {
           issueNo,
-          fromLocId: BigInt(fromLocId),
-          toLocId: toLocId ? BigInt(toLocId) : null,
+          fromLocId: fromLocIdBig,
+          toLocId: toLocIdBig,
           notes: notes ?? null,
           lines: {
-            create: lines.map((ln) => ({
-              itemId: BigInt(ln.itemId),
-              qtyReq: Number(ln.qty),
-              qtyIssued: 0,
-              notes: ln.notes ?? null,
+            create: normalizedLines.map((ln) => ({
+              itemId: ln.itemId,
+              qtyReq: ln.qtyDecimal,
+              qtyIssued: new Prisma.Decimal(0),
+              notes: ln.notes,
             })),
           },
         },
@@ -49,13 +97,12 @@ r.post("/", async (req, res) => {
         const totalAvail = batches.reduce((sum, b) => sum + Number(b.qtyOnHand || 0), 0);
 
         if (batches.length === 0 || totalAvail <= 0) {
-          // Fallback: single stock move without batch
           await p.stockMove.create({
             data: {
               itemId: ln.itemId,
               fromLocId: issue.fromLocId,
               toLocId: issue.toLocId,
-              qty: remaining,
+              qty: remaining.toString(),
               reason: "ISSUE",
               refType: "ISSUE",
               refId: issue.id,
@@ -80,7 +127,7 @@ r.post("/", async (req, res) => {
           const take = Math.min(available, remaining);
 
           await p.issueAlloc.create({
-            data: { issueLineId: ln.id, batchId: b.id, qty: take },
+            data: { issueLineId: ln.id, batchId: b.id, qty: take.toString() },
           });
 
           await p.stockMove.create({
@@ -89,7 +136,7 @@ r.post("/", async (req, res) => {
               batchId: b.id,
               fromLocId: issue.fromLocId,
               toLocId: issue.toLocId,
-              qty: take,
+              qty: take.toString(),
               reason: "ISSUE",
               refType: "ISSUE",
               refId: issue.id,
@@ -98,23 +145,21 @@ r.post("/", async (req, res) => {
             },
           });
 
-          // If you track live qtyOnHand, update here.
-          // await p.batch.update({ where: { id: b.id }, data: { qtyOnHand: new Prisma.Decimal(available - take) } });
+          await p.batch.update({
+            where: { id: b.id },
+            data: { qtyOnHand: { decrement: take.toString() } },
+          });
 
           remaining -= take;
         }
 
         if (remaining > 0) {
-          // STRICT option:
-          // throw Object.assign(new Error("Insufficient stock"), { code: "FEFO_STOCK_OUT" });
-
-          // Default lenient remainder: finish without batch
           await p.stockMove.create({
             data: {
               itemId: ln.itemId,
               fromLocId: issue.fromLocId,
               toLocId: issue.toLocId,
-              qty: remaining,
+              qty: remaining.toString(),
               reason: "ISSUE",
               refType: "ISSUE",
               refId: issue.id,
@@ -122,6 +167,7 @@ r.post("/", async (req, res) => {
               occurredAt: new Date(),
             },
           });
+          remaining = 0;
         }
 
         await p.issueLine.update({
@@ -150,12 +196,13 @@ r.post("/", async (req, res) => {
         id: l.id.toString(),
         issueId: l.issueId.toString(),
         itemId: l.itemId.toString(),
-        qtyReq: Number(l.qtyReq),     // <- ensure numbers in JSON
+        qtyReq: Number(l.qtyReq),
         qtyIssued: Number(l.qtyIssued),
         notes: l.notes,
       })),
     });
   } catch (err) {
+    if (err?.status === 400) return res.status(400).json({ error: err.message });
     if (err?.code === "P2002") return res.status(409).json({ error: "Issue number already exists" });
     if (err?.code === "P2003") return res.status(400).json({ error: "Invalid fromLocId/toLocId foreign key" });
     if (err?.code === "FEFO_STOCK_OUT") return res.status(409).json({ error: "Insufficient stock (FEFO)" });

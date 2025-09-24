@@ -26,6 +26,7 @@ jobs:
             set -euo pipefail
 
             APP_DIR="/home/log1.health-ease-hospital.com/public_html"
+            REPO_URL="https://github.com/xdlemar/capstone-node.git"
 
             echo "==> Ensure app dir"
             mkdir -p "$APP_DIR"
@@ -36,7 +37,7 @@ jobs:
               git fetch origin main
               git reset --hard origin/main
             else
-              git clone https://github.com/xdlemar/capstone-node.git .
+              git clone "$REPO_URL" .
             fi
 
             echo "==> Install dependencies"
@@ -50,8 +51,11 @@ jobs:
             npm --prefix alms-svc ci
             npm --prefix hospital-web ci
 
+            echo "==> Generate Prisma clients"
+            npm run gen:clients
+
             echo "==> Build hospital-web"
-            npm --prefix hospital-web run build
+            NODE_ENV=production npm --prefix hospital-web run build
 
             # If your web server serves docroot from APP_DIR,
             # uncomment the next 3 lines to publish the SPA to ./public:
@@ -73,5 +77,5 @@ jobs:
               pm2 save || true
               pm2 status
             else
-              echo "⚠️ PM2 not found on server!"
+              echo "PM2 not found on server. Skipping restart."
             fi

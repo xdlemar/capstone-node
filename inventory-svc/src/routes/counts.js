@@ -1,7 +1,24 @@
 const { Router } = require("express");
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const { prisma } = require("../prisma");
+
 const r = Router();
+
+function parseBigInt(value, field) {
+  if (value === undefined || value === null || value === "") {
+    throw Object.assign(new Error(`${field} is required`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  try {
+    return BigInt(value);
+  } catch {
+    throw Object.assign(new Error(`Invalid ${field}`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+}
 
 /**
  * POST /counts
@@ -14,20 +31,26 @@ r.post("/", async (req, res) => {
       return res.status(400).json({ error: "sessionNo, locationId required" });
     }
 
+    const locationIdBig = parseBigInt(locationId, "locationId");
+    const normalizedLines = lines.map((ln, idx) => {
+      const lineNo = idx + 1;
+      return {
+        itemId: parseBigInt(ln.itemId, `lines[${lineNo}].itemId`),
+        countedQty: ln.countedQty ?? 0,
+        systemQty: ln.systemQty ?? 0,
+        variance: ln.variance ?? 0,
+        notes: ln.notes ?? null,
+      };
+    });
+
     const created = await prisma.countSession.create({
       data: {
         sessionNo,
-        locationId: BigInt(locationId),
+        locationId: locationIdBig,
         status: "OPEN",
         notes: notes ?? null,
         lines: {
-          create: lines.map((ln) => ({
-            itemId: BigInt(ln.itemId),
-            countedQty: ln.countedQty,
-            systemQty: ln.systemQty,
-            variance: ln.variance,
-            notes: ln.notes ?? null,
-          })),
+          create: normalizedLines,
         },
       },
       include: { lines: true },
@@ -50,6 +73,9 @@ r.post("/", async (req, res) => {
       })),
     });
   } catch (err) {
+    if (err?.status === 400) {
+      return res.status(400).json({ error: err.message });
+    }
     if (err?.code === "P2002") {
       return res.status(409).json({ error: "Session already exists" });
     }
@@ -79,15 +105,16 @@ r.post("/:sessionNo/post", async (req, res) => {
     await prisma.$transaction(async (p) => {
       for (const ln of session.lines) {
         if (!ln.variance) continue;
-        const qty = Math.abs(ln.variance);
-        const out = ln.variance < 0;
+        const qty = Math.abs(Number(ln.variance));
+        if (!Number.isFinite(qty) || qty === 0) continue;
+        const out = Number(ln.variance) < 0;
 
         await p.stockMove.create({
           data: {
             itemId: ln.itemId,
             fromLocId: out ? session.locationId : null,
             toLocId: out ? null : session.locationId,
-            qty,
+            qty: qty.toString(),
             reason: "ADJUSTMENT",
             refType: "COUNT",
             refId: session.id,

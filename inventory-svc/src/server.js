@@ -15,19 +15,22 @@ const transfers = require("./routes/transfers");
 const counts = require("./routes/counts");
 const inspection = require("./routes/inspection");
 const notifications = require("./routes/notifications");
+const { authRequired } = require("./auth");
 
 const app = express();
 
-// ✅ One JSON parser, before routes
+// Single JSON parser, before routes
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 app.use(morgan("dev"));
 
-// ✅ One bigint serializer (string is safest)
+// Serialize bigint to string in JSON
 app.set("json replacer", (_k, v) => (typeof v === "bigint" ? v.toString() : v));
 
 // health
 app.get("/health", (_req, res) => res.json({ ok: true, svc: "inventory" }));
+
+app.use(authRequired);
 
 // mount routes at ROOT
 app.use("/stock-moves", moves);

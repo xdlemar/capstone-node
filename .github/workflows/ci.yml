@@ -25,6 +25,7 @@ jobs:
       GATEWAY_URL:     http://localhost:8080
 
       JWT_SECRET: super_secret_dev
+      JWT_EXPIRES: 8h
 
     services:
       postgres:
@@ -48,6 +49,16 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            inventory-svc/package-lock.json
+            procurement-svc/package-lock.json
+            auth-svc/package-lock.json
+            gateway/package-lock.json
+            plt-svc/package-lock.json
+            dtrs-svc/package-lock.json
+            alms-svc/package-lock.json
+            hospital-web/package-lock.json
 
       - name: Install deps (root & services & web)
         run: |
@@ -62,7 +73,6 @@ jobs:
           npm --prefix hospital-web ci
 
       - name: Build hospital-web (Vite)
-        # If your app needs VITE_* env vars, export them here.
         run: npm --prefix hospital-web run build
 
       - name: Generate Prisma clients
@@ -109,37 +119,50 @@ jobs:
           ALMS_URL:        ${{ env.ALMS_URL }}
 
           JWT_SECRET: ${{ env.JWT_SECRET }}
+          JWT_EXPIRES: ${{ env.JWT_EXPIRES }}
           GATEWAY_URL: ${{ env.GATEWAY_URL }}
         run: |
           set -e
 
           export PORT=4001 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/inventory_db?schema=public"
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/inventory_db?schema=public" \
+                 JWT_SECRET="${JWT_SECRET}" \
+                 JWT_EXPIRES="${JWT_EXPIRES}"
           node inventory-svc/src/server.js > inv.log 2>&1 &
           npx wait-on -t 120000 "${INVENTORY_URL}/health" || { echo "INVENTORY failed. Last 200 lines:"; tail -n 200 inv.log; exit 1; }
 
           export PORT=4002 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/procurement_db?schema=public"
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/procurement_db?schema=public" \
+                 JWT_SECRET="${JWT_SECRET}" \
+                 JWT_EXPIRES="${JWT_EXPIRES}"
           node procurement-svc/src/server.js > proc.log 2>&1 &
           npx wait-on -t 120000 "${PROCUREMENT_URL}/health" || { echo "PROCUREMENT failed. Last 200 lines:"; tail -n 200 proc.log; exit 1; }
 
           export PORT=4000 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/auth_db?schema=public"
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/auth_db?schema=public" \
+                 JWT_SECRET="${JWT_SECRET}" \
+                 JWT_EXPIRES="${JWT_EXPIRES}"
           node auth-svc/src/server.js > auth.log 2>&1 &
           npx wait-on -t 120000 "${AUTH_URL}/health" || { echo "AUTH failed. Last 200 lines:"; tail -n 200 auth.log; exit 1; }
 
           export PORT=4005 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/plt_db?schema=public"
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/plt_db?schema=public" \
+                 JWT_SECRET="${JWT_SECRET}" \
+                 JWT_EXPIRES="${JWT_EXPIRES}"
           node plt-svc/src/server.js > plt.log 2>&1 &
           npx wait-on -t 120000 "${PLT_URL}/health" || { echo "PLT failed. Last 200 lines:"; tail -n 200 plt.log; exit 1; }
 
           export PORT=4006 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/dtrs_db?schema=public"
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/dtrs_db?schema=public" \
+                 JWT_SECRET="${JWT_SECRET}" \
+                 JWT_EXPIRES="${JWT_EXPIRES}"
           node dtrs-svc/src/server.js > dtrs.log 2>&1 &
           npx wait-on -t 120000 "${DTRS_URL}/health" || { echo "DTRS failed. Last 200 lines:"; tail -n 200 dtrs.log; exit 1; }
 
           export PORT=4007 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/alms_db?schema=public"
+                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/alms_db?schema=public" \
+                 JWT_SECRET="${JWT_SECRET}" \
+                 JWT_EXPIRES="${JWT_EXPIRES}"
           node alms-svc/src/server.js > alms.log 2>&1 &
           npx wait-on -t 120000 "${ALMS_URL}/health" || { echo "ALMS failed. Last 200 lines:"; tail -n 200 alms.log; exit 1; }
 
@@ -150,7 +173,8 @@ jobs:
                  PLT_URL="${PLT_URL}" \
                  DTRS_URL="${DTRS_URL}" \
                  ALMS_URL="${ALMS_URL}" \
-                 JWT_SECRET="${JWT_SECRET}"
+                 JWT_SECRET="${JWT_SECRET}" \
+                 JWT_EXPIRES="${JWT_EXPIRES}"
           node gateway/src/index.js > gw.log 2>&1 &
           npx wait-on -t 120000 "${GATEWAY_URL}/health" || { echo "GATEWAY failed. Last 200 lines:"; tail -n 200 gw.log; exit 1; }
 
@@ -166,6 +190,10 @@ jobs:
 
       - name: Smoke
         run: npm run smoke
+
+      - name: Stop background services
+        if: always()
+        run: pkill node || true
 
       - name: Upload logs on failure
         if: failure()

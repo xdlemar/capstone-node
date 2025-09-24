@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const { authRequired } = require("./auth");
 
 const app = express();
 app.use(cors());
@@ -9,6 +10,8 @@ app.use(morgan("dev"));
 app.set("json replacer", (_k, v) => (typeof v === "bigint" ? v.toString() : v));
 
 app.get("/health", (_req, res) => res.json({ ok: true, svc: "alms" }));
+
+app.use(authRequired);
 
 app.use("/assets", require("./routes/assets"));
 app.use("/workorders", require("./routes/workorders"));

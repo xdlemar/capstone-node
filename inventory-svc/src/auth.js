@@ -1,31 +1,46 @@
-import jwt from "jsonwebtoken";
+const jwt = require("jsonwebtoken");
 
-export const JWT_SECRET = process.env.JWT_SECRET || "supersecret_dev_only";
+const JWT_SECRET = process.env.JWT_SECRET || "supersecret_dev_only";
 
-// attach req.user if token is present (for read endpoints)
-export function authOptional(req, _res, next) {
+function authOptional(req, _res, next) {
   const h = req.headers.authorization || "";
   const token = h.startsWith("Bearer ") ? h.slice(7) : null;
   if (token) {
-    try { req.user = jwt.verify(token, JWT_SECRET); } catch {}
+    try {
+      req.user = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      console.warn("[authOptional] invalid token", err.message);
+    }
   }
   next();
 }
 
-// require a valid JWT
-export function authRequired(req, res, next) {
+function authRequired(req, res, next) {
   const h = req.headers.authorization || "";
   const token = h.startsWith("Bearer ") ? h.slice(7) : null;
   if (!token) return res.status(401).json({ message: "Missing token" });
-  try { req.user = jwt.verify(token, JWT_SECRET); next(); }
-  catch { return res.status(401).json({ message: "Invalid token" }); }
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (err) {
+    console.warn("[authRequired] invalid token", err.message);
+    return res.status(401).json({ message: "Invalid token" });
+  }
 }
 
-// simple role check (ADMIN, STAFF, IT from auth-svc)
-export function requireRole(...roles) {
+function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-    if (!roles.includes(req.user.role)) return res.status(403).json({ message: "Forbidden" });
+    const userRoles = Array.isArray(req.user.roles) ? req.user.roles : [req.user.role].filter(Boolean);
+    const allowed = roles.some((role) => userRoles.includes(role));
+    if (!allowed) return res.status(403).json({ message: "Forbidden" });
     next();
   };
 }
+
+module.exports = {
+  JWT_SECRET,
+  authOptional,
+  authRequired,
+  requireRole,
+};

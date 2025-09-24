@@ -2,11 +2,31 @@ const express = require("express");
 const router = express.Router();
 const prisma = require("../prisma.js");
 
+function toBigInt(value, field) {
+  if (value === undefined || value === null || value === "") {
+    throw Object.assign(new Error(`${field} is required`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+  try {
+    return BigInt(value);
+  } catch {
+    throw Object.assign(new Error(`Invalid ${field}`), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+}
+
 // POST /pr  { prNo, notes, lines: [{ itemId, qty, unit, notes? }] }
 router.post("/pr", async (req, res) => {
   try {
-    const { prNo, notes, lines = [] } = req.body;
+    const { prNo, notes, lines = [] } = req.body || {};
     if (!prNo) return res.status(400).json({ error: "prNo required" });
+    if (!Array.isArray(lines) || lines.length === 0) {
+      return res.status(400).json({ error: "At least one line is required" });
+    }
 
     const created = await prisma.pR.create({
       data: {
@@ -14,8 +34,8 @@ router.post("/pr", async (req, res) => {
         status: "SUBMITTED",
         notes: notes || null,
         lines: {
-          create: lines.map(l => ({
-            itemId: BigInt(l.itemId),
+          create: lines.map((l, idx) => ({
+            itemId: toBigInt(l.itemId, `lines[${idx + 1}].itemId`),
             qty: l.qty,
             unit: l.unit || "",
             notes: l.notes || null,
@@ -27,6 +47,7 @@ router.post("/pr", async (req, res) => {
 
     res.json(created);
   } catch (err) {
+    if (err?.status === 400) return res.status(400).json({ error: err.message });
     if (err?.code === "P2002") return res.status(409).json({ error: "PR number already exists" });
     console.error("[/pr] error", err);
     res.status(500).json({ error: "Internal error" });

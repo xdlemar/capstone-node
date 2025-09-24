@@ -10,7 +10,7 @@ function authRequired(req, res, next) {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch (err) {
-    console.warn("[procurement auth] invalid token", err.message);
+    console.warn("[alms auth] invalid token", err.message);
     return res.status(401).json({ message: "Invalid token" });
   }
 }

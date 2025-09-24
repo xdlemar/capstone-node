@@ -1,21 +1,24 @@
-import { Outlet, useLocation } from "react-router-dom"
-import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
-import { AppSidebar } from "@/components/app-sidebar"
-import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
+import { useEffect, useState } from "react";
+import { Outlet } from "react-router-dom";
 
-const AUTH_ROUTES = ["/login"]; // add more like "/register", "/forgot-password" if you have them
+import { AppSidebar } from "@/components/app-sidebar";
+import { FullScreenPreloader } from "@/components/layout/Preloader";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 export default function AppLayout() {
-  const { pathname } = useLocation()
-  const isAuth = AUTH_ROUTES.some((p) => pathname.startsWith(p))
+  const [isReady, setIsReady] = useState(false);
 
-  // For auth pages, render content only (no sidebar/header)
-  if (isAuth) {
-    return <Outlet />
+  useEffect(() => {
+    const id = window.setTimeout(() => setIsReady(true), 150);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  if (!isReady) {
+    return <FullScreenPreloader label="Loading dashboard..." />;
   }
 
-  // App chrome for everything else
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -38,5 +41,5 @@ export default function AppLayout() {
         </div>
       </SidebarInset>
     </SidebarProvider>
-  )
+  );
 }
