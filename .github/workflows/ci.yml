@@ -1,4 +1,5 @@
 name: ci
+
 on:
   push:
     branches: [ main ]
@@ -9,23 +10,20 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      
       DB_USER: postgres
-      DB_PASS: 'Masterpogi09?'         
+      DB_PASS: 'Masterpogi09?'
       DB_HOST: localhost
       DB_PORT: 5432
-      DB_PASS_URL: 'Masterpogi09%3F'  
+      DB_PASS_URL: 'Masterpogi09%3F'
 
-      
       INVENTORY_URL:   http://localhost:4001
       PROCUREMENT_URL: http://localhost:4002
       AUTH_URL:        http://localhost:4000
-      PLT_URL:         http://localhost:4005         
-      DTRS_URL:        http://localhost:4006         
-      ALMS_URL:        http://localhost:4007         
+      PLT_URL:         http://localhost:4005
+      DTRS_URL:        http://localhost:4006
+      ALMS_URL:        http://localhost:4007
       GATEWAY_URL:     http://localhost:8080
 
-     
       JWT_SECRET: super_secret_dev
 
     services:
@@ -33,7 +31,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: 'Masterpogi09?'   
+          POSTGRES_PASSWORD: 'Masterpogi09?'
         ports: [ "5432:5432" ]
         options: >-
           --health-cmd="pg_isready -U postgres"
@@ -49,35 +47,32 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
-      - name: Install deps (root & services)
+      - name: Install deps (root & services & web)
         run: |
           npm ci
           npm --prefix inventory-svc ci
           npm --prefix procurement-svc ci
           npm --prefix auth-svc ci
           npm --prefix gateway ci
-          npm --prefix plt-svc ci        
-          npm --prefix dtrs-svc ci       
-          npm --prefix alms-svc ci      
+          npm --prefix plt-svc ci
+          npm --prefix dtrs-svc ci
+          npm --prefix alms-svc ci
+          npm --prefix hospital-web ci
 
-      - name: Create DBs
-        run: |
-          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "inventory_db";'   || true
-          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "procurement_db";' || true
-          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "auth_db";'        || true
-          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "plt_db";'         || true   
-          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "dtrs_db";'        || true   
-          psql "postgresql://${{ env.DB_USER }}:${{ env.DB_PASS }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}" -c 'CREATE DATABASE "alms_db";'        || true   
+      - name: Build hospital-web (Vite)
+        # If your app needs VITE_* env vars, export them here.
+        run: npm --prefix hospital-web run build
 
       - name: Generate Prisma clients
         run: |
           npx prisma generate --schema=inventory-svc/prisma/schema.prisma
           npx prisma generate --schema=procurement-svc/prisma/schema.prisma
           npx prisma generate --schema=auth-svc/prisma/schema.prisma
-          npx prisma generate --schema=plt-svc/prisma/schema.prisma      
-          npx prisma generate --schema=dtrs-svc/prisma/schema.prisma     
-          npx prisma generate --schema=alms-svc/prisma/schema.prisma     
+          npx prisma generate --schema=plt-svc/prisma/schema.prisma
+          npx prisma generate --schema=dtrs-svc/prisma/schema.prisma
+          npx prisma generate --schema=alms-svc/prisma/schema.prisma
 
       - name: Run migrations (explicit URLs)
         run: |
@@ -109,52 +104,45 @@ jobs:
           INVENTORY_URL:   ${{ env.INVENTORY_URL }}
           PROCUREMENT_URL: ${{ env.PROCUREMENT_URL }}
           AUTH_URL:        ${{ env.AUTH_URL }}
-          PLT_URL:         ${{ env.PLT_URL }}     
-          DTRS_URL:        ${{ env.DTRS_URL }}    
-          ALMS_URL:        ${{ env.ALMS_URL }}    
+          PLT_URL:         ${{ env.PLT_URL }}
+          DTRS_URL:        ${{ env.DTRS_URL }}
+          ALMS_URL:        ${{ env.ALMS_URL }}
 
           JWT_SECRET: ${{ env.JWT_SECRET }}
           GATEWAY_URL: ${{ env.GATEWAY_URL }}
         run: |
           set -e
 
-          # --- INVENTORY (4001) ---
           export PORT=4001 \
                  DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/inventory_db?schema=public"
           node inventory-svc/src/server.js > inv.log 2>&1 &
           npx wait-on -t 120000 "${INVENTORY_URL}/health" || { echo "INVENTORY failed. Last 200 lines:"; tail -n 200 inv.log; exit 1; }
 
-          # --- PROCUREMENT (4002) ---
           export PORT=4002 \
                  DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/procurement_db?schema=public"
           node procurement-svc/src/server.js > proc.log 2>&1 &
           npx wait-on -t 120000 "${PROCUREMENT_URL}/health" || { echo "PROCUREMENT failed. Last 200 lines:"; tail -n 200 proc.log; exit 1; }
 
-          # --- AUTH (4000) ---
           export PORT=4000 \
                  DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/auth_db?schema=public"
           node auth-svc/src/server.js > auth.log 2>&1 &
           npx wait-on -t 120000 "${AUTH_URL}/health" || { echo "AUTH failed. Last 200 lines:"; tail -n 200 auth.log; exit 1; }
 
-          # --- PLT (4005) ---
           export PORT=4005 \
                  DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/plt_db?schema=public"
           node plt-svc/src/server.js > plt.log 2>&1 &
           npx wait-on -t 120000 "${PLT_URL}/health" || { echo "PLT failed. Last 200 lines:"; tail -n 200 plt.log; exit 1; }
 
-          # --- DTRS (4006) ---
           export PORT=4006 \
                  DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/dtrs_db?schema=public"
           node dtrs-svc/src/server.js > dtrs.log 2>&1 &
           npx wait-on -t 120000 "${DTRS_URL}/health" || { echo "DTRS failed. Last 200 lines:"; tail -n 200 dtrs.log; exit 1; }
 
-          # --- ALMS (4007) ---
           export PORT=4007 \
                  DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/alms_db?schema=public"
           node alms-svc/src/server.js > alms.log 2>&1 &
           npx wait-on -t 120000 "${ALMS_URL}/health" || { echo "ALMS failed. Last 200 lines:"; tail -n 200 alms.log; exit 1; }
 
-          # --- GATEWAY (8080) ---
           export PORT=8080 \
                  INVENTORY_URL="${INVENTORY_URL}" \
                  PROCUREMENT_URL="${PROCUREMENT_URL}" \
@@ -166,12 +154,12 @@ jobs:
           node gateway/src/index.js > gw.log 2>&1 &
           npx wait-on -t 120000 "${GATEWAY_URL}/health" || { echo "GATEWAY failed. Last 200 lines:"; tail -n 200 gw.log; exit 1; }
 
-      - name: Seed minimal master data (set DATABASE_URL explicitly)
+      - name: Seed minimal master data
         run: |
           DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
           node tests/seedInventory.js
 
-      - name: Run tests (set DATABASE_URL explicitly)
+      - name: Run tests
         run: |
           DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
           npm test
@@ -188,7 +176,7 @@ jobs:
             inv.log
             proc.log
             auth.log
-            plt.log    
-            dtrs.log   
-            alms.log   
+            plt.log
+            dtrs.log
+            alms.log
             gw.log

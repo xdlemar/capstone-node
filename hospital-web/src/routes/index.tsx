@@ -1,23 +1,21 @@
-import { createBrowserRouter } from "react-router-dom";
-import ProtectedRoute from "./protected";
-import AppLayout from "@/components/layout/AppLayout";
-import LoginPage from "@/features/auth/LoginPage";
-// placeholder until you import v0 dashboard:
-const Dashboard = () => <div>Dashboard</div>;
+import { createBrowserRouter } from "react-router-dom"
+import AppLayout from "@/components/layout/AppLayout"
+import Dashboard from "@/features/dashboard/Dashboard"
+import LoginPage from "@/features/auth/LoginPage"
 
 export const router = createBrowserRouter([
+  // Public
   { path: "/login", element: <LoginPage /> },
+
+  // App (protected)
   {
-    element: <ProtectedRoute />,
+    path: "/",
+    element: <AppLayout />, // your shell with sidebar/header
     children: [
-      {
-        element: <AppLayout />,
-        children: [
-          { path: "/", element: <Dashboard /> },
-          { path: "/dashboard", element: <Dashboard /> },
-          // add Inventory/Procurement/ALMS/DTRS/PLT routes next
-        ],
-      },
+      { path: "/", element: <Dashboard /> },
+      { path: "/dashboard", element: <Dashboard /> },
+      // ...other routes
     ],
   },
-]);
+])
+

@@ -121,3 +121,59 @@ body::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   background-clip: content-box;
 }
+
+
+/* === HVH login background utilities === */
+:root{
+  --hvh-navy: #0A1D4D;
+  --hvh-navy-900: #07143A;
+  --hvh-gold: #F2B500;
+  /* uses /public/hvh-logo.png */
+  --hvh-logo-url: url("/hvh-logo.png");
+}
+
+.hvh-bg{
+  min-height: 100dvh;
+  background: linear-gradient(180deg, var(--hvh-navy) 0%, var(--hvh-navy-900) 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* subtle repeating logos layer */
+.hvh-bg::before{
+  content:"";
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+  background-image: var(--hvh-logo-url);
+  background-repeat: repeat;
+  background-size: 200px 200px;
+  opacity: .18;
+  filter: blur(1px) brightness(1.08);
+  animation: hvh-logos 40s linear infinite alternate;
+}
+
+/* soft moving glow */
+.hvh-bg::after{
+  content:"";
+  position: fixed; inset: -20%;
+  pointer-events: none; z-index: 1;
+  background:
+    radial-gradient(40vmax 30vmax at 20% 25%, rgba(255,255,255,.14), transparent 60%),
+    radial-gradient(35vmax 28vmax at 80% 70%, rgba(212,175,55,.18), transparent 65%),
+    radial-gradient(28vmax 24vmax at 50% 85%, rgba(255,255,255,.10), transparent 70%);
+  filter: blur(35px);
+  animation: hvh-glow 25s ease-in-out infinite alternate;
+}
+
+@keyframes hvh-logos {
+  0%   { background-position:   0   0; }
+  100% { background-position: -200px -150px; }
+}
+@keyframes hvh-glow {
+  0%   { transform: scale(1) translate(0,0); }
+  100% { transform: scale(1.05) translate(-2%, -1%); }
+}
+
+@media (max-width:640px){
+  .hvh-bg::before{ background-size: 150px 150px; opacity:.14; }
+}

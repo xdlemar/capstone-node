@@ -1,14 +1,21 @@
-import { Outlet } from "react-router-dom";
-import {
-  SidebarProvider,
-  SidebarInset,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
+import { Outlet, useLocation } from "react-router-dom"
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
+import { AppSidebar } from "@/components/app-sidebar"
+import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+
+const AUTH_ROUTES = ["/login"]; // add more like "/register", "/forgot-password" if you have them
 
 export default function AppLayout() {
+  const { pathname } = useLocation()
+  const isAuth = AUTH_ROUTES.some((p) => pathname.startsWith(p))
+
+  // For auth pages, render content only (no sidebar/header)
+  if (isAuth) {
+    return <Outlet />
+  }
+
+  // App chrome for everything else
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -31,5 +38,5 @@ export default function AppLayout() {
         </div>
       </SidebarInset>
     </SidebarProvider>
-  );
+  )
 }

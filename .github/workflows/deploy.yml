@@ -3,14 +3,15 @@ name: Deploy to Server
 on:
   workflow_run:
     workflows: ["ci"]
-    types: [ completed ]
+    types: [completed]
 
 jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout (no submodules needed)
         uses: actions/checkout@v4
 
       - name: Deploy via SSH
@@ -22,17 +23,18 @@ jobs:
           port: 2298
           script_stop: true
           script: |
-            set -e
+            set -euo pipefail
+
             APP_DIR="/home/log1.health-ease-hospital.com/public_html"
 
-            echo "==> Navigate to app dir"
+            echo "==> Ensure app dir"
             mkdir -p "$APP_DIR"
             cd "$APP_DIR"
 
             echo "==> Pull latest code"
             if [ -d .git ]; then
-              git reset --hard
-              git pull origin main
+              git fetch origin main
+              git reset --hard origin/main
             else
               git clone https://github.com/xdlemar/capstone-node.git .
             fi
@@ -43,33 +45,33 @@ jobs:
             npm --prefix procurement-svc ci
             npm --prefix auth-svc ci
             npm --prefix gateway ci
-            npm --prefix plt-svc ci          
-            npm --prefix dtrs-svc ci         
-            npm --prefix alms-svc ci         
+            npm --prefix plt-svc ci
+            npm --prefix dtrs-svc ci
+            npm --prefix alms-svc ci
+            npm --prefix hospital-web ci
 
-            echo "==> Run migrations"
-            DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" \
-            npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+            echo "==> Build hospital-web"
+            npm --prefix hospital-web run build
 
-            DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" \
-            npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+            # If your web server serves docroot from APP_DIR,
+            # uncomment the next 3 lines to publish the SPA to ./public:
+            # rm -rf public && mkdir -p public
+            # rsync -a --delete hospital-web/dist/ public/
+            # echo "Published hospital-web to $(pwd)/public"
 
-            DATABASE_URL="${{ secrets.AUTH_DB_URL }}" \
-            npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+            echo "==> Run Prisma migrations"
+            DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}"   npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.AUTH_DB_URL }}"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.PLT_DB_URL }}"         npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.DTRS_DB_URL }}"        npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.ALMS_DB_URL }}"        npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
 
-            DATABASE_URL="${{ secrets.PLT_DB_URL }}" \
-            npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
-
-            DATABASE_URL="${{ secrets.DTRS_DB_URL }}" \
-            npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
-
-            DATABASE_URL="${{ secrets.ALMS_DB_URL }}" \
-            npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
-            
             echo "==> Restart with PM2"
             if command -v pm2 >/dev/null 2>&1; then
               pm2 startOrReload ecosystem.config.js --update-env || true
               pm2 save || true
+              pm2 status
             else
               echo "⚠️ PM2 not found on server!"
             fi
