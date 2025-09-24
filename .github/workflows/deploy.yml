@@ -54,6 +54,72 @@ jobs:
             echo "==> Generate Prisma clients"
             npm run gen:clients
 
+            echo "==> Prepare shared environment values"
+            JWT_SECRET='${{ secrets.JWT_SECRET }}'
+          
+            JWT_EXPIRES='${{ secrets.JWT_EXPIRES }}'
+            
+            AUTH_CORS_ORIGIN='${{ secrets.AUTH_CORS_ORIGIN }}'
+           
+
+            echo "==> Write service environment files"
+            cat <<EOF > gateway/.env
+            PORT=8080
+            JWT_SECRET=${JWT_SECRET}
+            JWT_EXPIRES=${JWT_EXPIRES}
+            AUTH_URL=http://127.0.0.1:4000
+            INVENTORY_URL=http://127.0.0.1:4001
+            PROCUREMENT_URL=http://127.0.0.1:4002
+            PLT_URL=http://127.0.0.1:4005
+            DTRS_URL=http://127.0.0.1:4006
+            ALMS_URL=http://127.0.0.1:4007
+            EOF
+
+                        cat <<EOF > auth-svc/.env
+            DATABASE_URL=${{ secrets.AUTH_DB_URL }}
+            PORT=4000
+            JWT_SECRET=${JWT_SECRET}
+            JWT_EXPIRES=${JWT_EXPIRES}
+            CORS_ORIGIN=${AUTH_CORS_ORIGIN}
+            EOF
+
+                        cat <<EOF > inventory-svc/.env
+            DATABASE_URL=${{ secrets.INVENTORY_DB_URL }}
+            PORT=4001
+            ALERT_EXPIRY_DAYS=30
+            JWT_SECRET=${JWT_SECRET}
+            JWT_EXPIRES=${JWT_EXPIRES}
+            EOF
+
+                        cat <<EOF > procurement-svc/.env
+            DATABASE_URL=${{ secrets.PROCUREMENT_DB_URL }}
+            PORT=4002
+            JWT_SECRET=${JWT_SECRET}
+            JWT_EXPIRES=${JWT_EXPIRES}
+            INVENTORY_URL=http://127.0.0.1:4001
+            EOF
+
+                        cat <<EOF > plt-svc/.env
+            DATABASE_URL=${{ secrets.PLT_DB_URL }}
+            PORT=4005
+            JWT_SECRET=${JWT_SECRET}
+            JWT_EXPIRES=${JWT_EXPIRES}
+            EOF
+
+                        cat <<EOF > dtrs-svc/.env
+            DATABASE_URL=${{ secrets.DTRS_DB_URL }}
+            PORT=4006
+            JWT_SECRET=${JWT_SECRET}
+            JWT_EXPIRES=${JWT_EXPIRES}
+            EOF
+
+                        cat <<EOF > alms-svc/.env
+            DATABASE_URL=${{ secrets.ALMS_DB_URL }}
+            PORT=4007
+            JWT_SECRET=${JWT_SECRET}
+            JWT_EXPIRES=${JWT_EXPIRES}
+            EOF
+
             echo "==> Build hospital-web"
             NODE_ENV=production npm --prefix hospital-web run build
 
