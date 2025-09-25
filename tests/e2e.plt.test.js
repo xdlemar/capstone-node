@@ -5,21 +5,27 @@ const jwt = require("jsonwebtoken");
 const GATEWAY_URL = process.env.GATEWAY_URL || "http://localhost:8080";
 const JWT_SECRET  = process.env.JWT_SECRET  || "super_secret_dev";
 
+const makeAuthz = (...roles) => ({
+  Authorization: `Bearer ${jwt.sign({ sub: "student1", roles }, JWT_SECRET)}`,
+});
+
 describe("E2E: PLT via Gateway", () => {
-  let agent, authz, token, state = {};
+  let agent, authz, state = {};
 
   beforeAll(() => {
-    token = jwt.sign(
-      { sub: "student1", name: "QA Runner", roles: ["plt","inventory","procurement"] },
-      JWT_SECRET
-    );
-    authz = { Authorization: `Bearer ${token}` };
+    authz = makeAuthz("ADMIN", "MANAGER", "STAFF");
     agent = request(GATEWAY_URL);
   });
 
   test("health (gateway reachable)", async () => {
     const gw = await agent.get("/health").expect(200);
     expect(gw.body).toMatchObject({ ok: true, svc: "gateway" });
+  });
+
+  test("staff cannot create project", async () => {
+    const staffAuth = makeAuthz("STAFF");
+    const body = { code: `PRJ-STAFF-${Math.floor(Math.random() * 1e9)}`, name: "Staff Blocked" };
+    await agent.post("/api/plt/projects").set(staffAuth).send(body).expect(403);
   });
 
   test("create project", async () => {

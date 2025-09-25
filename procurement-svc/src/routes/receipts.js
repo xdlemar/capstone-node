@@ -2,8 +2,10 @@ const express = require("express");
 const router = express.Router();
 const prisma = require("../prisma.js");
 const { postStockMove } = require("../inventoryClient");
+const { requireRole } = require("../auth");
 
 const DEFAULT_RECEIPT_LOC_ID = process.env.DEFAULT_RECEIPT_LOC_ID || "1";
+const staffAccess = requireRole("STAFF", "MANAGER", "ADMIN");
 
 function toBigInt(val, field) {
   if (val === undefined || val === null || val === "") {
@@ -37,7 +39,7 @@ function toDate(val, field) {
 }
 
 // POST /receipts
-router.post("/receipts", async (req, res) => {
+router.post("/receipts", staffAccess, async (req, res) => {
   try {
     const { poNo, drNo, invoiceNo, lines } = req.body || {};
     if (!poNo) return res.status(400).json({ error: "poNo required" });

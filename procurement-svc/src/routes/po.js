@@ -1,9 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../prisma.js");
+const { requireRole } = require("../auth");
+
+const managerAccess = requireRole("MANAGER", "ADMIN");
 
 // Create PO from PR
-router.post("/po", async (req, res) => {
+router.post("/po", managerAccess, async (req, res) => {
   try {
     const { poNo, prNo } = req.body || {};
     if (!poNo || !prNo) return res.status(400).json({ error: "poNo, prNo required" });
@@ -26,7 +29,7 @@ router.post("/po", async (req, res) => {
         prId: pr.id,
         vendorId,
         lines: {
-          create: pr.lines.map(l => ({
+          create: pr.lines.map((l) => ({
             itemId: l.itemId,
             qty: l.qty,
             unit: l.unit || "",

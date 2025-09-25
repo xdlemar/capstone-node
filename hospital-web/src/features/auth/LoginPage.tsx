@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { FullScreenPreloader } from "@/components/layout/Preloader";
 import { api } from "@/lib/api";
-import { auth } from "@/lib/auth";
+import { useAuth } from "@/contexts/AuthContext";
 
 type LoginPayload = { email: string; password: string };
 
@@ -21,6 +21,7 @@ type LoginErrorMessage = (typeof LOGIN_ERROR)[keyof typeof LOGIN_ERROR];
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<LoginErrorMessage | null>(null);
   const [redirecting, setRedirecting] = useState(false);
@@ -34,7 +35,7 @@ export default function LoginPage() {
       if (!token) {
         throw new Error("Missing access token");
       }
-      auth.set(token);
+      login(token);
       setRedirecting(true);
       navigate("/dashboard", { replace: true });
       return;
@@ -74,4 +75,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

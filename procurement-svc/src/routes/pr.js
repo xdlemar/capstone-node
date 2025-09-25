@@ -1,6 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../prisma.js");
+const { requireRole } = require("../auth");
+
+const staffAccess = requireRole("STAFF", "MANAGER", "ADMIN");
+const managerAccess = requireRole("MANAGER", "ADMIN");
 
 function toBigInt(value, field) {
   if (value === undefined || value === null || value === "") {
@@ -20,7 +24,7 @@ function toBigInt(value, field) {
 }
 
 // POST /pr  { prNo, notes, lines: [{ itemId, qty, unit, notes? }] }
-router.post("/pr", async (req, res) => {
+router.post("/pr", staffAccess, async (req, res) => {
   try {
     const { prNo, notes, lines = [] } = req.body || {};
     if (!prNo) return res.status(400).json({ error: "prNo required" });
@@ -55,7 +59,7 @@ router.post("/pr", async (req, res) => {
 });
 
 // POST /pr/:no/approve
-router.post("/pr/:no/approve", async (req, res) => {
+router.post("/pr/:no/approve", managerAccess, async (req, res) => {
   try {
     const { no } = req.params;
     const pr = await prisma.pR.update({

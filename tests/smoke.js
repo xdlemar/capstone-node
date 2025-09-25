@@ -7,7 +7,7 @@ const FROM_LOC_ID = Number(process.env.FROM_LOC_ID) || 1;
 const TO_LOC_ID   = Number(process.env.TO_LOC_ID)   || 2;
 
 function token() {
-  return jwt.sign({ sub: "student1", name: "Smoke Runner", roles: ["inventory","procurement"] }, JWT_SECRET);
+  return jwt.sign({ sub: "student1", name: "Smoke Runner", roles: ["ADMIN","MANAGER","STAFF"] }, JWT_SECRET);
 }
 
 async function http(method, path, body, {auth=true} = {}) {
@@ -64,3 +64,4 @@ const red   = (m)=>log("\x1b[31m", m);
     green("\n✔ SMOKE PASS"); process.exit(0);
   } catch (e) { red(`\n✖ SMOKE FAIL: ${e.message}`); process.exit(1); }
 })();
+

@@ -1,168 +1,108 @@
-"use client"
+"use client";
 
-import type * as React from "react"
+import type * as React from "react";
 import {
- 
-  BookOpen,
-  Bot,
-
-  Frame,
-  
-  Map,
-  PieChart,
+  Boxes,
+  FileText,
+  LayoutDashboard,
   Settings2,
-  SquareTerminal,
-} from "lucide-react"
+  ShoppingCart,
+  Stethoscope,
+  Truck,
+  Users,
+} from "lucide-react";
 
-import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
-import { NavUser } from "@/components/nav-user"
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar"
-import { Brand } from "@/components/layout/Brand"
-// This is sample data.
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+import { NavMain, type NavSection } from "@/components/nav-main";
+import { NavUser } from "@/components/nav-user";
+import { Brand } from "@/components/layout/Brand";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader } from "@/components/ui/sidebar";
+import { useAuth } from "@/contexts/AuthContext";
+
+const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
+  {
+    title: "Dashboard",
+    url: "/dashboard",
+    icon: LayoutDashboard,
+    roles: ["STAFF", "MANAGER", "ADMIN"],
+    items: [{ title: "Overview", url: "/dashboard" }],
   },
-  teams: [
-    {
-      name: "HVH HOSPITAL",
-      logo: "/hvh-logo.png",
-      plan: "Logistics 1",
-    },
-  ],
-  navMain: [
-    {
-      title: "Playground",
-      url: "#",
-      icon: SquareTerminal,
-      isActive: true,
-      items: [
-        {
-          title: "History",
-          url: "#",
-        },
-        {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: Bot,
-      items: [
-        {
-          title: "Genesis",
-          url: "#",
-        },
-        {
-          title: "Explorer",
-          url: "#",
-        },
-        {
-          title: "Quantum",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Documentation",
-      url: "#",
-      icon: BookOpen,
-      items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: Settings2,
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: Frame,
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: PieChart,
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: Map,
-    },
-  ],
-}
+  {
+    title: "Procurement",
+    url: "/procurement",
+    icon: ShoppingCart,
+    roles: ["STAFF", "MANAGER", "ADMIN"],
+    items: [
+      { title: "Workspace", url: "/procurement" },
+      { title: "Approvals", url: "/procurement" },
+    ],
+  },
+  {
+    title: "Inventory",
+    url: "/inventory",
+    icon: Boxes,
+    roles: ["STAFF", "MANAGER", "ADMIN"],
+    items: [
+      { title: "Stock control", url: "/inventory" },
+      { title: "Cycle counts", url: "/inventory" },
+    ],
+  },
+  {
+    title: "Asset lifecycle",
+    url: "/alms",
+    icon: Stethoscope,
+    roles: ["STAFF", "MANAGER", "ADMIN"],
+    items: [
+      { title: "Assets", url: "/alms" },
+      { title: "Schedules", url: "/alms" },
+    ],
+  },
+  {
+    title: "Project logistics",
+    url: "/plt",
+    icon: Truck,
+    roles: ["MANAGER", "ADMIN"],
+    items: [
+      { title: "Deliveries", url: "/plt" },
+      { title: "Routes", url: "/plt" },
+    ],
+  },
+  {
+    title: "Document hub",
+    url: "/dtrs",
+    icon: FileText,
+    roles: ["MANAGER", "ADMIN"],
+    items: [{ title: "Records", url: "/dtrs" }],
+  },
+  {
+    title: "Administration",
+    url: "/admin",
+    icon: Users,
+    roles: ["ADMIN"],
+    items: [{ title: "User access", url: "/admin" }],
+  },
+];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user } = useAuth();
+  const userRoles = user?.roles ?? [];
+
+  const filteredNav = NAV_ITEMS.filter((item) =>
+    !item.roles.length || item.roles.some((role) => userRoles.includes(role))
+  );
+
   return (
-    <Sidebar
-      collapsible="offcanvas"
-      // subtle gradient that keeps your HVH navy vibe
-      className="bg-gradient-to-b from-[#0f2540] via-[#112a45] to-[#0c1e34]"
-      {...props}
-    >
+    <Sidebar collapsible="offcanvas" className="bg-gradient-to-b from-[#0f2540] via-[#112a45] to-[#0c1e34]" {...props}>
       <SidebarHeader>
-        {/* Replace TeamSwitcher with a non-clickable header */}
         <Brand />
       </SidebarHeader>
 
       <SidebarContent className="sidebar-scroll">
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        <NavMain items={filteredNav} />
       </SidebarContent>
 
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser roles={userRoles} />
       </SidebarFooter>
-
-      {/* Remove the rail to STOP expanding when clicking the far left */}
-      {/* <SidebarRail /> */}
     </Sidebar>
-  )
+  );
 }

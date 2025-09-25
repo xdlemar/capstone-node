@@ -5,18 +5,30 @@ const jwt = require("jsonwebtoken");
 const GATEWAY_URL = process.env.GATEWAY_URL || "http://localhost:8080";
 const JWT_SECRET  = process.env.JWT_SECRET  || "super_secret_dev";
 
+const makeAuthz = (...roles) => ({
+  Authorization: `Bearer ${jwt.sign({ sub: "student1", name: "ALMS Runner", roles }, JWT_SECRET)}`,
+});
+
 describe("E2E: ALMS CRUD via Gateway", () => {
-  let agent, authz, token;
+  let agent, authz;
   const S = {};
 
   beforeAll(() => {
-    token = jwt.sign({ sub: "student1", name: "ALMS Runner", roles: ["alms"] }, JWT_SECRET);
-    authz = { Authorization: `Bearer ${token}` };
+    authz = makeAuthz("ADMIN", "MANAGER", "STAFF");
     agent = request(GATEWAY_URL);
   });
 
   test("health", async () => {
     await agent.get("/api/alms/health").set(authz).expect(200);
+  });
+
+  test("staff cannot create asset", async () => {
+    const staffAuth = makeAuthz("STAFF");
+    await agent
+      .post("/api/alms/assets")
+      .set(staffAuth)
+      .send({ assetCode: "EQ-STAFF", itemId: 1, serialNo: "SN-BLOCKED" })
+      .expect(403);
   });
 
   // ---------- ASSETS ----------
@@ -86,7 +98,6 @@ describe("E2E: ALMS CRUD via Gateway", () => {
 
   // ---------- SCHEDULES ----------
   test("schedules: create list read update delete", async () => {
-    // create
     const create = await agent.post("/api/alms/schedules").set(authz).send({
       assetId: S.asset.id,
       type: "PREVENTIVE",
@@ -96,7 +107,6 @@ describe("E2E: ALMS CRUD via Gateway", () => {
     }).expect(201);
     S.sched = create.body;
 
-    // list
     const list = await agent
       .get("/api/alms/schedules")
       .query({ assetId: S.asset.id, take: 10 })
@@ -104,11 +114,9 @@ describe("E2E: ALMS CRUD via Gateway", () => {
       .expect(200);
     expect(list.body.rows.find(r => r.id === S.sched.id)).toBeTruthy();
 
-    // read
     const read = await agent.get(`/api/alms/schedules/${S.sched.id}`).set(authz).expect(200);
     expect(read.body.id).toBe(S.sched.id);
 
-    // update
     const upd = await agent.put(`/api/alms/schedules/${S.sched.id}`).set(authz).send({
       type: "PREVENTIVE",
       intervalDays: 90,
@@ -117,7 +125,6 @@ describe("E2E: ALMS CRUD via Gateway", () => {
     }).expect(200);
     expect(upd.body.intervalDays).toBe(90);
 
-    // delete
     await agent.delete(`/api/alms/schedules/${S.sched.id}`).set(authz).expect(204);
   });
 
@@ -129,15 +136,12 @@ describe("E2E: ALMS CRUD via Gateway", () => {
     }).expect(201);
     S.wo = open.body;
 
-    // list
     const list = await agent.get("/api/alms/workorders").query({ q: woNo }).set(authz).expect(200);
     expect(list.body.rows.find(w => w.id === S.wo.id)).toBeTruthy();
 
-    // read
     const read = await agent.get(`/api/alms/workorders/${S.wo.id}`).set(authz).expect(200);
     expect(read.body.woNo).toBe(woNo);
 
-    // transitions
     await agent.patch(`/api/alms/workorders/${S.wo.id}/status`).set(authz).send({ status: "SCHEDULED" }).expect(200);
     await agent.patch(`/api/alms/workorders/${S.wo.id}/status`).set(authz).send({ status: "IN_PROGRESS", technician: "Tech B" }).expect(200);
     const done = await agent.patch(`/api/alms/workorders/${S.wo.id}/status`).set(authz).send({

@@ -8,7 +8,7 @@ const po = require("./routes/po");
 const rcv = require("./routes/receipts");
 const att = require("./routes/attachments");
 const ven = require("./routes/vendors");
-const { authRequired } = require("./auth");
+const { authRequired, requireRole } = require("./auth");
 
 const app = express();
 app.set("json replacer", (_k, v) => (typeof v === "bigint" ? v.toString() : v));
@@ -21,6 +21,7 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/health", (_req, res) => res.json({ ok: true, svc: "procurement" }));
 
 app.use(authRequired);
+app.use(requireRole("STAFF", "MANAGER", "ADMIN"));
 
 // Mount routes at ROOT to match gateway path rewrite
 app.use(pr);

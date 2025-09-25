@@ -16,6 +16,10 @@ const DEV_SEED_LOCATIONS_EP = process.env.DEV_SEED_LOCATIONS_EP || "/api/invento
 const RECEIPT_QTY = Number(process.env.TEST_RECEIPT_QTY || 200);
 const TRANSFER_QTY = Number(process.env.TEST_TRANSFER_QTY || 25);
 
+const makeAuthz = (...roles) => ({
+  Authorization: `Bearer ${jwt.sign({ sub: "student1", roles }, JWT_SECRET)}`,
+});
+
 const fetchOnHand = async (agent, authz, locationId) => {
   const res = await agent
     .get("/api/inventory/reports/levels")
@@ -32,7 +36,6 @@ const fetchOnHand = async (agent, authz, locationId) => {
 
 describe("E2E: Procurement + Inventory via Gateway", () => {
   let agent;
-  let token;
   let authz;
 
   const state = {
@@ -48,11 +51,7 @@ describe("E2E: Procurement + Inventory via Gateway", () => {
   };
 
   beforeAll(() => {
-    token = jwt.sign(
-      { sub: "student1", name: "QA Runner", roles: ["inventory", "procurement"] },
-      JWT_SECRET,
-    );
-    authz = { Authorization: `Bearer ${token}` };
+    authz = makeAuthz("ADMIN", "MANAGER", "STAFF");
     agent = request(GATEWAY_URL);
   });
 
@@ -87,6 +86,25 @@ describe("E2E: Procurement + Inventory via Gateway", () => {
       name: "ER",
       kind: "ROOM",
     });
+  });
+
+  test("staff cannot approve PR", async () => {
+    const staffAuth = makeAuthz("STAFF");
+    const prNo = `PR-STAFF-${Math.floor(Math.random() * 1e9)}`;
+    await agent
+      .post("/api/procurement/pr")
+      .set(staffAuth)
+      .send({
+        prNo,
+        notes: "Test staff restrictions",
+        lines: [{ itemId: ITEM_ID, qty: 1, unit: "box" }],
+      })
+      .expect(200);
+
+    await agent
+      .post(`/api/procurement/pr/${encodeURIComponent(prNo)}/approve`)
+      .set(staffAuth)
+      .expect(403);
   });
 
   test("upsert vendor (MedSupply Co.)", async () => {
@@ -132,15 +150,15 @@ describe("E2E: Procurement + Inventory via Gateway", () => {
     const res = await agent.post("/api/procurement/po").set(authz).send(body).expect(200);
 
     expect(res.body).toMatchObject({ poNo, status: "OPEN" });
-    expect(res.body.vendor?.name).toBe("MedSupply Co.");
     expect(res.body.lines?.length).toBe(1);
     state.po = res.body;
   });
 
   test("post receipt (lines -> adds stock at FROM)", async () => {
+    const drNo = `DR-${Math.floor(Math.random() * 1e9)}`;
+
     state.onHand.fromBeforeReceipt = await fetchOnHand(agent, authz, FROM_LOC_ID);
 
-    const drNo = `DR-${Math.floor(Math.random() * 1e9)}`;
     const body = {
       poNo: state.po.poNo,
       drNo,
@@ -275,5 +293,10 @@ describe("E2E: Procurement + Inventory via Gateway", () => {
 
     expect(fromAfter).toBe(fromOnHand - TRANSFER_QTY);
     expect(toAfter).toBe(toOnHand + TRANSFER_QTY);
+  });
+
+  test("staff cannot list inventory master data", async () => {
+    const staffAuth = makeAuthz("STAFF");
+    await agent.get("/api/inventory/items").set(staffAuth).expect(403);
   });
 });

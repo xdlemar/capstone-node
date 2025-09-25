@@ -1,5 +1,18 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { auth } from "@/lib/auth";
+
+import { FullScreenPreloader } from "@/components/layout/Preloader";
+import { useAuth } from "@/contexts/AuthContext";
+
 export default function ProtectedRoute() {
-  return auth.isAuthed() ? <Outlet/> : <Navigate to="/login" replace/>;
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <FullScreenPreloader label="Checking permissions..." />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
 }

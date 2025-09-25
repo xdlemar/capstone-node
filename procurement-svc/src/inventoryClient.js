@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const BASE = process.env.INVENTORY_URL || "http://localhost:4001";
 const JWT_SECRET = process.env.JWT_SECRET || "super_secret_dev";
 const SERVICE_SUB = process.env.SERVICE_TOKEN_SUB || "procurement-svc";
-const SERVICE_ROLES = (process.env.SERVICE_TOKEN_ROLES || "inventory,procurement")
+const SERVICE_ROLES = (process.env.SERVICE_TOKEN_ROLES || "ADMIN,MANAGER,STAFF")
   .split(",")
   .map((r) => r.trim())
   .filter(Boolean);

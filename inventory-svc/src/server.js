@@ -15,9 +15,13 @@ const transfers = require("./routes/transfers");
 const counts = require("./routes/counts");
 const inspection = require("./routes/inspection");
 const notifications = require("./routes/notifications");
-const { authRequired } = require("./auth");
+const { authRequired, requireRole } = require("./auth");
 
 const app = express();
+
+const staffAccess = requireRole("STAFF", "MANAGER", "ADMIN");
+const managerAccess = requireRole("MANAGER", "ADMIN");
+const adminOnly = requireRole("ADMIN");
 
 // Single JSON parser, before routes
 app.use(cors());
@@ -31,6 +35,7 @@ app.set("json replacer", (_k, v) => (typeof v === "bigint" ? v.toString() : v));
 app.get("/health", (_req, res) => res.json({ ok: true, svc: "inventory" }));
 
 app.use(authRequired);
+app.use(staffAccess);
 
 // mount routes at ROOT
 app.use("/stock-moves", moves);
@@ -38,12 +43,12 @@ app.use("/issues", issues);
 app.use("/transfers", transfers);
 app.use("/counts", counts);
 app.use("/inspection", inspection);
-app.use("/notifications", notifications);
-app.use("/items", items);
-app.use("/locations", locations);
-app.use("/batches", batches);
-app.use("/reports", reports);
-app.use("/thresholds", thresholds);
+app.use("/notifications", managerAccess, notifications);
+app.use("/items", adminOnly, items);
+app.use("/locations", adminOnly, locations);
+app.use("/batches", managerAccess, batches);
+app.use("/reports", managerAccess, reports);
+app.use("/thresholds", adminOnly, thresholds);
 
 const port = Number(process.env.PORT || 4001);
 app.listen(port, () => console.log(`inventory-svc on http://localhost:${port}`));

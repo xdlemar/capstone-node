@@ -5,13 +5,16 @@ const GATEWAY_URL = process.env.GATEWAY_URL || "http://localhost:8080";
 const JWT_SECRET  = process.env.JWT_SECRET  || "super_secret_dev";
 const ITEM_ID     = Number(process.env.ITEM_ID) || 1;
 
+const makeAuthz = (...roles) => ({
+  Authorization: `Bearer ${jwt.sign({ sub: "student1", roles }, JWT_SECRET)}`,
+});
+
 describe("E2E: DTRS linked to PO & Delivery via Gateway", () => {
-  let agent, authz, token;
+  let agent, authz;
   const S = {};
 
   beforeAll(() => {
-    token = jwt.sign({ sub:"student1", roles:["procurement","plt","dtrs"] }, JWT_SECRET);
-    authz = { Authorization: `Bearer ${token}` };
+    authz = makeAuthz("ADMIN", "MANAGER", "STAFF");
     agent = request(GATEWAY_URL);
   });
 
@@ -19,6 +22,15 @@ describe("E2E: DTRS linked to PO & Delivery via Gateway", () => {
     await agent.get("/api/dtrs/health").set(authz).expect(200);
     await agent.get("/api/procurement/health").set(authz).expect(200);
     await agent.get("/api/plt/health").set(authz).expect(200);
+  });
+
+  test("staff cannot upload DTRS document", async () => {
+    const staffAuth = makeAuthz("STAFF");
+    await agent
+      .post("/api/dtrs/documents")
+      .set(staffAuth)
+      .send({ module: "DELIVERY", title: "Denied", storageKey: "deny", uploaderId: 1 })
+      .expect(403);
   });
 
   test("create PR -> approve -> PO", async () => {
@@ -47,25 +59,21 @@ describe("E2E: DTRS linked to PO & Delivery via Gateway", () => {
   });
 
   test("DTRS: create doc for DELIVERY & for PO, then query", async () => {
-    // doc for delivery
     const d1 = await agent.post("/api/dtrs/documents").set(authz).send({
       module:"DELIVERY", title:"POD Photo", storageKey:`deliveries/${S.delivery.id}/pod.jpg`,
       mimeType:"image/jpeg", size:12345, deliveryId:S.delivery.id, uploaderId:1
     }).expect(201);
     expect(d1.body.deliveryId).toBe(S.delivery.id);
 
-    // doc for PO
     const d2 = await agent.post("/api/dtrs/documents").set(authz).send({
       module:"PROCUREMENT", title:"PO PDF", storageKey:`pos/${S.po.id}/po.pdf`,
       mimeType:"application/pdf", size:45678, poId:S.po.id, uploaderId:1
     }).expect(201);
     expect(d2.body.poId).toBe(S.po.id);
 
-    // query by deliveryId
     const q1 = await agent.get(`/api/dtrs/documents?deliveryId=${S.delivery.id}`).set(authz).expect(200);
     expect(q1.body.find(x => x.id === d1.body.id)).toBeTruthy();
 
-    // query by poId
     const q2 = await agent.get(`/api/dtrs/documents?module=PROCUREMENT&poId=${S.po.id}`).set(authz).expect(200);
     expect(q2.body.find(x => x.id === d2.body.id)).toBeTruthy();
   });
