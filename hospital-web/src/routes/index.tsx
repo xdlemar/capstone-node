@@ -9,6 +9,7 @@ import ProcurementPurchaseOrdersPage from "@/features/procurement/ProcurementPur
 import ProcurementReceivingPage from "@/features/procurement/ProcurementReceivingPage";
 import ProcurementApprovalsPage from "@/features/procurement/ProcurementApprovalsPage";
 import ProcurementVendorsPage from "@/features/procurement/ProcurementVendorsPage";
+import InventoryOverview from "@/features/inventory/InventoryOverview";
 import StockControlPage from "@/features/inventory/StockControlPage";
 import CycleCountPage from "@/features/inventory/CycleCountPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
@@ -72,7 +73,8 @@ export const router = createBrowserRouter([
               </RoleGate>
             ),
             children: [
-              { index: true, element: <Navigate to="stock-control" replace /> },
+              { index: true, element: <Navigate to="stock-levels" replace /> },
+              { path: "stock-levels", element: <InventoryOverview /> },
               { path: "stock-control", element: <StockControlPage /> },
               {
                 path: "cycle-counts",
@@ -121,3 +123,9 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
+
+
+
+
+
+

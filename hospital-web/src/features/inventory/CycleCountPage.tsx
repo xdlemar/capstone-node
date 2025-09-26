@@ -13,9 +13,9 @@ export default function CycleCountPage() {
   return (
     <section className="space-y-6">
       <header className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Cycle counts</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Cycle counts (audits)</h1>
         <p className="text-muted-foreground max-w-3xl">
-          Initiate cycle count sessions, capture variances, and post adjustments once the review is complete.
+          Plan periodic audits of storerooms, capture variances against SAP totals, and post adjustments once logistics leadership signs off.
         </p>
       </header>
 
@@ -31,3 +31,4 @@ export default function CycleCountPage() {
     </section>
   );
 }
+

@@ -44,8 +44,9 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     icon: Boxes,
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
-      { title: "Stock control", url: "/inventory/stock-control", roles: ["STAFF", "MANAGER", "ADMIN"] },
-      { title: "Cycle counts", url: "/inventory/cycle-counts", roles: ["MANAGER", "ADMIN"] },
+      { title: "Stock levels", url: "/inventory/stock-levels", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Issue & transfer", url: "/inventory/stock-control", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Cycle counts (audits)", url: "/inventory/cycle-counts", roles: ["MANAGER", "ADMIN"] },
     ],
   },
   {
@@ -112,4 +113,3 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     </Sidebar>
   );
 }
-

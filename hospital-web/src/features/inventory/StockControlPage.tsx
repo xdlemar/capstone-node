@@ -11,7 +11,7 @@ export default function StockControlPage() {
   return (
     <section className="space-y-6">
       <header className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Stock control</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Issue & transfer</h1>
         <p className="text-muted-foreground max-w-3xl">
           Issue stock to requesting locations or coordinate inter-location transfers. Allocations respect FEFO and update
           stock moves automatically.
@@ -35,3 +35,4 @@ export default function StockControlPage() {
     </section>
   );
 }
+
