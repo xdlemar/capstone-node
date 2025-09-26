@@ -203,6 +203,8 @@ export function PurchaseRequestCard({ className }: { className?: string }) {
     }
   };
 
+
+
   return (
     <Card className={cn("border-border/60", className)}>
       <CardHeader>
@@ -279,6 +281,7 @@ export function PurchaseRequestCard({ className }: { className?: string }) {
 
 export function ReceiptCard({ className }: { className?: string }) {
   const { toast } = useToast();
+  const lookups = useProcurementLookups();
   const form = useForm<ReceiptValues>({
     resolver: zodResolver(receiptSchema),
     defaultValues: { poNo: "", drNo: "", invoiceNo: "" },
@@ -293,11 +296,17 @@ export function ReceiptCard({ className }: { className?: string }) {
       });
       toast({ title: "Delivery receipt logged", description: `Receipt recorded for purchase order ${values.poNo}.` });
       form.reset({ poNo: "", drNo: "", invoiceNo: "" });
+      lookups.refetch();
     } catch (err: any) {
       const message = err?.response?.data?.error || err.message || "Failed to record receipt";
       toast({ title: "Delivery receipt failed", description: message, variant: "destructive" });
     }
   };
+
+  const openPos = lookups.data?.openPos ?? [];
+
+
+
 
   return (
     <Card className={cn("border-border/60", className)}>
@@ -306,55 +315,89 @@ export function ReceiptCard({ className }: { className?: string }) {
         <CardDescription>Capture delivery receipt and invoice references so inventory and vendor KPIs stay current.</CardDescription>
       </CardHeader>
       <CardContent>
-        <Form {...form}>
-          <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
-            <FormField
-              control={form.control}
-              name="poNo"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Purchase order number (PO No.)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="PO-0001" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid gap-4 md:grid-cols-2">
+        {lookups.isLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading open purchase orders...
+          </div>
+        ) : lookups.error ? (
+          <Alert variant="destructive">
+            <AlertTitle>Lookup failed</AlertTitle>
+            <AlertDescription>Unable to load open purchase orders. Try again shortly.</AlertDescription>
+          </Alert>
+        ) : openPos.length === 0 ? (
+          <Alert>
+            <AlertTitle>No open purchase orders</AlertTitle>
+            <AlertDescription>Create or reopen a purchase order before recording receipts.</AlertDescription>
+          </Alert>
+        ) : (
+          <Form {...form}>
+            <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
               <FormField
                 control={form.control}
-                name="drNo"
+                name="poNo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Delivery receipt number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="DR-123" {...field} />
-                    </FormControl>
+                    <FormLabel>Purchase order</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select purchase order" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {openPos.map((po) => (
+                          <SelectItem key={po.id} value={po.poNo}>
+                            <div className="flex flex-col text-left">
+                              <span className="font-medium">{po.poNo}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {po.vendorName ?? "Vendor pending"}
+                                {po.prNo ? ` - PR ${po.prNo}` : ""}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Only open purchase orders appear here.</FormDescription>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="invoiceNo"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Invoice number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="INV-456" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
-            <CardFooter className="px-0 pt-4">
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Record receipt
-              </Button>
-            </CardFooter>
-          </form>
-        </Form>
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="drNo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Delivery receipt number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="DR-123" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="invoiceNo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Invoice number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="INV-456" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <CardFooter className="px-0 pt-4">
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Record receipt
+                </Button>
+              </CardFooter>
+            </form>
+          </Form>
+        )}
       </CardContent>
     </Card>
   );
@@ -376,6 +419,8 @@ export function ApprovePrCard({ className }: { className?: string }) {
       toast({ title: "Approval failed", description: message, variant: "destructive" });
     }
   };
+
+
 
   return (
     <Card className={cn("border-border/60", className)}>
@@ -561,6 +606,8 @@ export function VendorUpsertCard({ className }: { className?: string }) {
     }
   };
 
+
+
   return (
     <Card className={cn("border-border/60", className)}>
       <CardHeader>
@@ -705,6 +752,14 @@ export function VendorPerformanceTable({ className }: { className?: string }) {
     </Card>
   );
 }
+
+
+
+
+
+
+
+
 
 
 

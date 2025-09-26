@@ -19,6 +19,14 @@ export type ProcurementLookups = {
       lastEvaluatedAt: string | null;
     };
   }>;
+  openPos: Array<{
+    id: string;
+    poNo: string;
+    prNo: string | null;
+    vendorName: string | null;
+    status: string;
+    orderedAt: string;
+  }>;
 };
 
 export function useProcurementLookups() {

@@ -10,7 +10,7 @@ router.get("/procurement", staffAccess, async (req, res) => {
   try {
     const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
 
-    const [prs, vendors] = await Promise.all([
+    const [prs, vendors, pos] = await Promise.all([
       prisma.pR.findMany({
         orderBy: { createdAt: "desc" },
         take: 50,
@@ -19,6 +19,15 @@ router.get("/procurement", staffAccess, async (req, res) => {
       prisma.vendor.findMany({
         orderBy: { name: "asc" },
         include: roles.includes("MANAGER") || roles.includes("ADMIN") ? { metrics: true } : undefined,
+      }),
+      prisma.pO.findMany({
+        where: { status: { in: ["OPEN", "PARTIAL"] } },
+        orderBy: { orderedAt: "desc" },
+        take: 75,
+        include: {
+          vendor: { select: { name: true } },
+          PR: { select: { prNo: true } },
+        },
       }),
     ]);
 
@@ -55,7 +64,16 @@ router.get("/procurement", staffAccess, async (req, res) => {
         : null,
     }));
 
-    res.json({ submittedPrs, approvedPrs, vendors: vendorPayload });
+    const openPos = pos.map((po) => ({
+      id: po.id.toString(),
+      poNo: po.poNo,
+      prNo: po.PR?.prNo ?? null,
+      vendorName: po.vendor?.name ?? null,
+      status: po.status,
+      orderedAt: po.orderedAt,
+    }));
+
+    res.json({ submittedPrs, approvedPrs, vendors: vendorPayload, openPos });
   } catch (err) {
     console.error("[GET /lookups/procurement]", err);
     res.status(500).json({ error: "Internal error" });
