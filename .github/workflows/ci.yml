@@ -15,7 +15,7 @@ jobs:
           - 5432:5432
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ${{ secrets.DB_PASS }}
+          POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -24,7 +24,7 @@ jobs:
 
     env:
       DB_USER: postgres
-      DB_PASS_URL: ${{ secrets.DB_PASS }}
+      DB_PASS_URL: postgres
       DB_HOST: localhost
       DB_PORT: 5432
 
