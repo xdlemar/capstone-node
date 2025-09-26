@@ -35,6 +35,11 @@ enum DepreciationMethod {
   NONE
 }
 
+enum MaintenanceAlertType {
+  OVERDUE_MAINTENANCE
+  WARRANTY_EXPIRING
+}
+
 model Asset {
   id              BigInt      @id @default(autoincrement())
   assetCode       String      @unique
@@ -58,6 +63,7 @@ model Asset {
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
   MaintenanceSchedule MaintenanceSchedule[]
+  alerts              MaintenanceAlert[]
 
   @@index([serialNo])
   @@index([locationId])
@@ -83,7 +89,8 @@ model MaintenanceSchedule {
   nextDue      DateTime?
   notes        String?
 
-  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  asset  Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  alerts MaintenanceAlert[]
 
   @@index([assetId, nextDue])
 }
@@ -145,4 +152,19 @@ model AssetDisposal {
   approvedById BigInt?
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+}
+
+model MaintenanceAlert {
+  id          BigInt                @id @default(autoincrement())
+  assetId     BigInt
+  scheduleId  BigInt?
+  type        MaintenanceAlertType
+  message     String
+  triggeredAt DateTime              @default(now())
+  resolvedAt  DateTime?
+
+  asset    Asset               @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  schedule MaintenanceSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+
+  @@index([assetId, resolvedAt])
 }
