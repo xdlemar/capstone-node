@@ -134,6 +134,7 @@ jobs:
                 dtrs-svc/*) export DATABASE_URL="${{ secrets.DTRS_DB_URL }}" ;;
                 alms-svc/*) export DATABASE_URL="${{ secrets.ALMS_DB_URL }}" ;;
               esac
+
               echo "Generating client for ${schema}"
               npx prisma generate --schema="$schema"
             done
