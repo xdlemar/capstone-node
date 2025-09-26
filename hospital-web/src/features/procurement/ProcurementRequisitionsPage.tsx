@@ -1,14 +1,10 @@
-import { ProcurementFlowGuide } from "./components/ProcurementFlowGuide";
 import { PurchaseRequestCard } from "./components/ProcurementForms";
 
 export default function ProcurementRequisitionsPage() {
   return (
-    <section className="space-y-8">
+    <section className="space-y-6">
       <header className="space-y-3">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase text-primary">Step 1 of 4</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Create purchase requisition</h1>
-        </div>
+        <h1 className="text-3xl font-semibold tracking-tight">Create purchase requisition</h1>
         <p className="text-muted-foreground max-w-3xl">
           Capture detailed purchase requisitions using readable item names. As soon as you submit, the request appears in the
           manager approval queue.
@@ -19,8 +15,6 @@ export default function ProcurementRequisitionsPage() {
           <li>Add optional notes for critical instructions such as delivery deadlines or cold-chain requirements.</li>
         </ul>
       </header>
-
-      <ProcurementFlowGuide current="requisition" />
 
       <PurchaseRequestCard />
     </section>

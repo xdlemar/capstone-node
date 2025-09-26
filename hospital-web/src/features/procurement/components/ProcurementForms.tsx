@@ -78,7 +78,7 @@ function useItemFormatter() {
     return `${item.name} - ${item.sku}`;
   };
 
-  return { options, format, query: inv };
+  return { options, format, query: inv, map: itemMap };
 }
 
 function PrLineRow({
@@ -103,7 +103,7 @@ function PrLineRow({
               <FormLabel>Item</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger className="bg-background">
+                  <SelectTrigger className="bg-background h-auto min-h-[3rem] items-start py-2 text-left">
                     <SelectValue placeholder="Select item" />
                   </SelectTrigger>
                 </FormControl>
@@ -282,6 +282,7 @@ export function PurchaseRequestCard({ className }: { className?: string }) {
 export function ReceiptCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const lookups = useProcurementLookups();
+  const { map: itemMap, query: inventoryQuery } = useItemFormatter();
   const form = useForm<ReceiptValues>({
     resolver: zodResolver(receiptSchema),
     defaultValues: { poNo: "", drNo: "", invoiceNo: "" },
@@ -303,10 +304,15 @@ export function ReceiptCard({ className }: { className?: string }) {
     }
   };
 
+  const safeLines = (lines?: Array<{ itemId: string; qty: number; unit: string; notes?: string | null }>) => lines ?? [];
   const openPos = lookups.data?.openPos ?? [];
+  const selectedPoNo = form.watch("poNo");
+  const selectedPo = openPos.find((po) => po.poNo === selectedPoNo);
 
-
-
+  const renderLineLabel = (line: { itemId: string; qty: number; unit: string; notes?: string | null }) => {
+    const item = itemMap.get(line.itemId);
+    return item ? `${item.name} (${item.sku})` : `Item #${line.itemId}`;
+  };
 
   return (
     <Card className={cn("border-border/60", className)}>
@@ -315,7 +321,7 @@ export function ReceiptCard({ className }: { className?: string }) {
         <CardDescription>Capture delivery receipt and invoice references so inventory and vendor KPIs stay current.</CardDescription>
       </CardHeader>
       <CardContent>
-        {lookups.isLoading ? (
+        {lookups.isLoading || inventoryQuery.isLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading open purchase orders...
           </div>
@@ -340,22 +346,25 @@ export function ReceiptCard({ className }: { className?: string }) {
                     <FormLabel>Purchase order</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger className="bg-background">
+                        <SelectTrigger className="bg-background h-auto min-h-[3rem] items-start py-2 text-left">
                           <SelectValue placeholder="Select purchase order" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {openPos.map((po) => (
-                          <SelectItem key={po.id} value={po.poNo}>
-                            <div className="flex flex-col text-left">
-                              <span className="font-medium">{po.poNo}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {po.vendorName ?? "Vendor pending"}
-                                {po.prNo ? ` - PR ${po.prNo}` : ""}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
+                        {openPos.map((po) => {
+                          const lines = safeLines(po.lines);
+                          const totalQty = lines.reduce((sum, line) => sum + (line?.qty ?? 0), 0);
+                          return (
+                            <SelectItem key={po.id} value={po.poNo}>
+                              <div className="flex flex-col text-left">
+                                <span className="font-medium">{po.poNo}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {(po.vendorName ?? "Vendor pending")} {lines.length} line(s) {totalQty} units
+                                </span>
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                     <FormDescription>Only open purchase orders appear here.</FormDescription>
@@ -389,6 +398,31 @@ export function ReceiptCard({ className }: { className?: string }) {
                   )}
                 />
               </div>
+
+              {selectedPo ? (
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                  <h3 className="text-sm font-semibold">Open PO line items</h3>
+                  <Table className="mt-3">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item</TableHead>
+                        <TableHead className="w-24 text-right">Quantity</TableHead>
+                        <TableHead className="w-24">Unit</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {safeLines(selectedPo.lines).map((line) => (
+                        <TableRow key={line.id}>
+                          <TableCell>{renderLineLabel(line)}</TableCell>
+                          <TableCell className="text-right">{line.qty}</TableCell>
+                          <TableCell>{line.unit}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : null}
+
               <CardFooter className="px-0 pt-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -401,12 +435,16 @@ export function ReceiptCard({ className }: { className?: string }) {
       </CardContent>
     </Card>
   );
-}
-
-export function ApprovePrCard({ className }: { className?: string }) {
+}export function ApprovePrCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const lookups = useProcurementLookups();
+  const { map: itemMap, query: inventoryQuery } = useItemFormatter();
   const form = useForm<ApproveValues>({ resolver: zodResolver(approveSchema), defaultValues: { prNo: "" } });
+
+  const submittedPrs = lookups.data?.submittedPrs ?? [];
+  const selectedPrNo = form.watch("prNo");
+  const selectedPr = submittedPrs.find((pr) => pr.prNo === selectedPrNo);
+  const safeLines = (lines?: Array<{ itemId: string; qty: number; unit: string; notes?: string | null }>) => lines ?? [];
 
   const onSubmit = async (values: ApproveValues) => {
     try {
@@ -420,7 +458,10 @@ export function ApprovePrCard({ className }: { className?: string }) {
     }
   };
 
-
+  const renderLineLabel = (line: { itemId: string; qty: number; unit: string; notes?: string | null }) => {
+    const item = itemMap.get(line.itemId);
+    return item ? `${item.name} (${item.sku})` : `Item #${line.itemId}`;
+  };
 
   return (
     <Card className={cn("border-border/60", className)}>
@@ -429,7 +470,7 @@ export function ApprovePrCard({ className }: { className?: string }) {
         <CardDescription>Choose a submitted requisition to authorize sourcing.</CardDescription>
       </CardHeader>
       <CardContent>
-        {lookups.isLoading ? (
+        {lookups.isLoading || inventoryQuery.isLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading submitted PRs...
           </div>
@@ -438,7 +479,7 @@ export function ApprovePrCard({ className }: { className?: string }) {
             <AlertTitle>Lookup failed</AlertTitle>
             <AlertDescription>Unable to load submitted PRs. Try again shortly.</AlertDescription>
           </Alert>
-        ) : lookups.data?.submittedPrs.length ? (
+        ) : submittedPrs.length ? (
           <Form {...form}>
             <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
               <FormField
@@ -446,25 +487,64 @@ export function ApprovePrCard({ className }: { className?: string }) {
                 name="prNo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Purchase requisition number (PR No.)</FormLabel>
+                    <FormLabel>Purchase requisition</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger className="bg-background">
+                        <SelectTrigger className="bg-background h-auto min-h-[3rem] items-start py-2 text-left">
                           <SelectValue placeholder="Select PR" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {lookups.data.submittedPrs.map((pr) => (
-                          <SelectItem key={pr.id} value={pr.prNo}>
-                            {pr.prNo}
-                          </SelectItem>
-                        ))}
+                        {submittedPrs.map((pr) => {
+                          const lines = safeLines(pr.lines);
+                          const totalQty = lines.reduce((sum, line) => sum + (line?.qty ?? 0), 0);
+                          return (
+                            <SelectItem key={pr.id} value={pr.prNo}>
+                              <div className="space-y-1 text-left">
+                                <span className="font-medium">{pr.prNo}</span>
+                                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                  <span>{lines.length} line(s)</span>
+                                  <span>{totalQty} units</span>
+                                  {pr.createdAt ? <span>{new Date(pr.createdAt).toLocaleDateString()}</span> : null}
+                                </div>
+                                {pr.notes ? (
+                                  <span className="block text-xs text-muted-foreground">Note: {pr.notes}</span>
+                                ) : null}
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {selectedPr ? (
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                  <h3 className="text-sm font-semibold">Line details</h3>
+                  <Table className="mt-3">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item</TableHead>
+                        <TableHead className="w-24 text-right">Quantity</TableHead>
+                        <TableHead className="w-24">Unit</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {safeLines(selectedPr.lines).map((line) => (
+                        <TableRow key={line.id}>
+                          <TableCell>{renderLineLabel(line)}</TableCell>
+                          <TableCell className="text-right">{line.qty}</TableCell>
+                          <TableCell>{line.unit}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : null}
+
               <CardFooter className="px-0 pt-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -482,15 +562,19 @@ export function ApprovePrCard({ className }: { className?: string }) {
       </CardContent>
     </Card>
   );
-}
-
-export function CreatePoCard({ className }: { className?: string }) {
+}export function CreatePoCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const lookups = useProcurementLookups();
+  const { map: itemMap, query: inventoryQuery } = useItemFormatter();
   const form = useForm<PoValues>({
     resolver: zodResolver(poSchema),
     defaultValues: { prNo: "", poNo: `PO-${Date.now()}` },
   });
+
+  const approved = lookups.data?.approvedPrs ?? [];
+  const selectedPrNo = form.watch("prNo");
+  const selectedPr = approved.find((pr) => pr.prNo === selectedPrNo);
+  const safeLines = (lines?: Array<{ itemId: string; qty: number; unit: string; notes?: string | null }>) => lines ?? [];
 
   const onSubmit = async (values: PoValues) => {
     try {
@@ -504,7 +588,10 @@ export function CreatePoCard({ className }: { className?: string }) {
     }
   };
 
-  const approved = lookups.data?.approvedPrs ?? [];
+  const renderLineLabel = (line: { itemId: string; qty: number; unit: string; notes?: string | null }) => {
+    const item = itemMap.get(line.itemId);
+    return item ? `${item.name} (${item.sku})` : `Item #${line.itemId}`;
+  };
 
   return (
     <Card className={cn("border-border/60", className)}>
@@ -513,7 +600,7 @@ export function CreatePoCard({ className }: { className?: string }) {
         <CardDescription>Turn an approved requisition into a purchase order using plain-language lists of recent approvals.</CardDescription>
       </CardHeader>
       <CardContent>
-        {lookups.isLoading ? (
+        {lookups.isLoading || inventoryQuery.isLoading ? (
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading approved PRs...
           </div>
@@ -533,16 +620,27 @@ export function CreatePoCard({ className }: { className?: string }) {
                     <FormLabel>Select approved requisition</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
-                        <SelectTrigger className="bg-background">
+                        <SelectTrigger className="bg-background h-auto min-h-[3rem] items-start py-2 text-left">
                           <SelectValue placeholder="Select approved PR" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {approved.map((pr) => (
-                          <SelectItem key={pr.id} value={pr.prNo}>
-                            {pr.prNo}
-                          </SelectItem>
-                        ))}
+                        {approved.map((pr) => {
+                          const lines = safeLines(pr.lines);
+                          const totalQty = lines.reduce((sum, line) => sum + (line?.qty ?? 0), 0);
+                          return (
+                            <SelectItem key={pr.id} value={pr.prNo}>
+                              <div className="space-y-1 text-left">
+                                <span className="font-medium">{pr.prNo}</span>
+                                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                  <span>{lines.length} line(s)</span>
+                                  <span>{totalQty} units</span>
+                                  {pr.notes ? <span className="truncate">Note: {pr.notes}</span> : null}
+                                </div>
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -558,10 +656,36 @@ export function CreatePoCard({ className }: { className?: string }) {
                     <FormControl>
                       <Input placeholder="PO-0001" {...field} />
                     </FormControl>
+                    <FormDescription>If blank, we generate a timestamp-based number for you.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {selectedPr ? (
+                <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                  <h3 className="text-sm font-semibold">Requisition details</h3>
+                  <Table className="mt-3">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item</TableHead>
+                        <TableHead className="w-24 text-right">Quantity</TableHead>
+                        <TableHead className="w-24">Unit</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {safeLines(selectedPr.lines).map((line) => (
+                        <TableRow key={line.id}>
+                          <TableCell>{renderLineLabel(line)}</TableCell>
+                          <TableCell className="text-right">{line.qty}</TableCell>
+                          <TableCell>{line.unit}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : null}
+
               <CardFooter className="px-0 pt-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -579,9 +703,7 @@ export function CreatePoCard({ className }: { className?: string }) {
       </CardContent>
     </Card>
   );
-}
-
-export function VendorUpsertCard({ className }: { className?: string }) {
+}export function VendorUpsertCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const lookups = useProcurementLookups();
   const form = useForm<VendorValues>({
@@ -752,6 +874,19 @@ export function VendorPerformanceTable({ className }: { className?: string }) {
     </Card>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

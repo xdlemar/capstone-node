@@ -3,16 +3,12 @@ import { ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { ApprovePrCard, VendorPerformanceTable } from "./components/ProcurementForms";
-import { ProcurementFlowGuide } from "./components/ProcurementFlowGuide";
 
 export default function ProcurementApprovalsPage() {
   return (
     <section className="space-y-8">
       <header className="space-y-3">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase text-primary">Step 2 of 4</p>
-          <h1 className="text-3xl font-semibold tracking-tight">Procurement approvals</h1>
-        </div>
+        <h1 className="text-3xl font-semibold tracking-tight">Procurement approvals</h1>
         <p className="text-muted-foreground max-w-3xl">
           Review submitted purchase requisitions, manage sourcing decisions, and monitor vendor performance signals before
           signing off. This view is limited to managers and admins to respect segregation of duties.
@@ -23,8 +19,6 @@ export default function ProcurementApprovalsPage() {
           <li>Approve to unlock the purchase order step; reject with notes if additional clarification is needed.</li>
         </ul>
       </header>
-
-      <ProcurementFlowGuide current="approval" />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-6">

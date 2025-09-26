@@ -2,9 +2,29 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 
+export type ProcurementLookupLine = {
+  id: string;
+  itemId: string;
+  qty: number;
+  unit: string;
+  notes?: string | null;
+};
+
 export type ProcurementLookups = {
-  submittedPrs: Array<{ id: string; prNo: string; createdAt: string }>;
-  approvedPrs: Array<{ id: string; prNo: string; createdAt: string }>;
+  submittedPrs: Array<{
+    id: string;
+    prNo: string;
+    createdAt: string;
+    notes?: string | null;
+    lines: ProcurementLookupLine[];
+  }>;
+  approvedPrs: Array<{
+    id: string;
+    prNo: string;
+    createdAt: string;
+    notes?: string | null;
+    lines: ProcurementLookupLine[];
+  }>;
   vendors: Array<{
     id: string;
     name: string;
@@ -26,6 +46,7 @@ export type ProcurementLookups = {
     vendorName: string | null;
     status: string;
     orderedAt: string;
+    lines: ProcurementLookupLine[];
   }>;
 };
 

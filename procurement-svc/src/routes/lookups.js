@@ -14,7 +14,22 @@ router.get("/procurement", staffAccess, async (req, res) => {
       prisma.pR.findMany({
         orderBy: { createdAt: "desc" },
         take: 50,
-        select: { id: true, prNo: true, status: true, createdAt: true },
+        select: {
+          id: true,
+          prNo: true,
+          status: true,
+          createdAt: true,
+          notes: true,
+          lines: {
+            select: {
+              id: true,
+              itemId: true,
+              qty: true,
+              unit: true,
+              notes: true,
+            },
+          },
+        },
       }),
       prisma.vendor.findMany({
         orderBy: { name: "asc" },
@@ -27,25 +42,38 @@ router.get("/procurement", staffAccess, async (req, res) => {
         include: {
           vendor: { select: { name: true } },
           PR: { select: { prNo: true } },
+          lines: {
+            select: {
+              id: true,
+              itemId: true,
+              qty: true,
+              unit: true,
+              notes: true,
+            },
+          },
         },
       }),
     ]);
 
-    const submittedPrs = prs
-      .filter((pr) => pr.status === "SUBMITTED")
-      .map((pr) => ({
-        id: pr.id.toString(),
-        prNo: pr.prNo,
-        createdAt: pr.createdAt,
-      }));
+    const mapPr = (status) =>
+      prs
+        .filter((pr) => pr.status === status)
+        .map((pr) => ({
+          id: pr.id.toString(),
+          prNo: pr.prNo,
+          createdAt: pr.createdAt,
+          notes: pr.notes,
+          lines: pr.lines.map((line) => ({
+            id: line.id.toString(),
+            itemId: line.itemId.toString(),
+            qty: line.qty,
+            unit: line.unit,
+            notes: line.notes,
+          })),
+        }));
 
-    const approvedPrs = prs
-      .filter((pr) => pr.status === "APPROVED")
-      .map((pr) => ({
-        id: pr.id.toString(),
-        prNo: pr.prNo,
-        createdAt: pr.createdAt,
-      }));
+    const submittedPrs = mapPr("SUBMITTED");
+    const approvedPrs = mapPr("APPROVED");
 
     const vendorPayload = vendors.map((vendor) => ({
       id: vendor.id.toString(),
@@ -71,6 +99,13 @@ router.get("/procurement", staffAccess, async (req, res) => {
       vendorName: po.vendor?.name ?? null,
       status: po.status,
       orderedAt: po.orderedAt,
+      lines: po.lines.map((line) => ({
+        id: line.id.toString(),
+        itemId: line.itemId.toString(),
+        qty: line.qty,
+        unit: line.unit,
+        notes: line.notes,
+      })),
     }));
 
     res.json({ submittedPrs, approvedPrs, vendors: vendorPayload, openPos });
