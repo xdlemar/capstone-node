@@ -16,6 +16,11 @@ enum DeliveryStatus {
   CANCELLED
 }
 
+enum DeliveryAlertType {
+  STATUS_DELAY
+  ETA_MISSED
+}
+
 enum ProjectStatus {
   PLANNING
   ACTIVE
@@ -59,11 +64,25 @@ model Delivery {
   project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   updates DeliveryUpdate[]
   photos  DeliveryPhoto[]
+  alerts  DeliveryAlert[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([projectId, status])
+}
+
+model DeliveryAlert {
+  id         BigInt            @id @default(autoincrement())
+  deliveryId BigInt
+  type       DeliveryAlertType
+  message    String
+  triggeredAt DateTime         @default(now())
+  resolvedAt DateTime?
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([deliveryId, resolvedAt])
 }
 
 model DeliveryUpdate {

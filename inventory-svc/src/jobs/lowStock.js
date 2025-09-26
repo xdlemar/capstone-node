@@ -1,75 +1,115 @@
 const { prisma } = require("../prisma");
 
-// helper: BigInt-safe print
+// helper: stringify BigInt safely
 const bi = (v) => (typeof v === "bigint" ? v.toString() : v);
 
 async function run() {
   console.log("=== LOW-STOCK CHECK START ===");
 
-  // Build per-location on-hand using location-aware conditional sums
-  // This matches the logic from /reports/levels?locationId=
-  const levels = await prisma.$queryRawUnsafe(`
-    SELECT
-      i.id AS "itemId",
-      l.id AS "locationId",
-      COALESCE(SUM(CASE WHEN sm."toLocId"   = l.id THEN sm.qty END), 0) -
-      COALESCE(SUM(CASE WHEN sm."fromLocId" = l.id THEN sm.qty END), 0) AS onhand
-    FROM "Item" i
-    JOIN "Location" l ON 1=1
-    LEFT JOIN "StockMove" sm
-      ON sm."itemId" = i.id
-     AND (sm."toLocId" = l.id OR sm."fromLocId" = l.id)
-    GROUP BY i.id, l.id
-    ORDER BY i.id, l.id
-  `);
+  const now = new Date();
 
-  // Pull all thresholds once
-  const thresholds = await prisma.threshold.findMany();
+  const [levels, thresholds, items, locations, unresolved] = await Promise.all([
+    prisma.$queryRawUnsafe(`
+      SELECT
+        i.id AS "itemId",
+        l.id AS "locationId",
+        COALESCE(SUM(CASE WHEN sm."toLocId"   = l.id THEN sm.qty END), 0) -
+        COALESCE(SUM(CASE WHEN sm."fromLocId" = l.id THEN sm.qty END), 0) AS onhand
+      FROM "Item" i
+      JOIN "Location" l ON 1=1
+      LEFT JOIN "StockMove" sm
+        ON sm."itemId" = i.id
+       AND (sm."toLocId" = l.id OR sm."fromLocId" = l.id)
+      GROUP BY i.id, l.id
+      ORDER BY i.id, l.id
+    `),
+    prisma.threshold.findMany(),
+    prisma.item.findMany({ select: { id: true, sku: true, name: true } }),
+    prisma.location.findMany({ select: { id: true, name: true } }),
+    prisma.notification.findMany({ where: { resolvedAt: null, type: "LOW_STOCK" } }),
+  ]);
 
-  if (!levels.length) {
-    console.log("No stock movement rows yet. Nothing to check.");
-    console.log("=== LOW-STOCK CHECK END ===");
-    return;
-  }
   if (!thresholds.length) {
     console.log("No thresholds configured. Nothing to check.");
     console.log("=== LOW-STOCK CHECK END ===");
     return;
   }
 
-  console.log("Levels:");
-  for (const L of levels) {
-    console.log(`  item=${bi(L.itemId)} loc=${bi(L.locationId)} onhand=${Number(L.onhand)}`);
-  }
-  console.log("Thresholds:");
-  for (const t of thresholds) {
-    console.log(`  id=${bi(t.id)} item=${bi(t.itemId)} loc=${t.locationId == null ? "ANY" : bi(t.locationId)} min=${Number(t.minQty)}`);
+  const itemMap = new Map(items.map((it) => [bi(it.id), it]));
+  const locationMap = new Map(locations.map((loc) => [bi(loc.id), loc]));
+  const thresholdMap = new Map(
+    thresholds.map((t) => [`${bi(t.itemId)}:${bi(t.locationId)}`, t])
+  );
+
+  const unresolvedMap = new Map();
+  for (const n of unresolved) {
+    const key = `${bi(n.itemId)}:${n.locationId == null ? "*" : bi(n.locationId)}`;
+    if (!unresolvedMap.has(key)) unresolvedMap.set(key, n);
   }
 
-  let alerts = 0;
+  const stillLow = new Set();
+
+  if (!levels.length) {
+    console.log("No stock movement rows yet. Nothing to check.");
+  }
+
   for (const L of levels) {
     const itemId = BigInt(L.itemId);
-    const locationId = L.locationId == null ? null : BigInt(L.locationId);
+    const locationId = BigInt(L.locationId);
+    const key = `${bi(itemId)}:${bi(locationId)}`;
+    const threshold = thresholdMap.get(key);
+    if (!threshold) continue;
+
     const onhand = Number(L.onhand);
+    const min = Number(threshold.minQty);
+    const item = itemMap.get(bi(itemId));
+    const location = locationMap.get(bi(locationId));
+    const labelItem = item ? `${item.sku} (${item.name})` : `Item ${bi(itemId)}`;
+    const labelLocation = location ? location.name : `Location ${bi(locationId)}`;
+    const message = `Low stock: ${labelItem} at ${labelLocation} is ${onhand} below minimum ${min}`;
 
-    const hits = thresholds.filter(
-      (t) => t.itemId === itemId && (t.locationId === null || t.locationId === locationId)
-    );
-
-    for (const t of hits) {
-      const min = Number(t.minQty);
-      if (onhand < min) {
-        alerts++;
-        console.log(
-          `[LOW-STOCK] item=${bi(itemId)} location=${locationId == null ? "ANY" : bi(locationId)} onhand=${onhand} < min=${min}`
-        );
-        // TODO: write to Notifications table in a later sprint
+    if (onhand < min) {
+      stillLow.add(key);
+      const existing = unresolvedMap.get(key);
+      if (!existing) {
+        await prisma.notification.create({
+          data: {
+            type: "LOW_STOCK",
+            itemId,
+            locationId,
+            message,
+          },
+        });
+        console.log(`Created alert -> ${message}`);
+      } else if (existing.message !== message) {
+        await prisma.notification.update({
+          where: { id: existing.id },
+          data: { message },
+        });
+        console.log(`Updated alert -> ${message}`);
       }
     }
   }
 
-  if (alerts === 0) console.log("No low-stock alerts.");
+  // auto-resolve alerts that are no longer in low-stock state
+  for (const [key, notif] of unresolvedMap.entries()) {
+    if (!stillLow.has(key)) {
+      await prisma.notification.update({
+        where: { id: notif.id },
+        data: { resolvedAt: now },
+      });
+      console.log(`Resolved alert ${notif.id} (stock back to safe level).`);
+    }
+  }
+
   console.log("=== LOW-STOCK CHECK END ===");
 }
 
-run().finally(() => process.exit(0));
+run()
+  .catch((err) => {
+    console.error("[lowStock job] failed", err);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

@@ -3,13 +3,20 @@ const { prisma } = require("../prisma");
 const r = Router();
 
 /**
- * GET /notifications?unresolved=true
+ * GET /notifications?unresolved=true&type=LOW_STOCK
  */
 r.get("/", async (req, res) => {
   const unresolved = String(req.query.unresolved || "").toLowerCase() === "true";
+  const type = req.query.type ? String(req.query.type).toUpperCase() : null;
+
+  const where = {
+    ...(unresolved ? { resolvedAt: null } : {}),
+    ...(type ? { type } : {}),
+  };
+
   const rows = await prisma.notification.findMany({
-    where: unresolved ? { resolvedAt: null } : {},
-    orderBy: [{ id: "asc" }],
+    where,
+    orderBy: [{ createdAt: "desc" }],
   });
 
   res.json(
