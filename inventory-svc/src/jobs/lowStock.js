@@ -1,3 +1,10 @@
+const path = require("path");
+const dotenv = require("dotenv");
+dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
+dotenv.config({ path: path.resolve(__dirname, "..", "..", "..", ".env") });
+if (!process.env.DATABASE_URL && process.env.INVENTORY_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.INVENTORY_DATABASE_URL;
+}
 const { prisma } = require("../prisma");
 
 // helper: stringify BigInt safely
@@ -113,3 +120,4 @@ run()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
