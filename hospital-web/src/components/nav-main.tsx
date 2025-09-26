@@ -32,6 +32,10 @@ export type NavSection = {
 
 export function NavMain({ items }: { items: NavSection[] }) {
   const location = useLocation();
+  const matchesPath = (target: string) => {
+    if (!target) return false;
+    return location.pathname === target || location.pathname.startsWith(target + "/");
+  };
 
   return (
     <SidebarGroup>
@@ -39,7 +43,7 @@ export function NavMain({ items }: { items: NavSection[] }) {
       <SidebarMenu>
         {items.map((item) => {
           const sectionActive =
-            item.isActive || item.url === location.pathname || item.items?.some((sub) => sub.url === location.pathname);
+            item.isActive || matchesPath(item.url) || item.items?.some((sub) => matchesPath(sub.url));
           return (
             <Collapsible key={item.title} asChild defaultOpen={sectionActive} className="group/collapsible">
               <SidebarMenuItem>
@@ -53,7 +57,7 @@ export function NavMain({ items }: { items: NavSection[] }) {
                 <CollapsibleContent>
                   <SidebarMenuSub>
                     {item.items?.map((subItem) => {
-                      const subActive = subItem.url === location.pathname;
+                      const subActive = matchesPath(subItem.url);
                       return (
                         <SidebarMenuSubItem key={subItem.title} data-active={subActive ? "true" : undefined}>
                           <SidebarMenuSubButton asChild>

@@ -5,7 +5,6 @@ import {
   Boxes,
   FileText,
   LayoutDashboard,
-  Settings2,
   ShoppingCart,
   Stethoscope,
   Truck,
@@ -42,8 +41,8 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     icon: Boxes,
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
-      { title: "Stock control", url: "/inventory" },
-      { title: "Cycle counts", url: "/inventory" },
+      { title: "Stock control", url: "/inventory/stock-control" },
+      { title: "Cycle counts", url: "/inventory/cycle-counts", roles: ["MANAGER", "ADMIN"] },
     ],
   },
   {
@@ -86,9 +85,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth();
   const userRoles = user?.roles ?? [];
 
-  const filteredNav = NAV_ITEMS.filter((item) =>
-    !item.roles.length || item.roles.some((role) => userRoles.includes(role))
-  );
+  const filteredNav = NAV_ITEMS.map((section) => ({
+    ...section,
+    items: section.items?.filter((sub: any) => {
+      const required = sub.roles ?? section.roles;
+      return required.some((role: string) => userRoles.includes(role));
+    }),
+  })).filter((section) => section.roles.some((role) => userRoles.includes(role)));
 
   return (
     <Sidebar collapsible="offcanvas" className="bg-gradient-to-b from-[#0f2540] via-[#112a45] to-[#0c1e34]" {...props}>

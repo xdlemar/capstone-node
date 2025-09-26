@@ -1,11 +1,12 @@
-import { createBrowserRouter } from "react-router-dom";
+import { Navigate, Outlet, createBrowserRouter } from "react-router-dom";
 
 import AppLayout from "@/components/layout/AppLayout";
 import Dashboard from "@/features/dashboard/Dashboard";
 import LoginPage from "@/features/auth/LoginPage";
 import UnauthorizedPage from "@/features/auth/UnauthorizedPage";
 import ProcurementOverview from "@/features/procurement/ProcurementOverview";
-import InventoryOverview from "@/features/inventory/InventoryOverview";
+import StockControlPage from "@/features/inventory/StockControlPage";
+import CycleCountPage from "@/features/inventory/CycleCountPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
 import PltOverview from "@/features/plt/PltOverview";
 import DtrsOverview from "@/features/dtrs/DtrsOverview";
@@ -41,9 +42,21 @@ export const router = createBrowserRouter([
             path: "inventory",
             element: (
               <RoleGate allowed={STAFF_SET}>
-                <InventoryOverview />
+                <Outlet />
               </RoleGate>
             ),
+            children: [
+              { index: true, element: <Navigate to="stock-control" replace /> },
+              { path: "stock-control", element: <StockControlPage /> },
+              {
+                path: "cycle-counts",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <CycleCountPage />
+                  </RoleGate>
+                ),
+              },
+            ],
           },
           {
             path: "alms",
