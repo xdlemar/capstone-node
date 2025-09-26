@@ -58,61 +58,61 @@ jobs:
 
             echo "==> Write service environment files"
             cat <<EOF > gateway/.env
-PORT=8080
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-AUTH_URL=http://127.0.0.1:4000
-INVENTORY_URL=http://127.0.0.1:4001
-PROCUREMENT_URL=http://127.0.0.1:4002
-PLT_URL=http://127.0.0.1:4005
-DTRS_URL=http://127.0.0.1:4006
-ALMS_URL=http://127.0.0.1:4007
-EOF
+            PORT=8080
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+            AUTH_URL=http://127.0.0.1:4000
+            INVENTORY_URL=http://127.0.0.1:4001
+            PROCUREMENT_URL=http://127.0.0.1:4002
+            PLT_URL=http://127.0.0.1:4005
+            DTRS_URL=http://127.0.0.1:4006
+            ALMS_URL=http://127.0.0.1:4007
+            EOF
 
-            cat <<EOF > auth-svc/.env
-PORT=4000
-DATABASE_URL=${{ secrets.AUTH_DB_URL }}
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-CORS_ORIGIN=${{ secrets.AUTH_CORS_ORIGIN }}
-EOF
+                        cat <<EOF > auth-svc/.env
+            PORT=4000
+            DATABASE_URL=${{ secrets.AUTH_DB_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+            CORS_ORIGIN=${{ secrets.AUTH_CORS_ORIGIN }}
+            EOF
 
-            cat <<EOF > inventory-svc/.env
-PORT=4001
-DATABASE_URL=${{ secrets.INVENTORY_DB_URL }}
-ALERT_EXPIRY_DAYS=30
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-EOF
+                        cat <<EOF > inventory-svc/.env
+            PORT=4001
+            DATABASE_URL=${{ secrets.INVENTORY_DB_URL }}
+            ALERT_EXPIRY_DAYS=30
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+            EOF
 
-            cat <<EOF > procurement-svc/.env
-PORT=4002
-DATABASE_URL=${{ secrets.PROCUREMENT_DB_URL }}
-INVENTORY_URL=http://127.0.0.1:4001
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-EOF
+                        cat <<EOF > procurement-svc/.env
+            PORT=4002
+            DATABASE_URL=${{ secrets.PROCUREMENT_DB_URL }}
+            INVENTORY_URL=http://127.0.0.1:4001
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+            EOF
 
-            cat <<EOF > plt-svc/.env
-PORT=4005
-DATABASE_URL=${{ secrets.PLT_DB_URL }}
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-EOF
+                        cat <<EOF > plt-svc/.env
+            PORT=4005
+            DATABASE_URL=${{ secrets.PLT_DB_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+            EOF
 
-            cat <<EOF > dtrs-svc/.env
-PORT=4006
-DATABASE_URL=${{ secrets.DTRS_DB_URL }}
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-EOF
+                        cat <<EOF > dtrs-svc/.env
+            PORT=4006
+            DATABASE_URL=${{ secrets.DTRS_DB_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+            EOF
 
-            cat <<EOF > alms-svc/.env
-PORT=4007
-DATABASE_URL=${{ secrets.ALMS_DB_URL }}
-JWT_SECRET=${{ secrets.JWT_SECRET }}
-JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-EOF
+                        cat <<EOF > alms-svc/.env
+            PORT=4007
+            DATABASE_URL=${{ secrets.ALMS_DB_URL }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+            EOF
 
             echo "==> Build SPA"
             NODE_ENV=production npm --prefix hospital-web run build

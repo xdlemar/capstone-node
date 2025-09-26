@@ -82,22 +82,47 @@ jobs:
       - name: Build hospital web
         run: npm --prefix hospital-web run build
 
-      - name: Generate Prisma clients
+      # --- New validation step: check JSON validity for each service package.json
+      - name: Validate service package.json files
         run: |
-          set -euo pipefail
-          declare -A SCHEMAS=(
-            [inventory]=inventory-svc/prisma/schema.prisma
-            [procurement]=procurement-svc/prisma/schema.prisma
-            [auth]=auth-svc/prisma/schema.prisma
-            [plt]=plt-svc/prisma/schema.prisma
-            [dtrs]=dtrs-svc/prisma/schema.prisma
-            [alms]=alms-svc/prisma/schema.prisma
-          )
-          for svc in "${!SCHEMAS[@]}"; do
+          set -euxo pipefail
+          node -e "
+            const fs = require('fs');
+            const svcs = ['inventory-svc','procurement-svc','auth-svc','plt-svc','dtrs-svc','alms-svc'];
+            let bad = false;
+            for (const s of svcs) {
+              const p = s + '/package.json';
+              if (!fs.existsSync(p)) {
+                console.error('MISSING', p);
+                bad = true;
+                continue;
+              }
+              try {
+                JSON.parse(fs.readFileSync(p, 'utf8'));
+                console.log('OK', p);
+              } catch (e) {
+                console.error('INVALID JSON', p, e.message);
+                console.error('--- content preview (first 800 chars) ---\\n', fs.readFileSync(p,'utf8').slice(0,800));
+                bad = true;
+              }
+            }
+            if (bad) process.exit(1);
+          "
+
+      - name: Generate Prisma clients (per-service)
+        run: |
+          set -euxo pipefail
+          # service directories - npx prisma generate will run inside each folder
+          SERVICES=(inventory-svc procurement-svc auth-svc plt-svc dtrs-svc alms-svc)
+          for svcdir in "${SERVICES[@]}"; do
+            svc=$(echo "$svcdir" | sed 's/-svc$//')  # inventory, procurement, etc
+            # export DB URL for prisma (percent-encoded password already provided in DB_PASS_URL)
             export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/${svc}_db?schema=public"
-            echo "Generating client for ${svc}"
-            npx prisma generate --schema="${SCHEMAS[$svc]}"
+            echo "---- Generating prisma client for ${svc} (cwd=${svcdir}) ----"
+            # Change into service folder then run prisma generate so it reads that folder's package.json and prisma schema
+            (cd "$svcdir" && npx prisma generate)
           done
+
       - name: Create logical databases
         run: |
           set -euo pipefail
@@ -159,4 +184,3 @@ jobs:
         with:
           name: stack-log
           path: stack.log
-
