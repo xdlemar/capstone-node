@@ -50,7 +50,20 @@ model Vendor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  POs PO[]
+  POs     PO[]
+  metrics VendorMetric?
+}
+
+model VendorMetric {
+  id               BigInt   @id @default(autoincrement())
+  vendorId         BigInt   @unique
+  onTimePercentage Float    @default(0)
+  avgLeadTimeDays  Float    @default(0)
+  fulfillmentRate  Float    @default(0)
+  totalSpend       Decimal  @default(0)
+  lastEvaluatedAt  DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
 }
 
 /**
@@ -94,6 +107,7 @@ model PO {
   prId      BigInt?
   vendorId  BigInt
   status    POStatus @default(OPEN)
+  orderedAt DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -123,21 +137,20 @@ model POLine {
  */
 
 model Receipt {
-  id         BigInt   @id @default(autoincrement())
-  poId       BigInt
-  drNo       String?
-  invoiceNo  String?
-  receivedAt DateTime @default(now())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          BigInt    @id @default(autoincrement())
+  poId        BigInt
+  drNo        String?
+  invoiceNo   String?
+  receivedAt  DateTime  @default(now())
+  arrivalDate DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   PO          PO            @relation(fields: [poId], references: [id], onDelete: Cascade)
   lines       ReceiptLine[]
   attachments Attachment[]
 
-  // (Optional) also prevent duplicate invoice numbers per PO:
   @@unique([poId, invoiceNo])
-  // prevent double-posting same DR for a PO
   @@unique([poId, drNo])
 }
 
@@ -163,12 +176,11 @@ model Attachment {
   id         BigInt         @id @default(autoincrement())
   kind       AttachmentKind
   fileName   String
-  storageKey String // where the binary is stored (S3 key, local path, etc.)
+  storageKey String
   mimeType   String?
   size       Int?
   uploadedAt DateTime       @default(now())
 
-  // either PO or Receipt (one of them must be set)
   poId      BigInt?
   receiptId BigInt?
 

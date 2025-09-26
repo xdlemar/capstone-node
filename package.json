@@ -21,6 +21,7 @@
                     "wait:ci":  "wait-on -t 60000 http://localhost:4001/health http://localhost:4002/health http://localhost:4000/health http://localhost:4005/health http://localhost:4006/health http://localhost:4007/health http://localhost:8080/health",
                     "smoke":  "node tests/smoke.js",
                     "start:jobs":  "node jobs/index.js",
-                    "start:ci":  "concurrently -k -s first -n inv,proc,auth,plt,dtrs,alms,gw,jobs -c green,magenta,cyan,yellow,blue,red,white,gray \"node inventory-svc/src/server.js\" \"node procurement-svc/src/server.js\" \"node auth-svc/src/server.js\" \"node plt-svc/src/server.js\" \"node dtrs-svc/src/server.js\" \"node alms-svc/src/server.js\" \"node gateway/src/index.js\" \"node jobs/index.js\""
+                    "start:ci":  "concurrently -k -s first -n inv,proc,auth,plt,dtrs,alms,gw,jobs -c green,magenta,cyan,yellow,blue,red,white,gray \"node inventory-svc/src/server.js\" \"node procurement-svc/src/server.js\" \"node auth-svc/src/server.js\" \"node plt-svc/src/server.js\" \"node dtrs-svc/src/server.js\" \"node alms-svc/src/server.js\" \"node gateway/src/index.js\" \"node jobs/index.js\"",
+                    "jobs:procurement":  "node procurement-svc/src/jobs/recalcVendorMetrics.js"
                 }
 }

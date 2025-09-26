@@ -19,6 +19,30 @@ function toBigInt(value, field, { optional = false } = {}) {
   }
 }
 
+const REQUIRED_DOCS = {
+  PROCUREMENT: [
+    { code: "PO", tag: "PO", label: "Signed Purchase Order" },
+    { code: "DR", tag: "DR", label: "Delivery Receipt" },
+    { code: "INVOICE", tag: "INVOICE", label: "Supplier Invoice" },
+  ],
+  PROJECT: [
+    { code: "PLAN", tag: "PROJECT_PLAN", label: "Project Implementation Plan" },
+    { code: "ACCEPTANCE", tag: "ACCEPTANCE", label: "Project Acceptance Form" },
+  ],
+  DELIVERY: [
+    { code: "DR", tag: "DR", label: "Delivery Receipt" },
+    { code: "PHOTO", tag: "PHOTO", label: "Delivery Photos" },
+  ],
+};
+
+const MODULE_SCOPE_FIELD = {
+  PROCUREMENT: "poId",
+  DELIVERY: "deliveryId",
+  PROJECT: "projectId",
+  ASSET: "assetId",
+  MAINTENANCE: "woId",
+};
+
 // create document + initial version
 router.post("/", async (req, res) => {
   try {
@@ -67,6 +91,7 @@ router.post("/", async (req, res) => {
         versionNo: 1,
         storageKey: storageKey || `placeholder:${doc.id}`,
         size: size || 0,
+        checksum: checksum || null,
         createdById: uploader,
       },
     });
@@ -128,6 +153,86 @@ router.get("/", async (req, res) => {
   }
 });
 
+router.get("/:id/versions", async (req, res) => {
+  try {
+    const id = toBigInt(req.params.id, "id");
+    const versions = await prisma.docVersion.findMany({
+      where: { documentId: id },
+      orderBy: { versionNo: "desc" },
+    });
+    res.json(
+      versions.map((v) => ({
+        id: v.id.toString(),
+        documentId: v.documentId.toString(),
+        versionNo: v.versionNo,
+        storageKey: v.storageKey,
+        size: v.size,
+        checksum: v.checksum,
+        createdAt: v.createdAt,
+        createdById: v.createdById ? v.createdById.toString() : null,
+      }))
+    );
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[GET /documents/:id/versions]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.post("/:id/versions", async (req, res) => {
+  try {
+    const id = toBigInt(req.params.id, "id");
+    const { storageKey, size, checksum, createdById, mimeType } = req.body || {};
+    if (!storageKey) return res.status(400).json({ error: "storageKey is required" });
+
+    const doc = await prisma.document.findUnique({ where: { id } });
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    const latest = await prisma.docVersion.findFirst({
+      where: { documentId: id },
+      orderBy: { versionNo: "desc" },
+    });
+    const nextVersion = (latest?.versionNo || 0) + 1;
+
+    const created = await prisma.docVersion.create({
+      data: {
+        documentId: id,
+        versionNo: nextVersion,
+        storageKey,
+        size: size ?? null,
+        checksum: checksum ?? null,
+        createdById: toBigInt(createdById, "createdById", { optional: true }),
+      },
+    });
+
+    await prisma.document.update({
+      where: { id },
+      data: {
+        storageKey,
+        size: size ?? doc.size,
+        mimeType: mimeType ?? doc.mimeType,
+        checksum: checksum ?? doc.checksum,
+        updatedAt: new Date(),
+      },
+    });
+
+    res.status(201).json({
+      id: created.id.toString(),
+      documentId: created.documentId.toString(),
+      versionNo: created.versionNo,
+      storageKey: created.storageKey,
+      size: created.size,
+      checksum: created.checksum,
+      createdAt: created.createdAt,
+      createdById: created.createdById ? created.createdById.toString() : null,
+    });
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[POST /documents/:id/versions]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 router.post("/:id/tags", async (req, res) => {
   try {
     const id = toBigInt(req.params.id, "id");
@@ -184,6 +289,61 @@ router.post("/:id/audit", async (req, res) => {
   } catch (e) {
     if (e?.status === 400) return res.status(400).json({ error: e.message });
     console.error("[POST /documents/:id/audit]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.get("/reports/missing", async (req, res) => {
+  try {
+    const module = String(req.query.module || "").toUpperCase();
+    if (!module || !REQUIRED_DOCS[module]) {
+      return res.status(400).json({ error: "Unsupported module or missing module parameter" });
+    }
+
+    const scopeField = MODULE_SCOPE_FIELD[module];
+    if (!scopeField) {
+      return res.status(400).json({ error: `Module ${module} does not support missing-doc reports yet` });
+    }
+
+    const scopeValue = req.query[scopeField];
+    const scopeId = toBigInt(scopeValue, scopeField);
+
+    const docs = await prisma.document.findMany({
+      where: {
+        module,
+        [scopeField]: scopeId,
+      },
+      include: { tags: true },
+      orderBy: { createdAt: "asc" },
+    });
+
+    const presentTags = new Set();
+    for (const doc of docs) {
+      for (const tag of doc.tags) {
+        presentTags.add(tag.name.toUpperCase());
+      }
+    }
+
+    const requirements = REQUIRED_DOCS[module];
+    const missing = requirements.filter((reqItem) => !presentTags.has(reqItem.tag.toUpperCase()));
+
+    res.json({
+      module,
+      scopeField,
+      scopeId: scopeId.toString(),
+      required: requirements,
+      missing,
+      present: docs.map((doc) => ({
+        id: doc.id.toString(),
+        title: doc.title,
+        tags: doc.tags.map((t) => t.name),
+        storageKey: doc.storageKey,
+        createdAt: doc.createdAt,
+      })),
+    });
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[GET /documents/reports/missing]", e);
     res.status(500).json({ error: "Internal error" });
   }
 });

@@ -15,6 +15,7 @@ const transfers = require("./routes/transfers");
 const counts = require("./routes/counts");
 const inspection = require("./routes/inspection");
 const notifications = require("./routes/notifications");
+const reorder = require("./routes/reorder");
 const { authRequired, requireRole } = require("./auth");
 
 const app = express();
@@ -44,6 +45,7 @@ app.use("/transfers", transfers);
 app.use("/counts", counts);
 app.use("/inspection", inspection);
 app.use("/notifications", managerAccess, notifications);
+app.use("/reorder-suggestions", managerAccess, reorder);
 app.use("/items", adminOnly, items);
 app.use("/locations", adminOnly, locations);
 app.use("/batches", managerAccess, batches);

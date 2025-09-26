@@ -64,19 +64,21 @@ model Asset {
   updatedAt           DateTime              @updatedAt
   MaintenanceSchedule MaintenanceSchedule[]
   alerts              MaintenanceAlert[]
+  financialSnapshots  AssetFinancialSnapshot[]
 
   @@index([serialNo])
   @@index([locationId])
 }
 
 model AssetDepreciation {
-  id          BigInt             @id @default(autoincrement())
-  assetId     BigInt             @unique
-  method      DepreciationMethod @default(STRAIGHT_LINE)
-  lifeMonths  Int?
-  salvage     Decimal?
-  startedAt   DateTime?
-  accumulated Decimal            @default(0)
+  id               BigInt             @id @default(autoincrement())
+  assetId          BigInt             @unique
+  method           DepreciationMethod @default(STRAIGHT_LINE)
+  lifeMonths       Int?
+  salvage          Decimal?
+  startedAt        DateTime?
+  accumulated      Decimal            @default(0)
+  lastPostedPeriod DateTime?
 
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
 }
@@ -167,4 +169,20 @@ model MaintenanceAlert {
   schedule MaintenanceSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
 
   @@index([assetId, resolvedAt])
+}
+
+model AssetFinancialSnapshot {
+  id              BigInt   @id @default(autoincrement())
+  assetId         BigInt
+  periodStart     DateTime
+  periodEnd       DateTime
+  depreciation    Decimal  @default(0)
+  maintenanceCost Decimal  @default(0)
+  bookValue       Decimal  @default(0)
+  createdAt       DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, periodStart])
+  @@index([periodStart])
 }
