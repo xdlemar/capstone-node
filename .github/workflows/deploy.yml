@@ -69,7 +69,7 @@ jobs:
             ALMS_URL=http://127.0.0.1:4007
             EOF
 
-                        cat <<EOF > auth-svc/.env
+            cat <<EOF > auth-svc/.env
             PORT=4000
             DATABASE_URL=${{ secrets.AUTH_DB_URL }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
@@ -77,7 +77,7 @@ jobs:
             CORS_ORIGIN=${{ secrets.AUTH_CORS_ORIGIN }}
             EOF
 
-                        cat <<EOF > inventory-svc/.env
+            cat <<EOF > inventory-svc/.env
             PORT=4001
             DATABASE_URL=${{ secrets.INVENTORY_DB_URL }}
             ALERT_EXPIRY_DAYS=30
@@ -85,7 +85,7 @@ jobs:
             JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
             EOF
 
-                        cat <<EOF > procurement-svc/.env
+            cat <<EOF > procurement-svc/.env
             PORT=4002
             DATABASE_URL=${{ secrets.PROCUREMENT_DB_URL }}
             INVENTORY_URL=http://127.0.0.1:4001
@@ -93,21 +93,21 @@ jobs:
             JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
             EOF
 
-                        cat <<EOF > plt-svc/.env
+            cat <<EOF > plt-svc/.env
             PORT=4005
             DATABASE_URL=${{ secrets.PLT_DB_URL }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
             EOF
 
-                        cat <<EOF > dtrs-svc/.env
+            cat <<EOF > dtrs-svc/.env
             PORT=4006
             DATABASE_URL=${{ secrets.DTRS_DB_URL }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
             EOF
 
-                        cat <<EOF > alms-svc/.env
+            cat <<EOF > alms-svc/.env
             PORT=4007
             DATABASE_URL=${{ secrets.ALMS_DB_URL }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
@@ -124,7 +124,8 @@ jobs:
               auth-svc/prisma/schema.prisma \
               plt-svc/prisma/schema.prisma \
               dtrs-svc/prisma/schema.prisma \
-              alms-svc/prisma/schema.prisma; do
+              alms-svc/prisma/schema.prisma
+            do
               case "$schema" in
                 inventory-svc/*) export DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" ;;
                 procurement-svc/*) export DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" ;;

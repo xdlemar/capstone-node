@@ -1,9 +1,10 @@
+@import "tw-animate-css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* (optional) if you really need this package, keep it. Otherwise remove it. */
-@import "tw-animate-css";
+
+
 
 /* Theme tokens (match your tailwind.config.js color mapping) */
 @layer base {
