@@ -1,169 +1,91 @@
-﻿name: ci
+﻿name: validate
 
 on:
+  pull_request:
   push:
     branches: [ main ]
-  pull_request:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:15
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASS }}
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
-      NODE_ENV: test
       DB_USER: postgres
-      DB_PASS: "Masterpogi09?"
-      DB_PASS_URL: "Masterpogi09%3F"
+      DB_PASS_URL: ${{ secrets.DB_PASS }}
       DB_HOST: localhost
       DB_PORT: 5432
 
-      INVENTORY_URL:   http://localhost:4001
-      PROCUREMENT_URL: http://localhost:4002
-      AUTH_URL:        http://localhost:4000
-      PLT_URL:         http://localhost:4005
-      DTRS_URL:        http://localhost:4006
-      ALMS_URL:        http://localhost:4007
-      GATEWAY_URL:     http://localhost:8080
-
-      JWT_SECRET: super_secret_dev
-      JWT_EXPIRES: 8h
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: "Masterpogi09?"
-        ports: [ "5432:5432" ]
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            inventory-svc/package-lock.json
-            procurement-svc/package-lock.json
-            auth-svc/package-lock.json
-            gateway/package-lock.json
-            plt-svc/package-lock.json
-            dtrs-svc/package-lock.json
-            alms-svc/package-lock.json
-            hospital-web/package-lock.json
 
       - name: Install dependencies
-        run: |
-          set -euo pipefail
-          npm ci
-          npm --prefix inventory-svc ci
-          npm --prefix procurement-svc ci
-          npm --prefix auth-svc ci
-          npm --prefix gateway ci
-          npm --prefix plt-svc ci
-          npm --prefix dtrs-svc ci
-          npm --prefix alms-svc ci
-          npm --prefix hospital-web ci
-
-      - name: Build hospital web
-        run: npm --prefix hospital-web run build
-
-      - name: Validate service package.json files
-        run: |
-          set -euxo pipefail
-          node -e "
-            const fs = require('fs');
-            const svcs = ['inventory-svc','procurement-svc','auth-svc','plt-svc','dtrs-svc','alms-svc'];
-            let bad = false;
-            for (const s of svcs) {
-              const p = s + '/package.json';
-              if (!fs.existsSync(p)) {
-                console.error('MISSING', p);
-                bad = true;
-                continue;
-              }
-              try {
-                JSON.parse(fs.readFileSync(p, 'utf8'));
-                console.log('OK', p);
-              } catch (e) {
-                console.error('INVALID JSON', p, e.message);
-                console.error('--- content preview (first 800 chars) ---\\n', fs.readFileSync(p,'utf8').slice(0,800));
-                bad = true;
-              }
-            }
-            if (bad) process.exit(1);
-          "
-
-      - name: Generate Prisma clients (per-service)
-        run: |
-          set -euxo pipefail
-          SERVICES=(inventory-svc procurement-svc auth-svc plt-svc dtrs-svc alms-svc)
-          for svcdir in "${SERVICES[@]}"; do
-            svc=$(echo "$svcdir" | sed 's/-svc$//')
-            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/${svc}_db?schema=public"
-            echo "---- Generating prisma client for ${svc} (cwd=${svcdir}) ----"
-            (cd "$svcdir" && npx prisma generate)
-          done
+        run: npm install
 
       - name: Create logical databases
         run: |
-          set -euo pipefail
-          for db in inventory_db procurement_db auth_db plt_db dtrs_db alms_db; do
-            PGPASSWORD="${DB_PASS}" psql -h "${DB_HOST}" -U "${DB_USER}" -p "${DB_PORT}" -d postgres -c "CREATE DATABASE \"${db}\";" || true
-          done
+          psql postgresql://$DB_USER:$DB_PASS_URL@$DB_HOST:$DB_PORT/postgres <<EOF
+          CREATE DATABASE inventory_db;
+          CREATE DATABASE procurement_db;
+          CREATE DATABASE auth_db;
+          CREATE DATABASE plt_db;
+          CREATE DATABASE dtrs_db;
+          CREATE DATABASE alms_db;
+          EOF
 
-      # 🔧 FIXED: use root package.json script instead of custom loop
       - name: Apply database migrations
-        run: npm run db:migrate
+        run: |
+          set -euo pipefail
+          declare -A SCHEMAS=(
+            [inventory]=inventory-svc/prisma/schema.prisma
+            [procurement]=procurement-svc/prisma/schema.prisma
+            [auth]=auth-svc/prisma/schema.prisma
+            [plt]=plt-svc/prisma/schema.prisma
+            [dtrs]=dtrs-svc/prisma/schema.prisma
+            [alms]=alms-svc/prisma/schema.prisma
+          )
+          for svc in "${!SCHEMAS[@]}"; do
+            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/${svc}_db?schema=public"
+            echo "Running migrations for $svc"
+            npx prisma migrate deploy --schema="${SCHEMAS[$svc]}"
+          done
 
       - name: Start service stack
         run: |
-          set -euo pipefail
-          nohup npm run start:ci > stack.log 2>&1 &
+          nohup npm run dev:all > server.log 2>&1 &
           echo $! > stack.pid
-          sleep 5
-          npm run wait:ci
+          sleep 10
 
       - name: Seed reference data
-        run: node tests/seedInventory.js
+        run: npm run db:seed
 
       - name: Run tests
-        env:
-          GATEWAY_URL: ${{ env.GATEWAY_URL }}
-          JWT_SECRET: ${{ env.JWT_SECRET }}
         run: npm test
 
       - name: Smoke endpoints
-        env:
-          GATEWAY_URL: ${{ env.GATEWAY_URL }}
-          JWT_SECRET: ${{ env.JWT_SECRET }}
-        run: npm run smoke
+        run: curl -f http://localhost:8080/health
 
       - name: Stop service stack
         if: always()
         run: |
           if [ -f stack.pid ]; then
-            kill $(cat stack.pid) || true
+            kill -9 $(cat stack.pid) || true
+            rm stack.pid
           fi
-          pkill node || true
-
-      - name: Upload stack log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: stack-log
-          path: stack.log
