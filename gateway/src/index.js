@@ -3,7 +3,12 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 const cors = require("cors");
 const morgan = require("morgan");
 const jwt = require("jsonwebtoken");
-require("dotenv").config();
+const path = require("path");
+const dotenv = require("dotenv");
+
+dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
+
 const app = express();
 // 1) Infra middlewares (do NOT add express.json here)
 app.use(cors());
@@ -16,8 +21,7 @@ function authRequired(req, res, next) {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     req.user = payload;
     next();
-  } 
-  catch {
+  } catch {
     return res.status(401).json({ error: "Invalid token" });
   }
 }
@@ -48,7 +52,6 @@ function proxy(target) {
         "x-user-roles",
         Array.isArray(u.roles) ? u.roles.join(",") : ""
       );
-    
     },
   });
 }

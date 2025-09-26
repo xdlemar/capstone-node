@@ -87,7 +87,7 @@ describe("E2E: Procurement + PLT (shipment tied to PO) via Gateway", () => {
         trackingNo: `TRK-${Math.floor(Math.random() * 1e9)}`,
         eta: "2025-10-01T10:00:00Z",
       })
-      .expect(200);
+      .expect(201);
     expect(del.body.status).toBe("DRAFT");
     S.delivery = del.body;
   });

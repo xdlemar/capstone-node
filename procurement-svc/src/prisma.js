@@ -1,6 +1,15 @@
-// procurement-svc/src/prisma.js
-require("dotenv").config();               // ensure DATABASE_URL is present before client boots
+const path = require("path");
+const dotenv = require("dotenv");
+
+dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
+
+if (!process.env.DATABASE_URL && process.env.PROCUREMENT_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.PROCUREMENT_DATABASE_URL;
+}
+
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
-module.exports = prisma;
 
+module.exports = prisma;
+module.exports.prisma = prisma;

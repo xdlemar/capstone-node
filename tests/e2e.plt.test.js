@@ -41,7 +41,7 @@ describe("E2E: PLT via Gateway", () => {
       trackingNo: `TRK-${Math.floor(Math.random()*1e9)}`,
       eta: "2025-10-01T10:00:00Z"
     };
-    const res = await agent.post("/api/plt/deliveries").set(authz).send(body).expect(200);
+    const res = await agent.post("/api/plt/deliveries").set(authz).send(body).expect(201);
     expect(res.body).toMatchObject({ projectId: state.project.id, status: "DRAFT" });
     state.delivery = res.body;
   });

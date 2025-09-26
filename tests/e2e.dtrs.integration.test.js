@@ -54,7 +54,7 @@ describe("E2E: DTRS linked to PO & Delivery via Gateway", () => {
     const del = await agent.post("/api/plt/deliveries").set(authz).send({
       projectId: S.project.id, poId: S.po.id,
       trackingNo:`TRK-${Math.floor(Math.random()*1e9)}`, eta:"2025-10-01T10:00:00Z"
-    }).expect(200);
+    }).expect(201);
     S.delivery = del.body;
   });
 
