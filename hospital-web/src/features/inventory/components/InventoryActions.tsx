@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+ï»¿import { useMemo } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useInventoryLookups } from "@/hooks/useInventoryLookups";
+import { useInventoryLookups, type InventoryLookupResponse } from "@/hooks/useInventoryLookups";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -60,11 +60,11 @@ type CountValues = z.infer<typeof countSchema>;
 function useInventoryData() {
   const query = useInventoryLookups();
   const itemsById = useMemo(() => {
-    if (!query.data) return new Map<string, (typeof query.data.items)[number]>();
+    if (!query.data) return new Map<string, InventoryLookupResponse["items"][number]>();
     return new Map(query.data.items.map((it) => [it.id, it]));
   }, [query.data]);
   const locationsById = useMemo(() => {
-    if (!query.data) return new Map<string, (typeof query.data.locations)[number]>();
+    if (!query.data) return new Map<string, InventoryLookupResponse["locations"][number]>();
     return new Map(query.data.locations.map((loc) => [loc.id, loc]));
   }, [query.data]);
   return { ...query, itemsById, locationsById };
@@ -91,11 +91,7 @@ function LineRow({
   index: number;
   control: any;
   remove: (index: number) => void;
-  itemOptions: ReturnType<typeof useInventoryLookups>["data"] extends infer R
-    ? R extends { items: infer Items }
-      ? Items
-      : never
-    : never;
+  itemOptions: InventoryLookupResponse["items"];
   itemHint: (id: string) => React.ReactNode;
   formType: "issue" | "transfer" | "count";
 }) {
@@ -116,7 +112,7 @@ function LineRow({
               <SelectContent>
                 {itemOptions.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
-                    {item.name} · {item.sku}
+                    {item.name} Â· {item.sku}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -189,7 +185,7 @@ function useLineHelpers(data: ReturnType<typeof useInventoryData>) {
     return (
       <span className="text-muted-foreground">
         {meta.unit ? `Unit: ${meta.unit}` : ""}
-        {meta.minQty ? ` · Min: ${meta.minQty}` : ""}
+        {meta.minQty ? ` Â· Min: ${meta.minQty}` : ""}
       </span>
     );
   };
@@ -307,7 +303,7 @@ export function IssueFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} · {loc.kind}
+                              {loc.name} Â· {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -331,7 +327,7 @@ export function IssueFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} · {loc.kind}
+                              {loc.name} Â· {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -348,7 +344,7 @@ export function IssueFormCard({ className }: { className?: string }) {
                 <div className="space-y-3">
                   {fields.map((field, index) => (
                     <LineRow
-                      key={field.id}
+                      key={(field as any).id ?? index}
                       index={index}
                       control={form.control}
                       remove={remove}
@@ -361,7 +357,7 @@ export function IssueFormCard({ className }: { className?: string }) {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => append({ itemId: "", qty: 1, notes: "" })}
+                  onClick={() => append({ itemId: "", qty: 1, notes: "" } as any)}
                   className="mt-2"
                 >
                   <Plus className="mr-2 h-4 w-4" /> Add another line
@@ -490,7 +486,7 @@ export function TransferFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} · {loc.kind}
+                              {loc.name} Â· {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -514,7 +510,7 @@ export function TransferFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} · {loc.kind}
+                              {loc.name} Â· {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -531,7 +527,7 @@ export function TransferFormCard({ className }: { className?: string }) {
                 <div className="space-y-3">
                   {fields.map((field, index) => (
                     <LineRow
-                      key={field.id}
+                      key={(field as any).id ?? index}
                       index={index}
                       control={form.control}
                       remove={remove}
@@ -544,7 +540,7 @@ export function TransferFormCard({ className }: { className?: string }) {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => append({ itemId: "", qty: 1, notes: "" })}
+                  onClick={() => append({ itemId: "", qty: 1, notes: "" } as any)}
                   className="mt-2"
                 >
                   <Plus className="mr-2 h-4 w-4" /> Add another line
@@ -654,7 +650,7 @@ export function CountFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} · {loc.kind}
+                              {loc.name} Â· {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -681,15 +677,15 @@ export function CountFormCard({ className }: { className?: string }) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-base">Lines</Label>
-                  <Button type="button" variant="outline" onClick={() => append({ itemId: "", countedQty: 0, systemQty: 0, notes: "" })}>
+                  <Button type="button" variant="outline" onClick={() => append({ itemId: "", countedQty: 0, systemQty: 0, notes: "" } as any)}>
                     <Plus className="mr-2 h-4 w-4" /> Add line
                   </Button>
                 </div>
-                {fields.length === 0 && <p className="text-sm text-muted-foreground">Add items you’ve counted to capture variances.</p>}
+                {fields.length === 0 && <p className="text-sm text-muted-foreground">Add items youâ€™ve counted to capture variances.</p>}
                 <div className="space-y-3">
                   {fields.map((field, index) => (
                     <LineRow
-                      key={field.id}
+                      key={(field as any).id ?? index}
                       index={index}
                       control={form.control}
                       remove={remove}
@@ -714,3 +710,19 @@ export function CountFormCard({ className }: { className?: string }) {
     </Card>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

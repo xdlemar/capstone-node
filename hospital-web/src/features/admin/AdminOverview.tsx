@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -238,7 +238,7 @@ export default function AdminOverview() {
         <CardContent className="space-y-4">
           {usersQuery.isLoading ? (
             <div className="flex items-center gap-3 text-muted-foreground">
-              <Spinner className="h-4 w-4" /> Loading usersÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦
+              <Spinner className="h-4 w-4" /> Loading usersÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦
             </div>
           ) : users.length === 0 ? (
             <p className="text-sm text-muted-foreground">No users found. Invite staff above.</p>
@@ -287,14 +287,15 @@ export default function AdminOverview() {
                             <DropdownMenuItem onSelect={() => onDisable(user)}>Disable account</DropdownMenuItem>
                           ) : (
                             <DropdownMenuItem
-                              onSelect={() =>
-                                updateUser.mutate({ id: user.id, isActive: true }).then(() =>
-                                  toast({ title: "Account reactivated", description: `${user.email} can log in again.` })
-                                ).catch((err: any) => {
+                              onSelect={async () => {
+                                try {
+                                  await updateUser.mutateAsync({ id: user.id, isActive: true });
+                                  toast({ title: "Account reactivated", description: `${user.email} can log in again.` });
+                                } catch (err: any) {
                                   const message = err?.response?.data?.error || err.message || "Failed to reactivate";
                                   toast({ title: "Update failed", description: message, variant: "destructive" });
-                                })
-                              }
+                                }
+                              }}
                             >
                               Reactivate account
                             </DropdownMenuItem>
@@ -407,6 +408,8 @@ export default function AdminOverview() {
     </section>
   );
 }
+
+
 
 
 

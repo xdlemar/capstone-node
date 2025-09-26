@@ -1,4 +1,4 @@
-import { ShieldAlert } from "lucide-react";
+﻿import { ShieldAlert } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,7 +22,7 @@ export default function CycleCountPage() {
       {canCount ? (
         <CountFormCard />
       ) : (
-        <Alert variant="secondary" className="border-dashed">
+        <Alert className="border-dashed">
           <ShieldAlert className="h-5 w-5" />
           <AlertTitle>Restricted</AlertTitle>
           <AlertDescription>Cycle counting is limited to managers and administrators.</AlertDescription>
@@ -31,4 +31,5 @@ export default function CycleCountPage() {
     </section>
   );
 }
+
 

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+﻿import { useMemo } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useInventoryLookups } from "@/hooks/useInventoryLookups";
+import { useInventoryLookups, type InventoryLookupResponse } from "@/hooks/useInventoryLookups";
 import { useProcurementLookups } from "@/hooks/useProcurementLookups";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -67,7 +67,7 @@ type VendorValues = z.infer<typeof vendorSchema>;
 function useItemFormatter() {
   const inv = useInventoryLookups();
   const itemMap = useMemo(() => {
-    if (!inv.data) return new Map<string, (typeof inv.data.items)[number]>();
+    if (!inv.data) return new Map<string, InventoryLookupResponse["items"][number]>();
     return new Map(inv.data.items.map((item) => [item.id, item]));
   }, [inv.data]);
 
@@ -256,11 +256,11 @@ export function PurchaseRequestCard({ className }: { className?: string }) {
               <div className="space-y-3">
                 <Label className="text-base">Lines</Label>
                 <div className="space-y-3">
-                  {fields.map((field, index) => (
-                    <PrLineRow key={field.id} index={index} control={form.control} remove={remove} items={options} />
+                  {fields.map((_, index) => (
+                    <PrLineRow key={index} index={index} control={form.control} remove={remove} items={options} />
                   ))}
                 </div>
-                <Button type="button" variant="outline" onClick={() => append({ itemId: "", qty: 1, unit: "box", notes: "" })}>
+                <Button type="button" variant="outline" onClick={() => append({ itemId: "", qty: 1, unit: "box", notes: "" } as any)}>
                   <Plus className="mr-2 h-4 w-4" /> Add line
                 </Button>
               </div>
@@ -411,8 +411,8 @@ export function ReceiptCard({ className }: { className?: string }) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {safeLines(selectedPo.lines).map((line) => (
-                        <TableRow key={line.id}>
+                      {safeLines(selectedPo.lines).map((line, index) => (
+                        <TableRow key={`${line.itemId}-${index}`}>
                           <TableCell>{renderLineLabel(line)}</TableCell>
                           <TableCell className="text-right">{line.qty}</TableCell>
                           <TableCell>{line.unit}</TableCell>
@@ -533,8 +533,8 @@ export function ReceiptCard({ className }: { className?: string }) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {safeLines(selectedPr.lines).map((line) => (
-                        <TableRow key={line.id}>
+                      {safeLines(selectedPr.lines).map((line, index) => (
+                        <TableRow key={`${line.itemId}-${index}`}>
                           <TableCell>{renderLineLabel(line)}</TableCell>
                           <TableCell className="text-right">{line.qty}</TableCell>
                           <TableCell>{line.unit}</TableCell>
@@ -674,8 +674,8 @@ export function ReceiptCard({ className }: { className?: string }) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {safeLines(selectedPr.lines).map((line) => (
-                        <TableRow key={line.id}>
+                      {safeLines(selectedPr.lines).map((line, index) => (
+                        <TableRow key={`${line.itemId}-${index}`}>
                           <TableCell>{renderLineLabel(line)}</TableCell>
                           <TableCell className="text-right">{line.qty}</TableCell>
                           <TableCell>{line.unit}</TableCell>
@@ -874,6 +874,14 @@ export function VendorPerformanceTable({ className }: { className?: string }) {
     </Card>
   );
 }
+
+
+
+
+
+
+
+
 
 
 
