@@ -82,7 +82,6 @@ jobs:
       - name: Build hospital web
         run: npm --prefix hospital-web run build
 
-      # --- New validation step: check JSON validity for each service package.json
       - name: Validate service package.json files
         run: |
           set -euxo pipefail
@@ -112,14 +111,11 @@ jobs:
       - name: Generate Prisma clients (per-service)
         run: |
           set -euxo pipefail
-          # service directories - npx prisma generate will run inside each folder
           SERVICES=(inventory-svc procurement-svc auth-svc plt-svc dtrs-svc alms-svc)
           for svcdir in "${SERVICES[@]}"; do
-            svc=$(echo "$svcdir" | sed 's/-svc$//')  # inventory, procurement, etc
-            # export DB URL for prisma (percent-encoded password already provided in DB_PASS_URL)
+            svc=$(echo "$svcdir" | sed 's/-svc$//')
             export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/${svc}_db?schema=public"
             echo "---- Generating prisma client for ${svc} (cwd=${svcdir}) ----"
-            # Change into service folder then run prisma generate so it reads that folder's package.json and prisma schema
             (cd "$svcdir" && npx prisma generate)
           done
 
@@ -130,22 +126,9 @@ jobs:
             PGPASSWORD="${DB_PASS}" psql -h "${DB_HOST}" -U "${DB_USER}" -p "${DB_PORT}" -d postgres -c "CREATE DATABASE \"${db}\";" || true
           done
 
+      # 🔧 FIXED: use root package.json script instead of custom loop
       - name: Apply database migrations
-        run: |
-          set -euo pipefail
-          declare -A SCHEMAS=(
-            [inventory]=inventory-svc/prisma/schema.prisma
-            [procurement]=procurement-svc/prisma/schema.prisma
-            [auth]=auth-svc/prisma/schema.prisma
-            [plt]=plt-svc/prisma/schema.prisma
-            [dtrs]=dtrs-svc/prisma/schema.prisma
-            [alms]=alms-svc/prisma/schema.prisma
-          )
-          for svc in "${!SCHEMAS[@]}"; do
-            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/${svc}_db?schema=public"
-            echo "Running migrations for ${svc}" \
-              && npx prisma migrate deploy --schema="${SCHEMAS[$svc]}"
-          done
+        run: npm run db:migrate
 
       - name: Start service stack
         run: |
