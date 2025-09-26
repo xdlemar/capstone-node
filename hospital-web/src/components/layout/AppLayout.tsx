@@ -6,6 +6,7 @@ import { FullScreenPreloader } from "@/components/layout/Preloader";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Toaster } from "@/components/ui/toaster";
 
 export default function AppLayout() {
   const [isReady, setIsReady] = useState(false);
@@ -22,6 +23,7 @@ export default function AppLayout() {
   return (
     <SidebarProvider>
       <AppSidebar />
+      <Toaster />
 
       <SidebarInset>
         <header className="sticky top-0 z-20 bg-background">

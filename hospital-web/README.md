@@ -1,73 +1,39 @@
-# React + TypeScript + Vite
+# Hospital Web Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This Vite + React (TS) app is wired to the Capstone gateway running at `http://localhost:8080`. Once the backend stack is online (`npm run start:ci` from the repository root), you only need to keep the environment variables below in place and provide a JWT for authorised calls.
 
-Currently, two official plugins are available:
+## 1. Environment
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Create a `.env.local` (already scaffolded for you) in this folder with:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+VITE_API_BASE_URL=http://localhost:8080/api
+VITE_JWT_SECRET=super_secret_dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+`VITE_API_BASE_URL` controls the Axios client base URL (`src/lib/api.ts`). `VITE_JWT_SECRET` is optional, but it matches the backend default so you can mint dev tokens locally.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 2. Generate a dev token (optional helper)
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Run this from the repository root whenever you need a fresh token:
+
 ```
+node -e "console.log(require('jsonwebtoken').sign({ sub: 'student1', roles: ['ADMIN','MANAGER','STAFF'] }, 'super_secret_dev'))"
+```
+
+Store the resulting token in `localStorage` (key `token`) or paste it into `VITE_DEV_BEARER` inside `.env.local` and read it in your auth bootstrap.
+
+## 3. Start the stack
+
+1. From the repo root: `npm run start:ci` (keeps the gateway + services alive).
+2. In this folder: `npm install` (once) then `npm run dev`.
+3. The app will proxy API requests to `http://localhost:8080/api/*` with the bearer header automatically injected by `src/lib/api.ts`.
+
+You should now be able to hit health routes like `/api/plt/health` or work with inventory/procurement flows directly from the UI.
+
+## 4. Notes
+
+- The Axios client automatically sends the bearer token stored in `localStorage` under the `token` key.
+- Adjust roles in the generated token to simulate manager/staff access as required by the backlog scenarios.
+- If you change backend ports, update `VITE_API_BASE_URL` accordingly.
+- Seeded accounts from `auth-svc`: `admin@hospital.local` / `ChangeMe123!`, `manager@hospital.local` / `ManageMe123!`, `staff@hospital.local` / `StaffMe123!`.

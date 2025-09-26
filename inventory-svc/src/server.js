@@ -16,6 +16,7 @@ const counts = require("./routes/counts");
 const inspection = require("./routes/inspection");
 const notifications = require("./routes/notifications");
 const reorder = require("./routes/reorder");
+const lookups = require("./routes/lookups");
 const { authRequired, requireRole } = require("./auth");
 
 const app = express();
@@ -51,6 +52,7 @@ app.use("/locations", adminOnly, locations);
 app.use("/batches", managerAccess, batches);
 app.use("/reports", managerAccess, reports);
 app.use("/thresholds", adminOnly, thresholds);
+app.use("/lookups", lookups);
 
 const port = Number(process.env.PORT || 4001);
 app.listen(port, () => console.log(`inventory-svc on http://localhost:${port}`));
