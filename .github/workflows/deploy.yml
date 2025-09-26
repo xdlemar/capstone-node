@@ -1,4 +1,4 @@
-name: Deploy to Server
+﻿name: deploy
 
 on:
   workflow_run:
@@ -9,12 +9,13 @@ jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout (no submodules needed)
+      - name: Checkout (for metadata only)
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH
+      - name: Roll out to server
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -27,17 +28,21 @@ jobs:
 
             APP_DIR="/home/log1.health-ease-hospital.com/public_html"
             REPO_URL="https://github.com/xdlemar/capstone-node.git"
+            BRANCH="main"
 
-            echo "==> Ensure app dir"
+            echo "==> Ensure application directory"
             mkdir -p "$APP_DIR"
             cd "$APP_DIR"
+            git config --global --add safe.directory "$APP_DIR"
 
-            echo "==> Pull latest code"
             if [ -d .git ]; then
-              git fetch origin main
-              git reset --hard origin/main
+              echo "==> Fetch latest commit"
+              git fetch origin "$BRANCH"
+              git reset --hard "origin/${BRANCH}"
             else
+              echo "==> Clone repository"
               git clone "$REPO_URL" .
+              git checkout "$BRANCH"
             fi
 
             echo "==> Install dependencies"
@@ -54,94 +59,80 @@ jobs:
             echo "==> Generate Prisma clients"
             npm run gen:clients
 
-            echo "==> Prepare shared environment values"
-            JWT_SECRET='${{ secrets.JWT_SECRET }}'
-          
-            JWT_EXPIRES='${{ secrets.JWT_EXPIRES }}'
-            
-            AUTH_CORS_ORIGIN='${{ secrets.AUTH_CORS_ORIGIN }}'
-           
-
             echo "==> Write service environment files"
             cat <<EOF > gateway/.env
-            PORT=8080
-            JWT_SECRET=${JWT_SECRET}
-            JWT_EXPIRES=${JWT_EXPIRES}
-            AUTH_URL=http://127.0.0.1:4000
-            INVENTORY_URL=http://127.0.0.1:4001
-            PROCUREMENT_URL=http://127.0.0.1:4002
-            PLT_URL=http://127.0.0.1:4005
-            DTRS_URL=http://127.0.0.1:4006
-            ALMS_URL=http://127.0.0.1:4007
-            EOF
+              PORT=8080
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+              AUTH_URL=http://127.0.0.1:4000
+              INVENTORY_URL=http://127.0.0.1:4001
+              PROCUREMENT_URL=http://127.0.0.1:4002
+              PLT_URL=http://127.0.0.1:4005
+              DTRS_URL=http://127.0.0.1:4006
+              ALMS_URL=http://127.0.0.1:4007
+              EOF
 
-                        cat <<EOF > auth-svc/.env
-            DATABASE_URL=${{ secrets.AUTH_DB_URL }}
-            PORT=4000
-            JWT_SECRET=${JWT_SECRET}
-            JWT_EXPIRES=${JWT_EXPIRES}
-            CORS_ORIGIN=${AUTH_CORS_ORIGIN}
-            EOF
+                          cat <<EOF > auth-svc/.env
+              PORT=4000
+              DATABASE_URL=${{ secrets.AUTH_DB_URL }}
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+              CORS_ORIGIN=${{ secrets.AUTH_CORS_ORIGIN }}
+              EOF
 
-                        cat <<EOF > inventory-svc/.env
-            DATABASE_URL=${{ secrets.INVENTORY_DB_URL }}
-            PORT=4001
-            ALERT_EXPIRY_DAYS=30
-            JWT_SECRET=${JWT_SECRET}
-            JWT_EXPIRES=${JWT_EXPIRES}
-            EOF
+                          cat <<EOF > inventory-svc/.env
+              PORT=4001
+              DATABASE_URL=${{ secrets.INVENTORY_DB_URL }}
+              ALERT_EXPIRY_DAYS=30
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+              EOF
 
-                        cat <<EOF > procurement-svc/.env
-            DATABASE_URL=${{ secrets.PROCUREMENT_DB_URL }}
-            PORT=4002
-            JWT_SECRET=${JWT_SECRET}
-            JWT_EXPIRES=${JWT_EXPIRES}
-            INVENTORY_URL=http://127.0.0.1:4001
-            EOF
+                          cat <<EOF > procurement-svc/.env
+              PORT=4002
+              DATABASE_URL=${{ secrets.PROCUREMENT_DB_URL }}
+              INVENTORY_URL=http://127.0.0.1:4001
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+              EOF
 
-                        cat <<EOF > plt-svc/.env
-            DATABASE_URL=${{ secrets.PLT_DB_URL }}
-            PORT=4005
-            JWT_SECRET=${JWT_SECRET}
-            JWT_EXPIRES=${JWT_EXPIRES}
-            EOF
+                          cat <<EOF > plt-svc/.env
+              PORT=4005
+              DATABASE_URL=${{ secrets.PLT_DB_URL }}
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+              EOF
 
-                        cat <<EOF > dtrs-svc/.env
-            DATABASE_URL=${{ secrets.DTRS_DB_URL }}
-            PORT=4006
-            JWT_SECRET=${JWT_SECRET}
-            JWT_EXPIRES=${JWT_EXPIRES}
-            EOF
+                          cat <<EOF > dtrs-svc/.env
+              PORT=4006
+              DATABASE_URL=${{ secrets.DTRS_DB_URL }}
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+              EOF
 
-                        cat <<EOF > alms-svc/.env
-            DATABASE_URL=${{ secrets.ALMS_DB_URL }}
-            PORT=4007
-            JWT_SECRET=${JWT_SECRET}
-            JWT_EXPIRES=${JWT_EXPIRES}
-            EOF
+                          cat <<EOF > alms-svc/.env
+              PORT=4007
+              DATABASE_URL=${{ secrets.ALMS_DB_URL }}
+              JWT_SECRET=${{ secrets.JWT_SECRET }}
+              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+              EOF
 
-            echo "==> Build hospital-web"
-            NODE_ENV=production npm --prefix hospital-web run build
+              echo "==> Build SPA"
+              NODE_ENV=production npm --prefix hospital-web run build
 
-            # If your web server serves docroot from APP_DIR,
-            # uncomment the next 3 lines to publish the SPA to ./public:
-            # rm -rf public && mkdir -p public
-            # rsync -a --delete hospital-web/dist/ public/
-            # echo "Published hospital-web to $(pwd)/public"
+              echo "==> Apply database migrations"
+              DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}"   npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.AUTH_DB_URL }}"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.PLT_DB_URL }}"         npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.DTRS_DB_URL }}"        npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
+              DATABASE_URL="${{ secrets.ALMS_DB_URL }}"        npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
 
-            echo "==> Run Prisma migrations"
-            DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}"   npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.AUTH_DB_URL }}"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.PLT_DB_URL }}"         npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.DTRS_DB_URL }}"        npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.ALMS_DB_URL }}"        npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
-
-            echo "==> Restart with PM2"
-            if command -v pm2 >/dev/null 2>&1; then
-              pm2 startOrReload ecosystem.config.js --update-env || true
-              pm2 save || true
-              pm2 status
-            else
-              echo "PM2 not found on server. Skipping restart."
-            fi
+              echo "==> Restart services with PM2"
+              if command -v pm2 >/dev/null 2>&1; then
+                pm2 startOrReload ecosystem.config.js --update-env || true
+                pm2 save || true
+                pm2 status
+              else
+                echo "PM2 not found; skipping restart"
+              fi

@@ -1,20 +1,26 @@
-name: ci
+﻿name: ci
 
 on:
   push:
     branches: [ main ]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     env:
+      NODE_ENV: test
       DB_USER: postgres
-      DB_PASS: 'Masterpogi09?'
+      DB_PASS: "Masterpogi09?"
+      DB_PASS_URL: "Masterpogi09%3F"
       DB_HOST: localhost
       DB_PORT: 5432
-      DB_PASS_URL: 'Masterpogi09%3F'
 
       INVENTORY_URL:   http://localhost:4001
       PROCUREMENT_URL: http://localhost:4002
@@ -32,7 +38,7 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: 'Masterpogi09?'
+          POSTGRES_PASSWORD: "Masterpogi09?"
         ports: [ "5432:5432" ]
         options: >-
           --health-cmd="pg_isready -U postgres"
@@ -60,8 +66,9 @@ jobs:
             alms-svc/package-lock.json
             hospital-web/package-lock.json
 
-      - name: Install deps (root & services & web)
+      - name: Install dependencies
         run: |
+          set -euo pipefail
           npm ci
           npm --prefix inventory-svc ci
           npm --prefix procurement-svc ci
@@ -72,139 +79,70 @@ jobs:
           npm --prefix alms-svc ci
           npm --prefix hospital-web ci
 
-      - name: Build hospital-web (Vite)
+      - name: Build hospital web
         run: npm --prefix hospital-web run build
 
       - name: Generate Prisma clients
+        run: npm run gen:clients
+
+      - name: Create logical databases
         run: |
-          npx prisma generate --schema=inventory-svc/prisma/schema.prisma
-          npx prisma generate --schema=procurement-svc/prisma/schema.prisma
-          npx prisma generate --schema=auth-svc/prisma/schema.prisma
-          npx prisma generate --schema=plt-svc/prisma/schema.prisma
-          npx prisma generate --schema=dtrs-svc/prisma/schema.prisma
-          npx prisma generate --schema=alms-svc/prisma/schema.prisma
+          set -euo pipefail
+          for db in inventory_db procurement_db auth_db plt_db dtrs_db alms_db; do
+            PGPASSWORD="${DB_PASS}" psql -h "${DB_HOST}" -U "${DB_USER}" -p "${DB_PORT}" -d postgres -c "CREATE DATABASE \"${db}\";" || true
+          done
 
-      - name: Run migrations (explicit URLs)
+      - name: Apply database migrations
         run: |
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
-          npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+          set -euo pipefail
+          declare -A SCHEMAS=(
+            [inventory]=inventory-svc/prisma/schema.prisma
+            [procurement]=procurement-svc/prisma/schema.prisma
+            [auth]=auth-svc/prisma/schema.prisma
+            [plt]=plt-svc/prisma/schema.prisma
+            [dtrs]=dtrs-svc/prisma/schema.prisma
+            [alms]=alms-svc/prisma/schema.prisma
+          )
+          for svc in "${!SCHEMAS[@]}"; do
+            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/${svc}_db?schema=public"
+            echo "Running migrations for ${svc}" \
+              && npx prisma migrate deploy --schema="${SCHEMAS[$svc]}"
+          done
 
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/procurement_db?schema=public" \
-          npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
-
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/auth_db?schema=public" \
-          npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
-
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/plt_db?schema=public" \
-          npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
-
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/dtrs_db?schema=public" \
-          npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
-
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/alms_db?schema=public" \
-          npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
-
-      - name: Start services (backends first, then gateway)
-        env:
-          DB_USER: ${{ env.DB_USER }}
-          DB_PASS_URL: ${{ env.DB_PASS_URL }}
-          DB_HOST: ${{ env.DB_HOST }}
-          DB_PORT: ${{ env.DB_PORT }}
-
-          INVENTORY_URL:   ${{ env.INVENTORY_URL }}
-          PROCUREMENT_URL: ${{ env.PROCUREMENT_URL }}
-          AUTH_URL:        ${{ env.AUTH_URL }}
-          PLT_URL:         ${{ env.PLT_URL }}
-          DTRS_URL:        ${{ env.DTRS_URL }}
-          ALMS_URL:        ${{ env.ALMS_URL }}
-
-          JWT_SECRET: ${{ env.JWT_SECRET }}
-          JWT_EXPIRES: ${{ env.JWT_EXPIRES }}
-          GATEWAY_URL: ${{ env.GATEWAY_URL }}
+      - name: Start service stack
         run: |
-          set -e
+          set -euo pipefail
+          nohup npm run start:ci > stack.log 2>&1 &
+          echo $! > stack.pid
+          sleep 5
+          npm run wait:ci
 
-          export PORT=4001 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/inventory_db?schema=public" \
-                 JWT_SECRET="${JWT_SECRET}" \
-                 JWT_EXPIRES="${JWT_EXPIRES}"
-          node inventory-svc/src/server.js > inv.log 2>&1 &
-          npx wait-on -t 120000 "${INVENTORY_URL}/health" || { echo "INVENTORY failed. Last 200 lines:"; tail -n 200 inv.log; exit 1; }
-
-          export PORT=4002 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/procurement_db?schema=public" \
-                 JWT_SECRET="${JWT_SECRET}" \
-                 JWT_EXPIRES="${JWT_EXPIRES}"
-          node procurement-svc/src/server.js > proc.log 2>&1 &
-          npx wait-on -t 120000 "${PROCUREMENT_URL}/health" || { echo "PROCUREMENT failed. Last 200 lines:"; tail -n 200 proc.log; exit 1; }
-
-          export PORT=4000 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/auth_db?schema=public" \
-                 JWT_SECRET="${JWT_SECRET}" \
-                 JWT_EXPIRES="${JWT_EXPIRES}"
-          node auth-svc/src/server.js > auth.log 2>&1 &
-          npx wait-on -t 120000 "${AUTH_URL}/health" || { echo "AUTH failed. Last 200 lines:"; tail -n 200 auth.log; exit 1; }
-
-          export PORT=4005 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/plt_db?schema=public" \
-                 JWT_SECRET="${JWT_SECRET}" \
-                 JWT_EXPIRES="${JWT_EXPIRES}"
-          node plt-svc/src/server.js > plt.log 2>&1 &
-          npx wait-on -t 120000 "${PLT_URL}/health" || { echo "PLT failed. Last 200 lines:"; tail -n 200 plt.log; exit 1; }
-
-          export PORT=4006 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/dtrs_db?schema=public" \
-                 JWT_SECRET="${JWT_SECRET}" \
-                 JWT_EXPIRES="${JWT_EXPIRES}"
-          node dtrs-svc/src/server.js > dtrs.log 2>&1 &
-          npx wait-on -t 120000 "${DTRS_URL}/health" || { echo "DTRS failed. Last 200 lines:"; tail -n 200 dtrs.log; exit 1; }
-
-          export PORT=4007 \
-                 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/alms_db?schema=public" \
-                 JWT_SECRET="${JWT_SECRET}" \
-                 JWT_EXPIRES="${JWT_EXPIRES}"
-          node alms-svc/src/server.js > alms.log 2>&1 &
-          npx wait-on -t 120000 "${ALMS_URL}/health" || { echo "ALMS failed. Last 200 lines:"; tail -n 200 alms.log; exit 1; }
-
-          export PORT=8080 \
-                 INVENTORY_URL="${INVENTORY_URL}" \
-                 PROCUREMENT_URL="${PROCUREMENT_URL}" \
-                 AUTH_URL="${AUTH_URL}" \
-                 PLT_URL="${PLT_URL}" \
-                 DTRS_URL="${DTRS_URL}" \
-                 ALMS_URL="${ALMS_URL}" \
-                 JWT_SECRET="${JWT_SECRET}" \
-                 JWT_EXPIRES="${JWT_EXPIRES}"
-          node gateway/src/index.js > gw.log 2>&1 &
-          npx wait-on -t 120000 "${GATEWAY_URL}/health" || { echo "GATEWAY failed. Last 200 lines:"; tail -n 200 gw.log; exit 1; }
-
-      - name: Seed minimal master data
-        run: |
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
-          node tests/seedInventory.js
+      - name: Seed reference data
+        run: node tests/seedInventory.js
 
       - name: Run tests
-        run: |
-          DATABASE_URL="postgresql://${{ env.DB_USER }}:${{ env.DB_PASS_URL }}@${{ env.DB_HOST }}:${{ env.DB_PORT }}/inventory_db?schema=public" \
-          npm test
+        env:
+          GATEWAY_URL: ${{ env.GATEWAY_URL }}
+          JWT_SECRET: ${{ env.JWT_SECRET }}
+        run: npm test
 
-      - name: Smoke
+      - name: Smoke endpoints
+        env:
+          GATEWAY_URL: ${{ env.GATEWAY_URL }}
+          JWT_SECRET: ${{ env.JWT_SECRET }}
         run: npm run smoke
 
-      - name: Stop background services
+      - name: Stop service stack
         if: always()
-        run: pkill node || true
+        run: |
+          if [ -f stack.pid ]; then
+            kill $(cat stack.pid) || true
+          fi
+          pkill node || true
 
-      - name: Upload logs on failure
+      - name: Upload stack log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: svc-logs
-          path: |
-            inv.log
-            proc.log
-            auth.log
-            plt.log
-            dtrs.log
-            alms.log
-            gw.log
+          name: stack-log
+          path: stack.log
