@@ -7,6 +7,7 @@ const pr = require("./routes/pr");
 const po = require("./routes/po");
 const rcv = require("./routes/receipts");
 const att = require("./routes/attachments");
+const lookups = require("./routes/lookups");
 const ven = require("./routes/vendors");
 const { authRequired, requireRole } = require("./auth");
 
@@ -28,6 +29,7 @@ app.use(pr);
 app.use(po);
 app.use(rcv);
 app.use(att);
+app.use("/lookups", lookups);
 app.use(ven);
 
 const port = Number(process.env.PORT || 4002);

@@ -24,17 +24,18 @@ export type NavSection = {
   url: string;
   icon?: LucideIcon;
   isActive?: boolean;
-  items?: {
+  items?: Array<{
     title: string;
     url: string;
-  }[];
+    roles?: string[];
+  }>;
 };
 
 export function NavMain({ items }: { items: NavSection[] }) {
   const location = useLocation();
   const matchesPath = (target: string) => {
     if (!target) return false;
-    return location.pathname === target || location.pathname.startsWith(target + "/");
+    return location.pathname === target || location.pathname.startsWith(`${target}/`);
   };
 
   return (

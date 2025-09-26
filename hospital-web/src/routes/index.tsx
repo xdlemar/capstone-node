@@ -4,7 +4,11 @@ import AppLayout from "@/components/layout/AppLayout";
 import Dashboard from "@/features/dashboard/Dashboard";
 import LoginPage from "@/features/auth/LoginPage";
 import UnauthorizedPage from "@/features/auth/UnauthorizedPage";
-import ProcurementOverview from "@/features/procurement/ProcurementOverview";
+import ProcurementRequisitionsPage from "@/features/procurement/ProcurementRequisitionsPage";
+import ProcurementPurchaseOrdersPage from "@/features/procurement/ProcurementPurchaseOrdersPage";
+import ProcurementReceivingPage from "@/features/procurement/ProcurementReceivingPage";
+import ProcurementApprovalsPage from "@/features/procurement/ProcurementApprovalsPage";
+import ProcurementVendorsPage from "@/features/procurement/ProcurementVendorsPage";
 import StockControlPage from "@/features/inventory/StockControlPage";
 import CycleCountPage from "@/features/inventory/CycleCountPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
@@ -34,9 +38,31 @@ export const router = createBrowserRouter([
             path: "procurement",
             element: (
               <RoleGate allowed={STAFF_SET}>
-                <ProcurementOverview />
+                <Outlet />
               </RoleGate>
             ),
+            children: [
+              { index: true, element: <Navigate to="requisitions" replace /> },
+              { path: "requisitions", element: <ProcurementRequisitionsPage /> },
+              { path: "purchase-orders", element: <ProcurementPurchaseOrdersPage /> },
+              { path: "receiving", element: <ProcurementReceivingPage /> },
+              {
+                path: "approvals",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <ProcurementApprovalsPage />
+                  </RoleGate>
+                ),
+              },
+              {
+                path: "vendors",
+                element: (
+                  <RoleGate allowed={ADMIN_SET}>
+                    <ProcurementVendorsPage />
+                  </RoleGate>
+                ),
+              },
+            ],
           },
           {
             path: "inventory",

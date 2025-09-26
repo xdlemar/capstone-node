@@ -1,0 +1,33 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { api } from "@/lib/api";
+
+export type ProcurementLookups = {
+  submittedPrs: Array<{ id: string; prNo: string; createdAt: string }>;
+  approvedPrs: Array<{ id: string; prNo: string; createdAt: string }>;
+  vendors: Array<{
+    id: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    metrics: null | {
+      onTimePercentage: number | null;
+      avgLeadTimeDays: number | null;
+      fulfillmentRate: number | null;
+      totalSpend: number;
+      lastEvaluatedAt: string | null;
+    };
+  }>;
+};
+
+export function useProcurementLookups() {
+  return useQuery<ProcurementLookups>({
+    queryKey: ["procurement", "lookups"],
+    queryFn: async () => {
+      const { data } = await api.get<ProcurementLookups>("/procurement/lookups/procurement");
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}

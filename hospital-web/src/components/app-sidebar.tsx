@@ -31,8 +31,11 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     icon: ShoppingCart,
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
-      { title: "Workspace", url: "/procurement" },
-      { title: "Approvals", url: "/procurement" },
+      { title: "Purchase requests", url: "/procurement/requisitions", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Purchase orders", url: "/procurement/purchase-orders", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Receiving", url: "/procurement/receiving", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Approvals", url: "/procurement/approvals", roles: ["MANAGER", "ADMIN"] },
+      { title: "Vendors", url: "/procurement/vendors", roles: ["ADMIN"] },
     ],
   },
   {
@@ -41,7 +44,7 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     icon: Boxes,
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
-      { title: "Stock control", url: "/inventory/stock-control" },
+      { title: "Stock control", url: "/inventory/stock-control", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Cycle counts", url: "/inventory/cycle-counts", roles: ["MANAGER", "ADMIN"] },
     ],
   },
@@ -51,8 +54,8 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     icon: Stethoscope,
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
-      { title: "Assets", url: "/alms" },
-      { title: "Schedules", url: "/alms" },
+      { title: "Assets", url: "/alms", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Schedules", url: "/alms", roles: ["STAFF", "MANAGER", "ADMIN"] },
     ],
   },
   {
@@ -61,8 +64,8 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     icon: Truck,
     roles: ["MANAGER", "ADMIN"],
     items: [
-      { title: "Deliveries", url: "/plt" },
-      { title: "Routes", url: "/plt" },
+      { title: "Deliveries", url: "/plt", roles: ["MANAGER", "ADMIN"] },
+      { title: "Routes", url: "/plt", roles: ["MANAGER", "ADMIN"] },
     ],
   },
   {
@@ -70,14 +73,14 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     url: "/dtrs",
     icon: FileText,
     roles: ["MANAGER", "ADMIN"],
-    items: [{ title: "Records", url: "/dtrs" }],
+    items: [{ title: "Records", url: "/dtrs", roles: ["MANAGER", "ADMIN"] }],
   },
   {
     title: "Administration",
     url: "/admin",
     icon: Users,
     roles: ["ADMIN"],
-    items: [{ title: "User access", url: "/admin" }],
+    items: [{ title: "User access", url: "/admin", roles: ["ADMIN"] }],
   },
 ];
 
@@ -109,3 +112,4 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     </Sidebar>
   );
 }
+

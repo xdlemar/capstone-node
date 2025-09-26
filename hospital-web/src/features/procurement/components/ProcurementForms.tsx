@@ -1,0 +1,717 @@
+import { useMemo } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2, Plus, Trash2 } from "lucide-react";
+import { z } from "zod";
+
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { useInventoryLookups } from "@/hooks/useInventoryLookups";
+import { useProcurementLookups } from "@/hooks/useProcurementLookups";
+import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+const prLineSchema = z.object({
+  itemId: z.string().min(1, "Select an item"),
+  qty: z.coerce.number({ invalid_type_error: "Enter quantity" }).positive("Quantity must be greater than zero"),
+  unit: z.string().min(1, "Unit is required"),
+  notes: z.string().optional(),
+});
+
+const prSchema = z.object({
+  prNo: z.string().min(3, "PR number is required"),
+  notes: z.string().optional(),
+  lines: z.array(prLineSchema).min(1, "Add at least one line"),
+});
+
+type PrValues = z.infer<typeof prSchema>;
+
+const receiptSchema = z.object({
+  poNo: z.string().min(3, "PO number is required"),
+  drNo: z.string().optional(),
+  invoiceNo: z.string().optional(),
+});
+
+type ReceiptValues = z.infer<typeof receiptSchema>;
+
+const approveSchema = z.object({
+  prNo: z.string().min(1, "Select a PR"),
+});
+
+type ApproveValues = z.infer<typeof approveSchema>;
+
+const poSchema = z.object({
+  prNo: z.string().min(1, "Select an approved PR"),
+  poNo: z.string().min(3, "PO number is required"),
+});
+
+type PoValues = z.infer<typeof poSchema>;
+
+const vendorSchema = z.object({
+  name: z.string().min(3, "Vendor name is required"),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+});
+
+type VendorValues = z.infer<typeof vendorSchema>;
+
+function useItemFormatter() {
+  const inv = useInventoryLookups();
+  const itemMap = useMemo(() => {
+    if (!inv.data) return new Map<string, (typeof inv.data.items)[number]>();
+    return new Map(inv.data.items.map((item) => [item.id, item]));
+  }, [inv.data]);
+
+  const options = inv.data?.items ?? [];
+  const format = (id: string) => {
+    const item = itemMap.get(id);
+    if (!item) return null;
+    return `${item.name} - ${item.sku}`;
+  };
+
+  return { options, format, query: inv };
+}
+
+function PrLineRow({
+  index,
+  control,
+  remove,
+  items,
+}: {
+  index: number;
+  control: any;
+  remove: (index: number) => void;
+  items: ReturnType<typeof useItemFormatter>["options"];
+}) {
+  return (
+    <div className="rounded-md border p-3 space-y-3">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px_160px]">
+        <FormField
+          control={control}
+          name={`lines.${index}.itemId`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Item</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <FormControl>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Select item" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {items.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name} - {item.sku}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={`lines.${index}.qty`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Quantity</FormLabel>
+              <FormControl>
+                <Input type="number" min="1" step="1" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name={`lines.${index}.unit`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Unit</FormLabel>
+              <FormControl>
+                <Input placeholder="box, pack, ea" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+      <FormField
+        control={control}
+        name={`lines.${index}.notes`}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Notes</FormLabel>
+            <FormControl>
+              <Input placeholder="Optional line notes" {...field} />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+      <div className="flex justify-end">
+        <Button type="button" variant="ghost" size="sm" onClick={() => remove(index)}>
+          <Trash2 className="mr-2 h-4 w-4" /> Remove line
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+export function PurchaseRequestCard({ className }: { className?: string }) {
+  const { toast } = useToast();
+  const { options, query } = useItemFormatter();
+
+  const form = useForm<PrValues>({
+    resolver: zodResolver(prSchema),
+    defaultValues: {
+      prNo: `PR-${Date.now()}`,
+      notes: "",
+      lines: [{ itemId: "", qty: 1, unit: "box", notes: "" }],
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
+
+  const onSubmit = async (values: PrValues) => {
+    try {
+      const payload = {
+        prNo: values.prNo,
+        notes: values.notes || undefined,
+        lines: values.lines.map((line) => ({
+          itemId: line.itemId,
+          qty: line.qty,
+          unit: line.unit,
+          notes: line.notes || undefined,
+        })),
+      };
+      await api.post("/procurement/pr", payload);
+      toast({ title: "Requisition submitted", description: `${values.lines.length} line(s) captured under ${values.prNo}.` });
+      form.reset({ prNo: `PR-${Date.now()}`, notes: "", lines: [{ itemId: "", qty: 1, unit: "box", notes: "" }] });
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err.message || "Failed to submit requisition";
+      toast({ title: "Requisition failed", description: message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Card className={cn("border-border/60", className)}>
+      <CardHeader>
+        <CardTitle>Create purchase requisition</CardTitle>
+        <CardDescription>Create a detailed request for supplies. The approval team will review item names, quantities, and units before sourcing.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {query.isLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading items...
+          </div>
+        ) : query.error ? (
+          <Alert variant="destructive">
+            <AlertTitle>Lookup failed</AlertTitle>
+            <AlertDescription>Unable to load item master data. Try again or contact an administrator.</AlertDescription>
+          </Alert>
+        ) : (
+          <Form {...form}>
+            <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="prNo"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Purchase requisition number (PR No.)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="PR-0001" {...field} />
+                      </FormControl>
+                      <FormDescription>Use consistent numbering for audit traceability.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notes</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Urgent resupply for ER" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-base">Lines</Label>
+                <div className="space-y-3">
+                  {fields.map((field, index) => (
+                    <PrLineRow key={field.id} index={index} control={form.control} remove={remove} items={options} />
+                  ))}
+                </div>
+                <Button type="button" variant="outline" onClick={() => append({ itemId: "", qty: 1, unit: "box", notes: "" })}>
+                  <Plus className="mr-2 h-4 w-4" /> Add line
+                </Button>
+              </div>
+
+              <CardFooter className="px-0 pt-4">
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Submit requisition
+                </Button>
+              </CardFooter>
+            </form>
+          </Form>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ReceiptCard({ className }: { className?: string }) {
+  const { toast } = useToast();
+  const form = useForm<ReceiptValues>({
+    resolver: zodResolver(receiptSchema),
+    defaultValues: { poNo: "", drNo: "", invoiceNo: "" },
+  });
+
+  const onSubmit = async (values: ReceiptValues) => {
+    try {
+      await api.post("/procurement/receipts", {
+        poNo: values.poNo,
+        drNo: values.drNo || undefined,
+        invoiceNo: values.invoiceNo || undefined,
+      });
+      toast({ title: "Delivery receipt logged", description: `Receipt recorded for purchase order ${values.poNo}.` });
+      form.reset({ poNo: "", drNo: "", invoiceNo: "" });
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err.message || "Failed to record receipt";
+      toast({ title: "Delivery receipt failed", description: message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Card className={cn("border-border/60", className)}>
+      <CardHeader>
+        <CardTitle>Log delivery receipt</CardTitle>
+        <CardDescription>Capture delivery receipt and invoice references so inventory and vendor KPIs stay current.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+            <FormField
+              control={form.control}
+              name="poNo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Purchase order number (PO No.)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="PO-0001" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="drNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Delivery receipt number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="DR-123" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="invoiceNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Invoice number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="INV-456" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+            <CardFooter className="px-0 pt-4">
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Record receipt
+              </Button>
+            </CardFooter>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ApprovePrCard({ className }: { className?: string }) {
+  const { toast } = useToast();
+  const lookups = useProcurementLookups();
+  const form = useForm<ApproveValues>({ resolver: zodResolver(approveSchema), defaultValues: { prNo: "" } });
+
+  const onSubmit = async (values: ApproveValues) => {
+    try {
+      await api.post(`/procurement/pr/${encodeURIComponent(values.prNo)}/approve`);
+      toast({ title: "Requisition approved", description: `Requisition ${values.prNo} is now APPROVED.` });
+      form.reset({ prNo: "" });
+      lookups.refetch();
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err.message || "Approval failed";
+      toast({ title: "Approval failed", description: message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Card className={cn("border-border/60", className)}>
+      <CardHeader>
+        <CardTitle>Approve purchase requisition</CardTitle>
+        <CardDescription>Choose a submitted requisition to authorize sourcing.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {lookups.isLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading submitted PRs...
+          </div>
+        ) : lookups.error ? (
+          <Alert variant="destructive">
+            <AlertTitle>Lookup failed</AlertTitle>
+            <AlertDescription>Unable to load submitted PRs. Try again shortly.</AlertDescription>
+          </Alert>
+        ) : lookups.data?.submittedPrs.length ? (
+          <Form {...form}>
+            <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+              <FormField
+                control={form.control}
+                name="prNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Purchase requisition number (PR No.)</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select PR" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {lookups.data.submittedPrs.map((pr) => (
+                          <SelectItem key={pr.id} value={pr.prNo}>
+                            {pr.prNo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <CardFooter className="px-0 pt-4">
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Approve requisition
+                </Button>
+              </CardFooter>
+            </form>
+          </Form>
+        ) : (
+          <Alert>
+            <AlertTitle>No submitted PRs</AlertTitle>
+            <AlertDescription>All requisitions are either approved or none have been created yet.</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function CreatePoCard({ className }: { className?: string }) {
+  const { toast } = useToast();
+  const lookups = useProcurementLookups();
+  const form = useForm<PoValues>({
+    resolver: zodResolver(poSchema),
+    defaultValues: { prNo: "", poNo: `PO-${Date.now()}` },
+  });
+
+  const onSubmit = async (values: PoValues) => {
+    try {
+      await api.post("/procurement/po", { prNo: values.prNo, poNo: values.poNo });
+      toast({ title: "Purchase order created", description: `Purchase order ${values.poNo} linked to requisition ${values.prNo}.` });
+      form.reset({ prNo: "", poNo: `PO-${Date.now()}` });
+      lookups.refetch();
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err.message || "Failed to create purchase order";
+      toast({ title: "Purchase order failed", description: message, variant: "destructive" });
+    }
+  };
+
+  const approved = lookups.data?.approvedPrs ?? [];
+
+  return (
+    <Card className={cn("border-border/60", className)}>
+      <CardHeader>
+        <CardTitle>Issue purchase order</CardTitle>
+        <CardDescription>Turn an approved requisition into a purchase order using plain-language lists of recent approvals.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {lookups.isLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading approved PRs...
+          </div>
+        ) : lookups.error ? (
+          <Alert variant="destructive">
+            <AlertTitle>Lookup failed</AlertTitle>
+            <AlertDescription>Unable to load approved PRs. Try again shortly.</AlertDescription>
+          </Alert>
+        ) : approved.length ? (
+          <Form {...form}>
+            <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+              <FormField
+                control={form.control}
+                name="prNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Select approved requisition</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="bg-background">
+                          <SelectValue placeholder="Select approved PR" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {approved.map((pr) => (
+                          <SelectItem key={pr.id} value={pr.prNo}>
+                            {pr.prNo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="poNo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Purchase order number (PO No.)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="PO-0001" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <CardFooter className="px-0 pt-4">
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create purchase order
+                </Button>
+              </CardFooter>
+            </form>
+          </Form>
+        ) : (
+          <Alert>
+            <AlertTitle>No approved PRs</AlertTitle>
+            <AlertDescription>Approve a requisition before opening a PO.</AlertDescription>
+          </Alert>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function VendorUpsertCard({ className }: { className?: string }) {
+  const { toast } = useToast();
+  const lookups = useProcurementLookups();
+  const form = useForm<VendorValues>({
+    resolver: zodResolver(vendorSchema),
+    defaultValues: { name: "", email: "", phone: "", address: "" },
+  });
+
+  const onSubmit = async (values: VendorValues) => {
+    try {
+      await api.post("/procurement/vendors", {
+        name: values.name,
+        email: values.email || undefined,
+        phone: values.phone || undefined,
+        address: values.address || undefined,
+      });
+      toast({ title: "Vendor saved", description: `${values.name} is now available for sourcing.` });
+      form.reset({ name: "", email: "", phone: "", address: "" });
+      lookups.refetch();
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err.message || "Failed to save vendor";
+      toast({ title: "Vendor save failed", description: message, variant: "destructive" });
+    }
+  };
+
+  return (
+    <Card className={cn("border-border/60", className)}>
+      <CardHeader>
+        <CardTitle>Vendor master data</CardTitle>
+        <CardDescription>Create or update vendor contact information.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Vendor name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="MedSupply Co." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="sales@example.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Phone</FormLabel>
+                    <FormControl>
+                      <Input placeholder="(555) 123-4567" {...field} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="address"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Address</FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="123 Supply Ave, Logistics City" {...field} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <CardFooter className="px-0 pt-4">
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save vendor
+              </Button>
+            </CardFooter>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function VendorPerformanceTable({ className }: { className?: string }) {
+  const lookups = useProcurementLookups();
+
+  if (lookups.isLoading) {
+    return (
+      <Card className={cn("border-border/60", className)}>
+        <CardHeader>
+          <CardTitle>Vendor performance</CardTitle>
+          <CardDescription>Evaluations based on recent receipts.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Refreshing metrics...
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (lookups.error) {
+    return (
+      <Card className={cn("border-border/60", className)}>
+        <CardHeader>
+          <CardTitle>Vendor performance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertTitle>Lookup failed</AlertTitle>
+            <AlertDescription>Unable to load vendor metrics.</AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className={cn("border-border/60", className)}>
+      <CardHeader>
+        <CardTitle>Vendor performance</CardTitle>
+        <CardDescription>Latest metrics from scheduled vendor KPI jobs.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Vendor</TableHead>
+              <TableHead>On-time %</TableHead>
+              <TableHead>Lead time (days)</TableHead>
+              <TableHead>Fulfillment %</TableHead>
+              <TableHead>Total spend</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {lookups.data?.vendors.map((vendor) => (
+              <TableRow key={vendor.id}>
+                <TableCell className="font-medium">{vendor.name}</TableCell>
+                <TableCell>{vendor.metrics?.onTimePercentage ?? "-"}</TableCell>
+                <TableCell>{vendor.metrics?.avgLeadTimeDays ?? "-"}</TableCell>
+                <TableCell>{vendor.metrics?.fulfillmentRate ?? "-"}</TableCell>
+                <TableCell>
+                  {vendor.metrics ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(vendor.metrics.totalSpend) : "-"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+
+
+
+
+
+
+
+
+
