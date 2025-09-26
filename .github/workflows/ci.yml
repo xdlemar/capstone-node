@@ -83,8 +83,21 @@ jobs:
         run: npm --prefix hospital-web run build
 
       - name: Generate Prisma clients
-        run: npm run gen:clients
-
+        run: |
+          set -euo pipefail
+          declare -A SCHEMAS=(
+            [inventory]=inventory-svc/prisma/schema.prisma
+            [procurement]=procurement-svc/prisma/schema.prisma
+            [auth]=auth-svc/prisma/schema.prisma
+            [plt]=plt-svc/prisma/schema.prisma
+            [dtrs]=dtrs-svc/prisma/schema.prisma
+            [alms]=alms-svc/prisma/schema.prisma
+          )
+          for svc in "${!SCHEMAS[@]}"; do
+            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/${svc}_db?schema=public"
+            echo "Generating client for ${svc}"
+            npx prisma generate --schema="${SCHEMAS[$svc]}"
+          done
       - name: Create logical databases
         run: |
           set -euo pipefail
@@ -146,3 +159,4 @@ jobs:
         with:
           name: stack-log
           path: stack.log
+

@@ -56,83 +56,100 @@ jobs:
             npm --prefix alms-svc ci
             npm --prefix hospital-web ci
 
-            echo "==> Generate Prisma clients"
-            npm run gen:clients
-
             echo "==> Write service environment files"
             cat <<EOF > gateway/.env
-              PORT=8080
-              JWT_SECRET=${{ secrets.JWT_SECRET }}
-              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-              AUTH_URL=http://127.0.0.1:4000
-              INVENTORY_URL=http://127.0.0.1:4001
-              PROCUREMENT_URL=http://127.0.0.1:4002
-              PLT_URL=http://127.0.0.1:4005
-              DTRS_URL=http://127.0.0.1:4006
-              ALMS_URL=http://127.0.0.1:4007
-              EOF
+PORT=8080
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+AUTH_URL=http://127.0.0.1:4000
+INVENTORY_URL=http://127.0.0.1:4001
+PROCUREMENT_URL=http://127.0.0.1:4002
+PLT_URL=http://127.0.0.1:4005
+DTRS_URL=http://127.0.0.1:4006
+ALMS_URL=http://127.0.0.1:4007
+EOF
 
-                          cat <<EOF > auth-svc/.env
-              PORT=4000
-              DATABASE_URL=${{ secrets.AUTH_DB_URL }}
-              JWT_SECRET=${{ secrets.JWT_SECRET }}
-              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-              CORS_ORIGIN=${{ secrets.AUTH_CORS_ORIGIN }}
-              EOF
+            cat <<EOF > auth-svc/.env
+PORT=4000
+DATABASE_URL=${{ secrets.AUTH_DB_URL }}
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+CORS_ORIGIN=${{ secrets.AUTH_CORS_ORIGIN }}
+EOF
 
-                          cat <<EOF > inventory-svc/.env
-              PORT=4001
-              DATABASE_URL=${{ secrets.INVENTORY_DB_URL }}
-              ALERT_EXPIRY_DAYS=30
-              JWT_SECRET=${{ secrets.JWT_SECRET }}
-              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-              EOF
+            cat <<EOF > inventory-svc/.env
+PORT=4001
+DATABASE_URL=${{ secrets.INVENTORY_DB_URL }}
+ALERT_EXPIRY_DAYS=30
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+EOF
 
-                          cat <<EOF > procurement-svc/.env
-              PORT=4002
-              DATABASE_URL=${{ secrets.PROCUREMENT_DB_URL }}
-              INVENTORY_URL=http://127.0.0.1:4001
-              JWT_SECRET=${{ secrets.JWT_SECRET }}
-              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-              EOF
+            cat <<EOF > procurement-svc/.env
+PORT=4002
+DATABASE_URL=${{ secrets.PROCUREMENT_DB_URL }}
+INVENTORY_URL=http://127.0.0.1:4001
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+EOF
 
-                          cat <<EOF > plt-svc/.env
-              PORT=4005
-              DATABASE_URL=${{ secrets.PLT_DB_URL }}
-              JWT_SECRET=${{ secrets.JWT_SECRET }}
-              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-              EOF
+            cat <<EOF > plt-svc/.env
+PORT=4005
+DATABASE_URL=${{ secrets.PLT_DB_URL }}
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+EOF
 
-                          cat <<EOF > dtrs-svc/.env
-              PORT=4006
-              DATABASE_URL=${{ secrets.DTRS_DB_URL }}
-              JWT_SECRET=${{ secrets.JWT_SECRET }}
-              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-              EOF
+            cat <<EOF > dtrs-svc/.env
+PORT=4006
+DATABASE_URL=${{ secrets.DTRS_DB_URL }}
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+EOF
 
-                          cat <<EOF > alms-svc/.env
-              PORT=4007
-              DATABASE_URL=${{ secrets.ALMS_DB_URL }}
-              JWT_SECRET=${{ secrets.JWT_SECRET }}
-              JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-              EOF
+            cat <<EOF > alms-svc/.env
+PORT=4007
+DATABASE_URL=${{ secrets.ALMS_DB_URL }}
+JWT_SECRET=${{ secrets.JWT_SECRET }}
+JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
+EOF
 
-              echo "==> Build SPA"
-              NODE_ENV=production npm --prefix hospital-web run build
+            echo "==> Build SPA"
+            NODE_ENV=production npm --prefix hospital-web run build
 
-              echo "==> Apply database migrations"
-              DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}"   npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
-              DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
-              DATABASE_URL="${{ secrets.AUTH_DB_URL }}"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
-              DATABASE_URL="${{ secrets.PLT_DB_URL }}"         npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
-              DATABASE_URL="${{ secrets.DTRS_DB_URL }}"        npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
-              DATABASE_URL="${{ secrets.ALMS_DB_URL }}"        npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
+            echo "==> Generate Prisma clients"
+            for schema in \
+              inventory-svc/prisma/schema.prisma \
+              procurement-svc/prisma/schema.prisma \
+              auth-svc/prisma/schema.prisma \
+              plt-svc/prisma/schema.prisma \
+              dtrs-svc/prisma/schema.prisma \
+              alms-svc/prisma/schema.prisma; do
+              case "$schema" in
+                inventory-svc/*) export DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" ;;
+                procurement-svc/*) export DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" ;;
+                auth-svc/*) export DATABASE_URL="${{ secrets.AUTH_DB_URL }}" ;;
+                plt-svc/*) export DATABASE_URL="${{ secrets.PLT_DB_URL }}" ;;
+                dtrs-svc/*) export DATABASE_URL="${{ secrets.DTRS_DB_URL }}" ;;
+                alms-svc/*) export DATABASE_URL="${{ secrets.ALMS_DB_URL }}" ;;
+              esac
+              echo "Generating client for ${schema}"
+              npx prisma generate --schema="$schema"
+            done
 
-              echo "==> Restart services with PM2"
-              if command -v pm2 >/dev/null 2>&1; then
-                pm2 startOrReload ecosystem.config.js --update-env || true
-                pm2 save || true
-                pm2 status
-              else
-                echo "PM2 not found; skipping restart"
-              fi
+            echo "==> Apply database migrations"
+            DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}"   npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.AUTH_DB_URL }}"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.PLT_DB_URL }}"         npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.DTRS_DB_URL }}"        npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
+            DATABASE_URL="${{ secrets.ALMS_DB_URL }}"        npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
+
+            echo "==> Restart services with PM2"
+            if command -v pm2 >/dev/null 2>&1; then
+              pm2 startOrReload ecosystem.config.js --update-env || true
+              pm2 save || true
+              pm2 status
+            else
+              echo "PM2 not found; skipping restart"
+            fi
