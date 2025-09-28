@@ -146,6 +146,25 @@ jobs:
 
             NODE_ENV=production npm --prefix hospital-web run build
 
+            rm -rf frontend-build
+            mkdir -p frontend-build
+            cp -a hospital-web/dist/. frontend-build/
+            shopt -s nullglob
+            for item in frontend-build/*; do
+              name=$(basename "$item")
+              ln -sfn "$item" "$name"
+            done
+            shopt -u nullglob
+
+            cat > .htaccess <<EOF
+            RewriteEngine On
+            RewriteRule ^api/(.*)$ http://127.0.0.1:$GATEWAY_PORT/api/$1 [P,L]
+            RewriteCond %{REQUEST_FILENAME} !-f
+            RewriteCond %{REQUEST_FILENAME} !-d
+            RewriteRule . index.html [L]
+            EOF
+
+
             services=(inventory-svc procurement-svc auth-svc plt-svc dtrs-svc alms-svc)
             for svc in "${services[@]}"; do
               db_url=""
