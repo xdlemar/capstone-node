@@ -51,7 +51,7 @@ jobs:
           PLT_PORT: 4005
           DTRS_PORT: 4006
           ALMS_PORT: 4007
-          SSH_PORT: ${{ secrets.SERVER_PORT}}
+          SSH_PORT: ${{ secrets.SERVER_PORT || '2298' }}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
@@ -98,7 +98,7 @@ jobs:
             DATABASE_URL=$AUTH_DB_URL
             JWT_SECRET=$JWT_SECRET
             JWT_EXPIRES=$JWT_EXPIRES
-            CORS_ORIGIN=${AUTH_CORS_ORIGIN:-*}
+            CORS_ORIGIN="${AUTH_CORS_ORIGIN:-*}"
             EOF
 
             cat > inventory-svc/.env <<EOF
@@ -148,14 +148,23 @@ jobs:
 
             services=(inventory-svc procurement-svc auth-svc plt-svc dtrs-svc alms-svc)
             for svc in "${services[@]}"; do
-              case "$svc" in
-                inventory-svc) db_url="$INVENTORY_DB_URL" ;;
-                procurement-svc) db_url="$PROCUREMENT_DB_URL" ;;
-                auth-svc) db_url="$AUTH_DB_URL" ;;
-                plt-svc) db_url="$PLT_DB_URL" ;;
-                dtrs-svc) db_url="$DTRS_DB_URL" ;;
-                alms-svc) db_url="$ALMS_DB_URL" ;;
-              esac
+              db_url=""
+              if [ "$svc" = 'inventory-svc' ]; then
+                db_url="$INVENTORY_DB_URL"
+              elif [ "$svc" = 'procurement-svc' ]; then
+                db_url="$PROCUREMENT_DB_URL"
+              elif [ "$svc" = 'auth-svc' ]; then
+                db_url="$AUTH_DB_URL"
+              elif [ "$svc" = 'plt-svc' ]; then
+                db_url="$PLT_DB_URL"
+              elif [ "$svc" = 'dtrs-svc' ]; then
+                db_url="$DTRS_DB_URL"
+              elif [ "$svc" = 'alms-svc' ]; then
+                db_url="$ALMS_DB_URL"
+              else
+                echo "Unknown service $svc" >&2
+                exit 1
+              fi
               (
                 cd "$svc"
                 DATABASE_URL="$db_url" npx prisma generate
