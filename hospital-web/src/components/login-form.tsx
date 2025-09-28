@@ -1,4 +1,5 @@
-import { useCallback, useState, type ComponentProps, type FormEvent, type KeyboardEvent } from "react"
+import { AlertTriangle, Eye, EyeOff } from "lucide-react"
+import { useCallback, useState, type ComponentProps, type FormEvent, type KeyboardEvent, type FocusEvent } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,6 +22,14 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
   }, [])
 
   const handleCapsLockState = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+    setCapsLockOn(event.getModifierState("CapsLock"))
+  }, [])
+
+  const handlePasswordBlur = useCallback(() => {
+    setCapsLockOn(false)
+  }, [])
+
+  const handlePasswordFocus = useCallback((event: FocusEvent<HTMLInputElement>) => {
     setCapsLockOn(event.getModifierState("CapsLock"))
   }, [])
 
@@ -74,22 +83,31 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
                     type={showPassword ? "text" : "password"}
                     required
                     disabled={loading}
+                    className="pr-12"
                     onKeyUp={handleCapsLockState}
                     onKeyDown={handleCapsLockState}
+                    onFocus={handlePasswordFocus}
+                    onBlur={handlePasswordBlur}
                   />
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
-                    className="absolute inset-y-0 right-1 my-1 flex items-center px-2 text-xs text-muted-foreground"
+                    size="icon"
+                    className="absolute inset-y-0 right-1 my-1 flex items-center justify-center px-2 text-muted-foreground"
                     onClick={togglePasswordVisibility}
                     disabled={loading}
                     aria-pressed={showPassword}
                   >
-                    {showPassword ? "Hide" : "Show"}
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
                   </Button>
                 </div>
-                {capsLockOn ? <p className="text-xs text-amber-500">Caps Lock is on</p> : null}
+                {capsLockOn ? (
+                  <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800 shadow-sm">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>Caps Lock is on</span>
+                  </div>
+                ) : null}
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>

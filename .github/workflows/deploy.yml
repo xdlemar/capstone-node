@@ -149,12 +149,10 @@ jobs:
             rm -rf frontend-build
             mkdir -p frontend-build
             cp -a hospital-web/dist/. frontend-build/
-            shopt -s nullglob
-            for item in frontend-build/*; do
-              name=$(basename "$item")
-              ln -sfn "$item" "$name"
-            done
-            shopt -u nullglob
+            rm -f index.html
+            rm -rf assets
+            cp -a frontend-build/index.html ./
+            cp -a frontend-build/assets ./
 
             cat > .htaccess <<EOF
             RewriteEngine On
