@@ -1,4 +1,4 @@
-import type { ComponentProps, FormEvent } from "react"
+import { useCallback, useState, type ComponentProps, type FormEvent, type KeyboardEvent } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -13,6 +13,17 @@ type LoginFormProps = Omit<ComponentProps<"div">, "onSubmit"> & {
 }
 
 export function LoginForm({ className, onSubmit, loading = false, error, ...props }: LoginFormProps) {
+  const [showPassword, setShowPassword] = useState(false)
+  const [capsLockOn, setCapsLockOn] = useState(false)
+
+  const togglePasswordVisibility = useCallback(() => {
+    setShowPassword((prev) => !prev)
+  }, [])
+
+  const handleCapsLockState = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+    setCapsLockOn(event.getModifierState("CapsLock"))
+  }, [])
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
@@ -56,7 +67,29 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
                     Forgot your password?
                   </a>
                 </div>
-                <Input id="password" name="password" type="password" required disabled={loading} />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    disabled={loading}
+                    onKeyUp={handleCapsLockState}
+                    onKeyDown={handleCapsLockState}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute inset-y-0 right-1 my-1 flex items-center px-2 text-xs text-muted-foreground"
+                    onClick={togglePasswordVisibility}
+                    disabled={loading}
+                    aria-pressed={showPassword}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </Button>
+                </div>
+                {capsLockOn ? <p className="text-xs text-amber-500">Caps Lock is on</p> : null}
               </div>
 
               <Button type="submit" className="w-full" disabled={loading}>
