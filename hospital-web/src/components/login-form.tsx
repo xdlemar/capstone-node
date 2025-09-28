@@ -1,5 +1,5 @@
 import { AlertTriangle, Eye, EyeOff } from "lucide-react"
-import { useCallback, useState, type ComponentProps, type FormEvent, type KeyboardEvent, type FocusEvent } from "react"
+import { useCallback, useState, type ComponentProps, type FormEvent, type KeyboardEvent } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -27,10 +27,6 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
 
   const handlePasswordBlur = useCallback(() => {
     setCapsLockOn(false)
-  }, [])
-
-  const handlePasswordFocus = useCallback((event: FocusEvent<HTMLInputElement>) => {
-    setCapsLockOn(event.getModifierState("CapsLock"))
   }, [])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -83,17 +79,16 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
                     type={showPassword ? "text" : "password"}
                     required
                     disabled={loading}
-                    className="pr-12"
+                    className="pr-11"
                     onKeyUp={handleCapsLockState}
                     onKeyDown={handleCapsLockState}
-                    onFocus={handlePasswordFocus}
                     onBlur={handlePasswordBlur}
                   />
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="absolute inset-y-0 right-1 my-1 flex items-center justify-center px-2 text-muted-foreground"
+                    className="absolute inset-y-0 right-2 flex h-9 w-9 items-center justify-center text-muted-foreground"
                     onClick={togglePasswordVisibility}
                     disabled={loading}
                     aria-pressed={showPassword}
@@ -115,12 +110,23 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
               </Button>
 
               <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
-                <span className="bg-card text-muted-foreground relative z-10 px-2">Or continue with</span>
+                <span className="bg-card text-muted-foreground relative z-10 px-2">Or</span>
               </div>
 
               <div>
-                <Button variant="outline" type="button" className="w-full" disabled={loading}>
-                  G <span className="sr-only">Continue with Google</span>
+                <Button
+                  variant="outline"
+                  type="button"
+                  className="flex w-full items-center justify-center gap-2 border-muted-foreground/30 bg-card/80 text-sm font-medium text-muted-foreground transition hover:bg-card"
+                  disabled={loading}
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path
+                      d="M21.35 11.1H12v2.9h5.35c-.23 1.37-1.5 4.02-5.35 4.02-3.22 0-5.85-2.67-5.85-5.97s2.63-5.97 5.85-5.97c1.83 0 3.07.77 3.77 1.43l2.58-2.5C16.59 3.82 14.53 3 12 3 6.98 3 3 6.92 3 12s3.98 9 9 9c5.2 0 8.63-3.67 8.63-8.84 0-.59-.06-1.04-.16-1.46Z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                  Continue with Google
                 </Button>
               </div>
             </div>
