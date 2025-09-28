@@ -158,7 +158,7 @@ jobs:
 
             cat > .htaccess <<EOF
             RewriteEngine On
-            RewriteRule ^api/(.*)$ http://127.0.0.1:$GATEWAY_PORT/api/$1 [P,L]
+            RewriteRule ^api/(.*)$ http://127.0.0.1:$GATEWAY_PORT/api/\$1 [P,L]
             RewriteCond %{REQUEST_FILENAME} !-f
             RewriteCond %{REQUEST_FILENAME} !-d
             RewriteRule . index.html [L]
