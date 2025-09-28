@@ -1,45 +1,51 @@
-﻿name: ci
+name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  NODE_VERSION: 20
+  DB_USER: postgres
+  DB_PASS: ${{ secrets.CI_DB_PASSWORD || 'Masterpogi09?' }}
+  POSTGRES_HOST: 127.0.0.1
+  POSTGRES_PORT: 5432
+  JWT_SECRET: super_secret_dev
+  JWT_EXPIRES: 8h
+  AUTH_URL: http://127.0.0.1:4000
+  INVENTORY_URL: http://127.0.0.1:4001
+  PROCUREMENT_URL: http://127.0.0.1:4002
+  PLT_URL: http://127.0.0.1:4005
+  DTRS_URL: http://127.0.0.1:4006
+  ALMS_URL: http://127.0.0.1:4007
+  GATEWAY_URL: http://127.0.0.1:8080
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
-    env:
-      NODE_ENV: test
-      DB_USER: postgres
-      DB_PASS: "Masterpogi09?"
-      DB_PASS_URL: "Masterpogi09%3F"
-      DB_HOST: localhost
-      DB_PORT: 5432
-
-      INVENTORY_URL:   http://localhost:4001
-      PROCUREMENT_URL: http://localhost:4002
-      AUTH_URL:        http://localhost:4000
-      PLT_URL:         http://localhost:4005
-      DTRS_URL:        http://localhost:4006
-      ALMS_URL:        http://localhost:4007
-      GATEWAY_URL:     http://localhost:8080
-
-      JWT_SECRET: super_secret_dev
-      JWT_EXPIRES: 8h
-
     services:
       postgres:
         image: postgres:16
+        ports:
+          - 5432:5432
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: "Masterpogi09?"
-        ports: [ "5432:5432" ]
+          POSTGRES_USER: ${{ env.DB_USER }}
+          POSTGRES_PASSWORD: ${{ env.DB_PASS }}
         options: >-
           --health-cmd="pg_isready -U postgres"
           --health-interval=5s
@@ -53,88 +59,84 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            inventory-svc/package-lock.json
-            procurement-svc/package-lock.json
-            auth-svc/package-lock.json
-            gateway/package-lock.json
-            plt-svc/package-lock.json
-            dtrs-svc/package-lock.json
-            alms-svc/package-lock.json
-            hospital-web/package-lock.json
+            **/package-lock.json
+
+      - name: Encode database password for URLs
+        run: |
+          echo "DB_PASS_URL=$(node -pe 'encodeURIComponent(process.env.DB_PASS)')" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: |
           set -euo pipefail
           npm ci
-          npm --prefix inventory-svc ci
-          npm --prefix procurement-svc ci
-          npm --prefix auth-svc ci
-          npm --prefix gateway ci
-          npm --prefix plt-svc ci
-          npm --prefix dtrs-svc ci
-          npm --prefix alms-svc ci
-          npm --prefix hospital-web ci
-
-      # 🔧 NEW: Clean BOM characters from env files
-      - name: Fix BOM in env files
-        run: |
-          find tests -type f -name "*.env*" -exec sed -i '1s/^\xEF\xBB\xBF//' {} \;
+          mapfile -t apps <<'LIST'
+          inventory-svc
+          procurement-svc
+          auth-svc
+          gateway
+          plt-svc
+          dtrs-svc
+          alms-svc
+          hospital-web
+          LIST
+          for app in "${apps[@]}"; do
+            npm ci --prefix "$app"
+          done
 
       - name: Build hospital web
         run: npm --prefix hospital-web run build
 
       - name: Validate service package.json files
         run: |
-          set -euxo pipefail
-          node -e "
-            const fs = require('fs');
-            const svcs = ['inventory-svc','procurement-svc','auth-svc','plt-svc','dtrs-svc','alms-svc'];
-            let bad = false;
-            for (const s of svcs) {
-              const p = s + '/package.json';
-              if (!fs.existsSync(p)) {
-                console.error('MISSING', p);
-                bad = true;
-                continue;
-              }
-              try {
-                JSON.parse(fs.readFileSync(p, 'utf8'));
-                console.log('OK', p);
-              } catch (e) {
-                console.error('INVALID JSON', p, e.message);
-                console.error('--- content preview (first 800 chars) ---\\n', fs.readFileSync(p,'utf8').slice(0,800));
-                bad = true;
-              }
+          node <<'NODE'
+          const fs = require('fs');
+          const services = ['inventory-svc','procurement-svc','auth-svc','plt-svc','dtrs-svc','alms-svc','gateway','hospital-web'];
+          let bad = false;
+          for (const svc of services) {
+            const path = `${svc}/package.json`;
+            if (!fs.existsSync(path)) {
+              console.error('Missing', path);
+              bad = true;
+              continue;
             }
-            if (bad) process.exit(1);
-          "
+            try {
+              JSON.parse(fs.readFileSync(path, 'utf8'));
+              console.log('OK', path);
+            } catch (err) {
+              console.error('Invalid JSON in', path, err.message);
+              bad = true;
+            }
+          }
+          if (bad) process.exit(1);
+          NODE
 
-      - name: Generate Prisma clients (per-service)
+      - name: Generate Prisma clients
         run: |
-          set -euxo pipefail
-          SERVICES=(inventory-svc procurement-svc auth-svc plt-svc dtrs-svc alms-svc)
-          for svcdir in "${SERVICES[@]}"; do
-            svc=$(echo "$svcdir" | sed 's/-svc$//')
-            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/${svc}_db?schema=public"
-            echo "---- Generating prisma client for ${svc} (cwd=${svcdir}) ----"
-            (cd "$svcdir" && npx prisma generate)
+          set -euo pipefail
+          services=(inventory-svc procurement-svc auth-svc plt-svc dtrs-svc alms-svc)
+          for svc in "${services[@]}"; do
+            db="${svc%-svc}"
+            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/${db}_db?schema=public"
+            (cd "$svc" && npx prisma generate)
           done
+          unset DATABASE_URL
 
       - name: Create logical databases
         run: |
           set -euo pipefail
-          for db in inventory_db procurement_db auth_db plt_db dtrs_db alms_db; do
-            PGPASSWORD="${DB_PASS}" psql -h "${DB_HOST}" -U "${DB_USER}" -p "${DB_PORT}" -d postgres -c "CREATE DATABASE \"${db}\";" || true
+          dbs=(inventory_db procurement_db auth_db plt_db dtrs_db alms_db)
+          for db in "${dbs[@]}"; do
+            PGPASSWORD="${DB_PASS}" psql -h "${POSTGRES_HOST}" -U "${DB_USER}" -p "${POSTGRES_PORT}" -d postgres -c "CREATE DATABASE \"${db}\";" 2>/dev/null || true
           done
 
       - name: Apply database migrations
         run: |
           set -euo pipefail
-          declare -A SCHEMAS=(
+          declare -A schemas=(
             [inventory]=inventory-svc/prisma/schema.prisma
             [procurement]=procurement-svc/prisma/schema.prisma
             [auth]=auth-svc/prisma/schema.prisma
@@ -142,19 +144,54 @@ jobs:
             [dtrs]=dtrs-svc/prisma/schema.prisma
             [alms]=alms-svc/prisma/schema.prisma
           )
-          for svc in "${!SCHEMAS[@]}"; do
-            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${DB_HOST}:${DB_PORT}/${svc}_db?schema=public"
-            echo "Running migrations for ${svc}" \
-              && npx prisma migrate deploy --schema="${SCHEMAS[$svc]}"
+          for svc in "${!schemas[@]}"; do
+            export DATABASE_URL="postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/${svc}_db?schema=public"
+            schema_path="${schemas[$svc]}"
+            dir="${schema_path%%/prisma/*}"
+            (cd "$dir" && npx prisma migrate deploy --schema="${schema_path#${dir}/}")
           done
+          unset DATABASE_URL
 
-      - name: Start service stack
+      - name: Configure test environment files
+        run: |
+          cat > tests/.env.test <<EOF
+          GATEWAY_URL=${GATEWAY_URL}
+          JWT_SECRET=${JWT_SECRET}
+          ITEM_ID=1
+          FROM_LOC_ID=1
+          TO_LOC_ID=2
+          DATABASE_URL=postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/inventory_db?schema=public
+          EOF
+
+          cat > env.stack.test <<EOF
+          NODE_ENV=test
+          JWT_SECRET=${JWT_SECRET}
+          JWT_EXPIRES=${JWT_EXPIRES}
+
+          AUTH_URL=${AUTH_URL}
+          INVENTORY_URL=${INVENTORY_URL}
+          PROCUREMENT_URL=${PROCUREMENT_URL}
+          PLT_URL=${PLT_URL}
+          DTRS_URL=${DTRS_URL}
+          ALMS_URL=${ALMS_URL}
+          GATEWAY_URL=${GATEWAY_URL}
+
+          AUTH_DATABASE_URL=postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/auth_db?schema=public
+          INVENTORY_DATABASE_URL=postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/inventory_db?schema=public
+          PROCUREMENT_DATABASE_URL=postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/procurement_db?schema=public
+          PLT_DATABASE_URL=postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/plt_db?schema=public
+          DTRS_DATABASE_URL=postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/dtrs_db?schema=public
+          ALMS_DATABASE_URL=postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/alms_db?schema=public
+          EOF
+
+      - name: Launch service stack
         run: |
           set -euo pipefail
           nohup npm run start:ci > stack.log 2>&1 &
           echo $! > stack.pid
-          sleep 5
-          npm run wait:ci
+
+      - name: Wait for service readiness
+        run: npm run wait:ci
 
       - name: Seed reference data
         run: node tests/seedInventory.js
@@ -175,11 +212,17 @@ jobs:
         if: always()
         run: |
           if [ -f stack.pid ]; then
-            kill $(cat stack.pid) || true
+            kill $(cat stack.pid) 2>/dev/null || true
           fi
-          pkill node || true
+          pkill node 2>/dev/null || true
 
-      - name: Upload stack log on failure
+      - name: Print stack log on failure
+        if: failure()
+        run: |
+          echo '---- stack.log ----'
+          cat stack.log || true
+
+      - name: Upload stack log artifact
         if: failure()
         uses: actions/upload-artifact@v4
         with:

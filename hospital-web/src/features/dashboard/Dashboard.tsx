@@ -10,28 +10,11 @@ export default function DashboardPage() {
       <section className="rounded-lg border bg-card p-4 shadow-sm">
         <h1 className="text-2xl font-semibold">Welcome back{user ? `, user ${user.id}` : ""}</h1>
         <p className="text-muted-foreground">
-          Current access: {roles.length ? roles.join(" • ") : "No roles assigned"}
+          Current access: {roles.length ? roles.join(" ï¿½ ") : "No roles assigned"}
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>Low stock</CardTitle>
-          </CardHeader>
-          <CardContent>Coming soon...</CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Open PR / PO</CardTitle>
-          </CardHeader>
-          <CardContent>Coming soon...</CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Deliveries today</CardTitle>
-          </CardHeader>
-          <CardContent>Coming soon...</CardContent>
-        </Card>
+      
       </div>
     </div>
   );

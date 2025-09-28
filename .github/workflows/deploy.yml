@@ -1,157 +1,177 @@
-﻿name: deploy
+name: Deploy
 
 on:
   workflow_run:
-    workflows: ["ci"]
-    types: [completed]
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Checkout (for metadata only)
+      - name: Checkout (metadata only)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Roll out to server
         uses: appleboy/ssh-action@v1.0.0
+        env:
+          APP_DIR: /home/log1.health-ease-hospital.com/public_html
+          REPO_URL: https://github.com/xdlemar/capstone-node.git
+          GIT_REF: ${{ github.event.workflow_run.head_branch }}
+          GIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_EXPIRES: ${{ secrets.JWT_EXPIRES }}
+          AUTH_DB_URL: ${{ secrets.AUTH_DB_URL }}
+          INVENTORY_DB_URL: ${{ secrets.INVENTORY_DB_URL }}
+          PROCUREMENT_DB_URL: ${{ secrets.PROCUREMENT_DB_URL }}
+          PLT_DB_URL: ${{ secrets.PLT_DB_URL }}
+          DTRS_DB_URL: ${{ secrets.DTRS_DB_URL }}
+          ALMS_DB_URL: ${{ secrets.ALMS_DB_URL }}
+          AUTH_CORS_ORIGIN: ${{ secrets.AUTH_CORS_ORIGIN }}
+          WEB_API_BASE_URL: ${{ secrets.WEB_API_BASE_URL }}
+          GATEWAY_PORT: 8080
+          AUTH_PORT: 4000
+          INVENTORY_PORT: 4001
+          PROCUREMENT_PORT: 4002
+          PLT_PORT: 4005
+          DTRS_PORT: 4006
+          ALMS_PORT: 4007
+          SSH_PORT: ${{ secrets.SERVER_PORT}}
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_KEY }}
-          port: 2298
+          port: ${{ env.SSH_PORT }}
           script_stop: true
+          envs: APP_DIR,REPO_URL,GIT_REF,GIT_SHA,JWT_SECRET,JWT_EXPIRES,AUTH_DB_URL,INVENTORY_DB_URL,PROCUREMENT_DB_URL,PLT_DB_URL,DTRS_DB_URL,ALMS_DB_URL,AUTH_CORS_ORIGIN,WEB_API_BASE_URL,GATEWAY_PORT,AUTH_PORT,INVENTORY_PORT,PROCUREMENT_PORT,PLT_PORT,DTRS_PORT,ALMS_PORT
           script: |
             set -euo pipefail
 
-            APP_DIR="/home/log1.health-ease-hospital.com/public_html"
-            REPO_URL="https://github.com/xdlemar/capstone-node.git"
-            BRANCH="main"
-
-            echo "==> Ensure application directory"
             mkdir -p "$APP_DIR"
             cd "$APP_DIR"
+
             git config --global --add safe.directory "$APP_DIR"
 
-            if [ -d .git ]; then
-              echo "==> Fetch latest commit"
-              git fetch origin "$BRANCH"
-              git reset --hard "origin/${BRANCH}"
-            else
-              echo "==> Clone repository"
-              git clone "$REPO_URL" .
-              git checkout "$BRANCH"
+            if [ ! -d .git ]; then
+              git clone --branch "$GIT_REF" --depth 1 "$REPO_URL" .
             fi
 
-            echo "==> Install dependencies"
+            git fetch origin "$GIT_REF"
+            git checkout "$GIT_REF"
+            git reset --hard "$GIT_SHA"
+            git clean -fdx
+
             npm ci
-            npm --prefix inventory-svc ci
-            npm --prefix procurement-svc ci
-            npm --prefix auth-svc ci
-            npm --prefix gateway ci
-            npm --prefix plt-svc ci
-            npm --prefix dtrs-svc ci
-            npm --prefix alms-svc ci
-            npm --prefix hospital-web ci
-
-            echo "==> Write service environment files"
-            cat <<EOF > gateway/.env
-            PORT=8080
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-            AUTH_URL=http://127.0.0.1:4000
-            INVENTORY_URL=http://127.0.0.1:4001
-            PROCUREMENT_URL=http://127.0.0.1:4002
-            PLT_URL=http://127.0.0.1:4005
-            DTRS_URL=http://127.0.0.1:4006
-            ALMS_URL=http://127.0.0.1:4007
-            EOF
-
-            cat <<EOF > auth-svc/.env
-            PORT=4000
-            DATABASE_URL=${{ secrets.AUTH_DB_URL }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-            CORS_ORIGIN=${{ secrets.AUTH_CORS_ORIGIN }}
-            EOF
-
-            cat <<EOF > inventory-svc/.env
-            PORT=4001
-            DATABASE_URL=${{ secrets.INVENTORY_DB_URL }}
-            ALERT_EXPIRY_DAYS=30
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-            EOF
-
-            cat <<EOF > procurement-svc/.env
-            PORT=4002
-            DATABASE_URL=${{ secrets.PROCUREMENT_DB_URL }}
-            INVENTORY_URL=http://127.0.0.1:4001
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-            EOF
-
-            cat <<EOF > plt-svc/.env
-            PORT=4005
-            DATABASE_URL=${{ secrets.PLT_DB_URL }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-            EOF
-
-            cat <<EOF > dtrs-svc/.env
-            PORT=4006
-            DATABASE_URL=${{ secrets.DTRS_DB_URL }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-            EOF
-
-            cat <<EOF > alms-svc/.env
-            PORT=4007
-            DATABASE_URL=${{ secrets.ALMS_DB_URL }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRES=${{ secrets.JWT_EXPIRES }}
-            EOF
-
-            echo "==> Build SPA"
-            NODE_ENV=production npm --prefix hospital-web run build
-
-            echo "==> Generate Prisma clients"
-            for schema in \
-              inventory-svc/prisma/schema.prisma \
-              procurement-svc/prisma/schema.prisma \
-              auth-svc/prisma/schema.prisma \
-              plt-svc/prisma/schema.prisma \
-              dtrs-svc/prisma/schema.prisma \
-              alms-svc/prisma/schema.prisma
-            do
-              case "$schema" in
-                inventory-svc/*) export DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}" ;;
-                procurement-svc/*) export DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" ;;
-                auth-svc/*) export DATABASE_URL="${{ secrets.AUTH_DB_URL }}" ;;
-                plt-svc/*) export DATABASE_URL="${{ secrets.PLT_DB_URL }}" ;;
-                dtrs-svc/*) export DATABASE_URL="${{ secrets.DTRS_DB_URL }}" ;;
-                alms-svc/*) export DATABASE_URL="${{ secrets.ALMS_DB_URL }}" ;;
-              esac
-
-              echo "Generating client for ${schema}"
-              npx prisma generate --schema="$schema"
+            for dir in inventory-svc procurement-svc auth-svc gateway plt-svc dtrs-svc alms-svc hospital-web; do
+              npm ci --prefix "$dir"
             done
 
-            echo "==> Apply database migrations"
-            DATABASE_URL="${{ secrets.INVENTORY_DB_URL }}"   npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.PROCUREMENT_DB_URL }}" npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.AUTH_DB_URL }}"        npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.PLT_DB_URL }}"         npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.DTRS_DB_URL }}"        npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma
-            DATABASE_URL="${{ secrets.ALMS_DB_URL }}"        npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma
+            cat > gateway/.env <<EOF
+            PORT=$GATEWAY_PORT
+            JWT_SECRET=$JWT_SECRET
+            JWT_EXPIRES=$JWT_EXPIRES
+            AUTH_URL=http://127.0.0.1:$AUTH_PORT
+            INVENTORY_URL=http://127.0.0.1:$INVENTORY_PORT
+            PROCUREMENT_URL=http://127.0.0.1:$PROCUREMENT_PORT
+            PLT_URL=http://127.0.0.1:$PLT_PORT
+            DTRS_URL=http://127.0.0.1:$DTRS_PORT
+            ALMS_URL=http://127.0.0.1:$ALMS_PORT
+            EOF
 
-            echo "==> Restart services with PM2"
+            cat > auth-svc/.env <<EOF
+            PORT=$AUTH_PORT
+            DATABASE_URL=$AUTH_DB_URL
+            JWT_SECRET=$JWT_SECRET
+            JWT_EXPIRES=$JWT_EXPIRES
+            CORS_ORIGIN=${AUTH_CORS_ORIGIN:-*}
+            EOF
+
+            cat > inventory-svc/.env <<EOF
+            PORT=$INVENTORY_PORT
+            DATABASE_URL=$INVENTORY_DB_URL
+            ALERT_EXPIRY_DAYS=30
+            JWT_SECRET=$JWT_SECRET
+            JWT_EXPIRES=$JWT_EXPIRES
+            EOF
+
+            cat > procurement-svc/.env <<EOF
+            PORT=$PROCUREMENT_PORT
+            DATABASE_URL=$PROCUREMENT_DB_URL
+            INVENTORY_URL=http://127.0.0.1:$INVENTORY_PORT
+            JWT_SECRET=$JWT_SECRET
+            JWT_EXPIRES=$JWT_EXPIRES
+            EOF
+
+            cat > plt-svc/.env <<EOF
+            PORT=$PLT_PORT
+            DATABASE_URL=$PLT_DB_URL
+            JWT_SECRET=$JWT_SECRET
+            JWT_EXPIRES=$JWT_EXPIRES
+            EOF
+
+            cat > dtrs-svc/.env <<EOF
+            PORT=$DTRS_PORT
+            DATABASE_URL=$DTRS_DB_URL
+            JWT_SECRET=$JWT_SECRET
+            JWT_EXPIRES=$JWT_EXPIRES
+            EOF
+
+            cat > alms-svc/.env <<EOF
+            PORT=$ALMS_PORT
+            DATABASE_URL=$ALMS_DB_URL
+            JWT_SECRET=$JWT_SECRET
+            JWT_EXPIRES=$JWT_EXPIRES
+            EOF
+
+            if [ -n "${WEB_API_BASE_URL:-}" ]; then
+              cat > hospital-web/.env.production <<EOF
+            VITE_API_BASE_URL=$WEB_API_BASE_URL
+            EOF
+            fi
+
+            NODE_ENV=production npm --prefix hospital-web run build
+
+            services=(inventory-svc procurement-svc auth-svc plt-svc dtrs-svc alms-svc)
+            for svc in "${services[@]}"; do
+              case "$svc" in
+                inventory-svc) db_url="$INVENTORY_DB_URL" ;;
+                procurement-svc) db_url="$PROCUREMENT_DB_URL" ;;
+                auth-svc) db_url="$AUTH_DB_URL" ;;
+                plt-svc) db_url="$PLT_DB_URL" ;;
+                dtrs-svc) db_url="$DTRS_DB_URL" ;;
+                alms-svc) db_url="$ALMS_DB_URL" ;;
+              esac
+              (
+                cd "$svc"
+                DATABASE_URL="$db_url" npx prisma generate
+                DATABASE_URL="$db_url" npx prisma migrate deploy
+              )
+            done
+
+            npm prune --omit=dev
+            for dir in inventory-svc procurement-svc auth-svc gateway plt-svc dtrs-svc alms-svc hospital-web; do
+              npm prune --prefix "$dir" --omit=dev || true
+            done
+
             if command -v pm2 >/dev/null 2>&1; then
-              pm2 startOrReload ecosystem.config.js --update-env || true
+              pm2 startOrReload ecosystem.config.js --update-env
               pm2 save || true
               pm2 status
             else
-              echo "PM2 not found; skipping restart"
+              echo "PM2 not installed on remote host; skipping restart"
             fi
