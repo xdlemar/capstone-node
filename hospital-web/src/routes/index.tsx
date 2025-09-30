@@ -1,4 +1,4 @@
-import { Navigate, Outlet, createBrowserRouter } from "react-router-dom";
+﻿import { Navigate, Outlet, createBrowserRouter } from "react-router-dom";
 
 import AppLayout from "@/components/layout/AppLayout";
 import Dashboard from "@/features/dashboard/Dashboard";
@@ -9,12 +9,24 @@ import ProcurementPurchaseOrdersPage from "@/features/procurement/ProcurementPur
 import ProcurementReceivingPage from "@/features/procurement/ProcurementReceivingPage";
 import ProcurementApprovalsPage from "@/features/procurement/ProcurementApprovalsPage";
 import ProcurementVendorsPage from "@/features/procurement/ProcurementVendorsPage";
+import ProcurementInsightsPage from "@/features/procurement/ProcurementInsightsPage";
 import InventoryOverview from "@/features/inventory/InventoryOverview";
 import StockControlPage from "@/features/inventory/StockControlPage";
 import CycleCountPage from "@/features/inventory/CycleCountPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
+import AssetsPage from "@/features/alms/AssetsPage";
+import WorkOrdersPage from "@/features/alms/WorkOrdersPage";
+import SchedulesPage from "@/features/alms/SchedulesPage";
+import AlmsAlertsPage from "@/features/alms/AlertsPage";
+import FinancialPage from "@/features/alms/FinancialPage";
 import PltOverview from "@/features/plt/PltOverview";
+import DeliveriesPage from "@/features/plt/DeliveriesPage";
+import ProjectsPage from "@/features/plt/ProjectsPage";
+import LogisticsAlertsPage from "@/features/plt/AlertsPage";
+import RoutesPage from "@/features/plt/RoutesPage";
 import DtrsOverview from "@/features/dtrs/DtrsOverview";
+import DocumentsPage from "@/features/dtrs/DocumentsPage";
+import MissingDocumentsPage from "@/features/dtrs/MissingDocumentsPage";
 import AdminOverview from "@/features/admin/AdminOverview";
 import ProtectedRoute from "@/routes/protected";
 import { RoleGate } from "@/routes/role-gate";
@@ -90,25 +102,103 @@ export const router = createBrowserRouter([
             path: "alms",
             element: (
               <RoleGate allowed={STAFF_SET}>
-                <AlmsOverview />
+                <Outlet />
               </RoleGate>
             ),
+            children: [
+              { index: true, element: <Navigate to="assets" replace /> },
+              { path: "assets", element: <AssetsPage /> },
+              { path: "work-orders", element: <WorkOrdersPage /> },
+              {
+                path: "schedules",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <SchedulesPage />
+                  </RoleGate>
+                ),
+              },
+              {
+                path: "alerts",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <AlmsAlertsPage />
+                  </RoleGate>
+                ),
+              },
+              {
+                path: "financial",
+                element: (
+                  <RoleGate allowed={ADMIN_SET}>
+                    <FinancialPage />
+                  </RoleGate>
+                ),
+              },
+              { path: "overview", element: <AlmsOverview /> },
+            ],
           },
           {
             path: "plt",
             element: (
-              <RoleGate allowed={MANAGER_SET}>
-                <PltOverview />
+              <RoleGate allowed={STAFF_SET}>
+                <Outlet />
               </RoleGate>
             ),
+            children: [
+              { index: true, element: <Navigate to="deliveries" replace /> },
+              {
+                path: "deliveries",
+                element: (
+                  <RoleGate allowed={STAFF_SET}>
+                    <DeliveriesPage />
+                  </RoleGate>
+                ),
+              },
+              {
+                path: "projects",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <ProjectsPage />
+                  </RoleGate>
+                ),
+              },
+              {
+                path: "alerts",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <LogisticsAlertsPage />
+                  </RoleGate>
+                ),
+              },
+              {
+                path: "routes",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <RoutesPage />
+                  </RoleGate>
+                ),
+              },
+              { path: "overview", element: <PltOverview /> },
+            ],
           },
           {
             path: "dtrs",
             element: (
-              <RoleGate allowed={MANAGER_SET}>
-                <DtrsOverview />
+              <RoleGate allowed={STAFF_SET}>
+                <Outlet />
               </RoleGate>
             ),
+            children: [
+              { index: true, element: <DtrsOverview /> },
+              { path: "documents", element: <DocumentsPage /> },
+              {
+                path: "missing",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <MissingDocumentsPage />
+                  </RoleGate>
+                ),
+              },
+            ],
           },
           {
             path: "admin",
@@ -123,6 +213,10 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
+
+
+
+
 
 
 

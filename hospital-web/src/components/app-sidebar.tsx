@@ -35,6 +35,7 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
       { title: "Receiving", url: "/procurement/receiving", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Approvals", url: "/procurement/approvals", roles: ["MANAGER", "ADMIN"] },
       { title: "Vendors", url: "/procurement/vendors", roles: ["ADMIN"] },
+      { title: "Insights", url: "/procurement/insights", roles: ["MANAGER", "ADMIN"] },
     ],
   },
   {
@@ -54,26 +55,35 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     icon: Stethoscope,
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
-      { title: "Assets", url: "/alms", roles: ["STAFF", "MANAGER", "ADMIN"] },
-      { title: "Schedules", url: "/alms", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Asset register", url: "/alms/assets", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Work orders", url: "/alms/work-orders", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Maintenance schedule", url: "/alms/schedules", roles: ["MANAGER", "ADMIN"] },
+      { title: "Alerts", url: "/alms/alerts", roles: ["MANAGER", "ADMIN"] },
+      { title: "Financials", url: "/alms/financial", roles: ["ADMIN"] },
     ],
   },
   {
     title: "Project logistics",
     url: "/plt",
     icon: Truck,
-    roles: ["MANAGER", "ADMIN"],
+    roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
-      { title: "Deliveries", url: "/plt", roles: ["MANAGER", "ADMIN"] },
-      { title: "Routes", url: "/plt", roles: ["MANAGER", "ADMIN"] },
+      { title: "Deliveries", url: "/plt/deliveries", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Projects", url: "/plt/projects", roles: ["MANAGER", "ADMIN"] },
+      { title: "Alerts", url: "/plt/alerts", roles: ["MANAGER", "ADMIN"] },
+      { title: "Routes", url: "/plt/routes", roles: ["MANAGER", "ADMIN"] },
     ],
   },
   {
     title: "Document hub",
     url: "/dtrs",
     icon: FileText,
-    roles: ["MANAGER", "ADMIN"],
-    items: [{ title: "Records", url: "/dtrs", roles: ["MANAGER", "ADMIN"] }],
+    roles: ["STAFF", "MANAGER", "ADMIN"],
+    items: [
+      { title: "Workspace", url: "/dtrs", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Upload", url: "/dtrs/documents", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Missing docs", url: "/dtrs/missing", roles: ["MANAGER", "ADMIN"] }
+    ],
   },
   {
     title: "Administration",
@@ -112,4 +122,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     </Sidebar>
   );
 }
+
+
+
 
