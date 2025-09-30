@@ -1,8 +1,9 @@
-import { Building2 } from "lucide-react";
+﻿import { Building2 } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { VendorPerformanceTable, VendorUpsertCard } from "./components/ProcurementForms";
+import { ProcurementInsightsPanel } from "./components/ProcurementInsights";
 
 export default function ProcurementVendorsPage() {
   return (
@@ -23,6 +24,7 @@ export default function ProcurementVendorsPage() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="space-y-6">
           <VendorUpsertCard />
+          <ProcurementInsightsPanel />
         </div>
         <aside className="space-y-6">
           <Card className="border-border/60">
@@ -48,3 +50,4 @@ export default function ProcurementVendorsPage() {
     </section>
   );
 }
+

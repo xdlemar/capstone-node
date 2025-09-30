@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
 require("dotenv").config();
@@ -9,6 +9,7 @@ const rcv = require("./routes/receipts");
 const att = require("./routes/attachments");
 const lookups = require("./routes/lookups");
 const dashboard = require("./routes/dashboard");
+const insights = require("./routes/insights");
 const ven = require("./routes/vendors");
 const { authRequired, requireRole } = require("./auth");
 
@@ -32,7 +33,9 @@ app.use(rcv);
 app.use(att);
 app.use("/lookups", lookups);
 app.use(dashboard);
+app.use(insights);
 app.use(ven);
 
 const port = Number(process.env.PORT || 4002);
 app.listen(port, () => console.log(`procurement-svc on http://localhost:${port}`));
+

@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 const prisma = require("../prisma");
 const { authRequired, requireRole } = require("../auth");
@@ -14,7 +14,7 @@ router.get("/summary", async (_req, res) => {
     const sevenDaysAgo = new Date(now);
     sevenDaysAgo.setDate(now.getDate() - 7);
 
-    const [totalDocuments, recentUploads, awaitingSignatures, recentDocs] = await Promise.all([
+    const [totalDocuments, recentUploads, awaitingSignatures, recentDocs, incompleteDocuments] = await Promise.all([
       prisma.document.count(),
       prisma.document.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
       prisma.docSignature.count({ where: { storageKey: null } }),
@@ -28,6 +28,26 @@ router.get("/summary", async (_req, res) => {
           createdAt: true,
         },
       }),
+      prisma.document.findMany({
+        where: {
+          OR: [
+            { signatures: { some: { storageKey: null } } },
+            { versions: { some: { storageKey: { startsWith: "placeholder:" } } } },
+          ],
+        },
+        select: {
+          id: true,
+          title: true,
+          module: true,
+          createdAt: true,
+          signatures: {
+            where: { storageKey: null },
+            select: { id: true, method: true, signedAt: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
     ]);
 
     res.json({
@@ -39,6 +59,17 @@ router.get("/summary", async (_req, res) => {
         title: doc.title,
         module: doc.module,
         createdAt: doc.createdAt,
+      })),
+      incompleteDocuments: incompleteDocuments.map((doc) => ({
+        id: doc.id.toString(),
+        title: doc.title,
+        module: doc.module,
+        createdAt: doc.createdAt,
+        pendingSignatures: doc.signatures.map((sig) => ({
+          id: sig.id.toString(),
+          method: sig.method,
+          signedAt: sig.signedAt,
+        })),
       })),
     });
   } catch (err) {
