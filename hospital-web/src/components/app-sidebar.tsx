@@ -23,7 +23,6 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     url: "/dashboard",
     icon: LayoutDashboard,
     roles: ["STAFF", "MANAGER", "ADMIN"],
-    items: [{ title: "Overview", url: "/dashboard" }],
   },
   {
     title: "Procurement",
@@ -113,3 +112,4 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     </Sidebar>
   );
 }
+
