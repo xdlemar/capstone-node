@@ -19,5 +19,7 @@ app.use(managerAccess);
 app.use('/projects', require('./routes/projects'));
 app.use('/deliveries', require('./routes/deliveries'));
 app.use('/alerts', require('./routes/alerts'));
+app.use('/dashboard', require('./routes/dashboard'));
 
 module.exports = app;
+

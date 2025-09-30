@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowUpRight,
   BadgeCheck,
   Boxes,
@@ -25,144 +26,176 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { useDashboardData } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
 
-const ROLE_LABEL: Record<string, string> = {
-  STAFF: "Staff",
-  MANAGER: "Manager",
-  ADMIN: "Administrator",
+const numberFormatter = new Intl.NumberFormat("en-US");
+
+const CTA_ROLES = {
+  inventory: ["STAFF", "MANAGER", "ADMIN"],
+  requisitions: ["STAFF", "MANAGER", "ADMIN"],
+  approvals: ["MANAGER", "ADMIN"],
+  admin: ["ADMIN"],
 };
 
-const KPI_CARDS = [
-  {
-    title: "Open purchase requests",
-    value: "14",
-    change: "+5.2%",
-    helper: "vs last week",
-    icon: ClipboardList,
-    accent: "from-orange-500/20 via-orange-500/10 to-transparent text-orange-700",
-    roles: ["STAFF", "MANAGER", "ADMIN"],
-  },
-  {
-    title: "Inventory alerts",
-    value: "8",
-    change: "3 new",
-    helper: "expiring in 30 days",
-    icon: Boxes,
-    accent: "from-rose-500/20 via-rose-500/10 to-transparent text-rose-700",
-    roles: ["MANAGER", "ADMIN"],
-  },
-  {
-    title: "Scheduled maintenance",
-    value: "22",
-    change: "92% on track",
-    helper: "asset lifecycle",
-    icon: Stethoscope,
-    accent: "from-sky-500/20 via-sky-500/10 to-transparent text-sky-700",
-    roles: ["STAFF", "MANAGER", "ADMIN"],
-  },
-  {
-    title: "Pending approvals",
-    value: "5",
-    change: "needs review",
-    helper: "procurement & logistics",
-    icon: BadgeCheck,
-    accent: "from-amber-400/25 via-amber-400/10 to-transparent text-amber-700",
-    roles: ["MANAGER", "ADMIN"],
-  },
-  {
-    title: "Documents uploaded",
-    value: "32",
-    change: "+12 this week",
-    helper: "compliance hub",
-    icon: FileText,
-    accent: "from-emerald-500/20 via-emerald-500/10 to-transparent text-emerald-700",
-    roles: ["MANAGER", "ADMIN"],
-  },
-  {
-    title: "Team on duty",
-    value: "18",
-    change: "4 new users",
-    helper: "active across services",
-    icon: Users2,
-    accent: "from-indigo-500/20 via-indigo-500/10 to-transparent text-indigo-700",
-    roles: ["ADMIN"],
-  },
-] as const;
-
-const QUICK_LINKS = [
-  {
-    title: "Procurement workspace",
-    description: "Track requisitions, orders and receipts",
-    href: "/procurement/requisitions",
-    icon: ClipboardCheck,
-    roles: ["STAFF", "MANAGER", "ADMIN"],
-  },
-  {
-    title: "Inventory insights",
-    description: "Review stock movements and cycle counts",
-    href: "/inventory/stock-levels",
-    icon: Layers,
-    roles: ["STAFF", "MANAGER", "ADMIN"],
-  },
-  {
-    title: "Asset maintenance",
-    description: "Check upcoming work orders and alerts",
-    href: "/alms",
-    icon: Factory,
-    roles: ["STAFF", "MANAGER", "ADMIN"],
-  },
-  {
-    title: "Logistics routes",
-    description: "Monitor deliveries and ETAs",
-    href: "/plt",
-    icon: Truck,
-    roles: ["MANAGER", "ADMIN"],
-  },
-  {
-    title: "Document library",
-    description: "Access compliance and regulatory files",
-    href: "/dtrs",
-    icon: FileText,
-    roles: ["MANAGER", "ADMIN"],
-  },
-  {
-    title: "User administration",
-    description: "Invite staff and manage access levels",
-    href: "/admin",
-    icon: ShieldAlert,
-    roles: ["ADMIN"],
-  },
-] as const;
-
-const INVENTORY_SERIES = [68, 72, 75, 78, 74, 81, 85];
-const ALERT_FEED = [
-  {
-    title: "Sterile gloves (MED-019)",
-    detail: "14 days until reorder threshold",
-    status: "warning",
-  },
-  {
-    title: "CT Scanner scheduled service",
-    detail: "Maintenance due in 3 days",
-    status: "info",
-  },
-  {
-    title: "Vendor SLA review",
-    detail: "2 contracts expiring this month",
-    status: "critical",
-  },
-];
+function formatCount(value?: number, fallback = "0") {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return fallback;
+  }
+  return numberFormatter.format(value);
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const roles = user?.roles ?? [];
-  const roleSet = new Set(roles);
-  const roleDisplay = roles.length ? roles.map((role) => ROLE_LABEL[role] ?? role).join(" ? ") : "No roles assigned";
+  const { data, isLoading } = useDashboardData();
 
-  const visibleKpis = KPI_CARDS.filter((card) => card.roles.some((role) => roleSet.has(role)));
-  const shortcuts = QUICK_LINKS.filter((link) => link.roles.some((role) => roleSet.has(role)));
+  const roleSet = new Set(user?.roles ?? []);
+
+  const procurement = data?.procurement;
+  const inventory = data?.inventory;
+  const assets = data?.assets;
+  const logistics = data?.logistics;
+  const documents = data?.documents;
+  const usersSummary = data?.users;
+
+  const heroActions = [
+    roleSetHas(roleSet, CTA_ROLES.inventory) && (
+      <Button
+        key="inventory"
+        asChild
+        variant="secondary"
+        className="bg-white/15 text-white hover:bg-white/25"
+      >
+        <Link to="/inventory/stock-levels">
+          View inventory
+          <ArrowUpRight className="ml-2 size-4" />
+        </Link>
+      </Button>
+    ),
+    roleSetHas(roleSet, CTA_ROLES.requisitions) && (
+      <Button key="requisition" asChild variant="secondary" className="bg-white text-slate-900 hover:bg-white/90">
+        <Link to="/procurement/requisitions">
+          Create requisition
+          <ArrowUpRight className="ml-2 size-4" />
+        </Link>
+      </Button>
+    ),
+    roleSetHas(roleSet, CTA_ROLES.approvals) && (
+      <Button key="approvals" asChild variant="outline" className="border-white/40 text-white hover:bg-white/10">
+        <Link to="/procurement/approvals">
+          Review approvals
+          <ArrowUpRight className="ml-2 size-4" />
+        </Link>
+      </Button>
+    ),
+  ].filter(Boolean);
+
+  const kpiCards = [
+    {
+      title: "Open purchase requests",
+      value: formatCount(procurement?.openRequests),
+      change: `${formatCount(procurement?.pendingApprovals)} pending approval`,
+      helper: "Procurement pipeline",
+      icon: ClipboardList,
+      roles: ["STAFF", "MANAGER", "ADMIN"],
+    },
+    {
+      title: "Inventory alerts",
+      value: formatCount((inventory?.lowStock ?? 0) + (inventory?.expiringSoon ?? 0)),
+      change: `${formatCount(inventory?.expiringBatches)} batches expiring soon`,
+      helper: "Covers low stock & expiries",
+      icon: Boxes,
+      roles: ["MANAGER", "ADMIN"],
+    },
+    {
+      title: "Scheduled maintenance",
+      value: formatCount(assets?.maintenanceDueSoon),
+      change: `${formatCount(assets?.openWorkOrders)} work orders in progress`,
+      helper: "Asset lifecycle",
+      icon: Stethoscope,
+      roles: ["STAFF", "MANAGER", "ADMIN"],
+    },
+    {
+      title: "Pending approvals",
+      value: formatCount(procurement?.pendingApprovals),
+      change: `${formatCount(procurement?.openPurchaseOrders)} open purchase orders`,
+      helper: "Review & release",
+      icon: BadgeCheck,
+      roles: ["MANAGER", "ADMIN"],
+    },
+    {
+      title: "Documents uploaded",
+      value: formatCount(documents?.recentUploads),
+      change: `${formatCount(documents?.awaitingSignatures)} awaiting signature`,
+      helper: "Compliance hub",
+      icon: FileText,
+      roles: ["MANAGER", "ADMIN"],
+    },
+    {
+      title: "Team on duty",
+      value: formatCount(usersSummary?.activeUsers),
+      change: `+${formatCount(usersSummary?.newThisWeek)} this week`,
+      helper: "User access",
+      icon: Users2,
+      roles: ["ADMIN"],
+    },
+  ];
+
+  const operationsSeries =
+    inventory?.movementsSeries?.length === 7 ? inventory.movementsSeries : new Array(7).fill(0);
+
+  const inventoryAlerts = (inventory?.alerts ?? []).map((alert) => ({
+    id: alert.id,
+    title: alert.title,
+    detail: alert.detail,
+    type: alert.type === "EXPIRY" ? "warning" : "info",
+  }));
+
+  const assetAlerts = (assets?.alerts ?? []).map((alert) => ({
+    id: alert.id,
+    title: "Maintenance alert",
+    detail: alert.message,
+    type: alert.type === "OVERDUE_MAINTENANCE" ? "critical" : "warning",
+  }));
+
+  const logisticsAlerts = (logistics?.alerts ?? []).map((alert) => ({
+    id: alert.id,
+    title: alert.delivery?.trackingNo ? `Delivery ${alert.delivery.trackingNo}` : "Delivery alert",
+    detail: alert.message,
+    type: alert.type === "ETA_MISSED" ? "critical" : "warning",
+  }));
+
+  const liveAlerts = [...inventoryAlerts, ...assetAlerts, ...logisticsAlerts].slice(0, 5);
+
+  const checklist = [
+    {
+      title: "Review requisitions needing approval",
+      detail: `${formatCount(procurement?.pendingApprovals)} awaiting approval`,
+    },
+    {
+      title: "Confirm inbound deliveries",
+      detail: `${formatCount(logistics?.deliveriesInTransit)} routes in transit`,
+    },
+    {
+      title: "Share weekly compliance digest",
+      detail: `${formatCount(documents?.recentUploads)} new files this week`,
+    },
+  ];
+
+  if (isLoading && !data) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-52 w-full rounded-3xl" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, idx) => (
+            <Skeleton key={idx} className="h-40 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -180,57 +213,44 @@ export default function DashboardPage() {
               Stay ahead of requisitions, inventory health, deliveries, and compliance from a single command dashboard.
             </p>
             <div className="flex flex-wrap items-center gap-2 text-sm text-white/80">
-              <span className="rounded-full bg-white/10 px-3 py-1">Access: {roleDisplay}</span>
-              <Separator orientation="vertical" className="hidden h-4 bg-white/20 lg:block" />
               <span className="rounded-full bg-white/10 px-3 py-1">System uptime: 99.98%</span>
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button asChild variant="secondary" className="bg-white/15 text-white hover:bg-white/25">
-              <Link to="/inventory/stock-levels">
-                View inventory
-                <ArrowUpRight className="ml-2 size-4" />
-              </Link>
-            </Button>
-            <Button asChild variant="secondary" className="bg-white text-slate-900 hover:bg-white/90">
-              <Link to="/procurement/requisitions">
-                Create requisition
-                <ArrowUpRight className="ml-2 size-4" />
-              </Link>
-            </Button>
-          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">{heroActions}</div>
         </div>
       </section>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {visibleKpis.map((card) => {
-          const Icon = card.icon;
-          return (
-            <Card key={card.title} className="border-none bg-background/60 shadow-sm">
-              <CardHeader className="flex flex-row items-start justify-between">
-                <div>
-                  <CardTitle className="text-base text-muted-foreground">{card.title}</CardTitle>
-                  <CardDescription className="text-3xl font-semibold text-foreground">
-                    {card.value}
-                  </CardDescription>
-                </div>
-                <div className={cn("rounded-full p-2 shadow-sm", `bg-gradient-to-br ${card.accent}`)}>
-                  <Icon className="size-5" />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Badge variant="outline" className="w-fit border-dashed text-xs text-muted-foreground">
-                  {card.change}
-                </Badge>
-                <p className="text-sm text-muted-foreground">{card.helper}</p>
-              </CardContent>
-            </Card>
-          );
-        })}
+        {kpiCards
+          .filter((card) => card.roles.some((role) => roleSet.has(role)))
+          .map((card) => {
+            const Icon = card.icon;
+            return (
+              <Card key={card.title} className="border bg-card shadow-md transition-shadow hover:shadow-lg">
+                <CardHeader className="flex flex-row items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base text-muted-foreground">{card.title}</CardTitle>
+                    <CardDescription className="text-3xl font-semibold text-foreground">
+                      {card.value}
+                    </CardDescription>
+                  </div>
+                  <div className="rounded-full bg-primary/10 p-2 text-primary shadow-sm">
+                    <Icon className="size-5" />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Badge variant="outline" className="w-fit border-dashed text-xs text-muted-foreground">
+                    {card.change}
+                  </Badge>
+                  <p className="text-sm text-muted-foreground">{card.helper}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
-        <Card className="border-none bg-card/60 shadow-sm">
+        <Card className="border bg-card shadow-md">
           <CardHeader className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <div>
@@ -244,11 +264,11 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex h-28 items-end gap-2">
-              {INVENTORY_SERIES.map((value, index) => (
+              {operationsSeries.map((value, index) => (
                 <div key={index} className="flex-1">
                   <div
                     className="rounded-t-full bg-gradient-to-t from-primary/60 via-primary/40 to-primary/20"
-                    style={{ height: `${value}%` }}
+                    style={{ height: `${Math.min(100, Math.round(value))}%` }}
                     aria-hidden
                   />
                 </div>
@@ -256,42 +276,51 @@ export default function DashboardPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <p className="text-sm text-muted-foreground">Inventory turnover</p>
-                <p className="text-lg font-semibold">4.6 days</p>
+                <p className="text-sm text-muted-foreground">Cycle counts open</p>
+                <p className="text-lg font-semibold">{formatCount(inventory?.openCounts)}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">On-time deliveries</p>
-                <p className="text-lg font-semibold text-emerald-600">96%</p>
+                <p className="text-sm text-muted-foreground">Deliveries in transit</p>
+                <p className="text-lg font-semibold text-emerald-600">{formatCount(logistics?.deliveriesInTransit)}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Critical stockouts</p>
-                <p className="text-lg font-semibold text-rose-600">0 events</p>
+                <p className="text-sm text-muted-foreground">Delayed deliveries</p>
+                <p className="text-lg font-semibold text-rose-600">{formatCount(logistics?.delayedDeliveries)}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-none bg-card/60 shadow-sm">
+        <Card className="border bg-card shadow-md">
           <CardHeader>
             <CardTitle>Live alerts</CardTitle>
             <CardDescription>Highlights that need follow-up</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {ALERT_FEED.map((alert) => (
-              <div key={alert.title} className="rounded-lg border bg-muted/40 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-foreground">{alert.title}</p>
-                  <Badge
-                    variant={alert.status === "critical" ? "destructive" : "secondary"}
-                    className={cn(
-                      alert.status === "warning" && "border-amber-200 bg-amber-100 text-amber-800",
-                      alert.status === "info" && "border-sky-200 bg-sky-100 text-sky-700"
-                    )}
-                  >
-                    {alert.status === "critical" ? "Critical" : alert.status === "warning" ? "Warning" : "Info"}
-                  </Badge>
+            {liveAlerts.length === 0 && (
+              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                No critical alerts at the moment.
+              </div>
+            )}
+            {liveAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={cn(
+                  "rounded-lg border bg-muted/40 p-3 shadow-sm",
+                  alert.type === "critical" && "border-destructive/40 bg-destructive/10",
+                  alert.type === "warning" && "border-amber-200 bg-amber-50",
+                  alert.type === "info" && "border-sky-200 bg-sky-50"
+                )}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-primary/10 p-2 text-primary">
+                    <AlertTriangle className="size-4" />
+                  </span>
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">{alert.title}</p>
+                    <p className="text-sm text-muted-foreground">{alert.detail}</p>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground">{alert.detail}</p>
               </div>
             ))}
           </CardContent>
@@ -307,58 +336,91 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border-none bg-card/60 shadow-sm lg:col-span-2">
+        <Card className="border bg-card shadow-md lg:col-span-2">
           <CardHeader>
             <CardTitle>Quick workspaces</CardTitle>
             <CardDescription>Jump to the modules you use most often</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
-            {shortcuts.map((link) => {
-              const Icon = link.icon;
-              return (
-                <Link
-                  key={link.title}
-                  to={link.href}
-                  className="group rounded-xl border bg-muted/30 p-4 transition-colors hover:border-primary/40 hover:bg-primary/5"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="rounded-lg bg-primary/10 p-2 text-primary">
-                      <Icon className="size-4" />
-                    </span>
-                    <div>
-                      <p className="font-medium text-foreground group-hover:text-primary">{link.title}</p>
-                      <p className="text-sm text-muted-foreground">{link.description}</p>
+            {[
+              {
+                title: "Procurement workspace",
+                description: `${formatCount(procurement?.openRequests)} open requests in review`,
+                href: "/procurement/requisitions",
+                icon: ClipboardCheck,
+                roles: ["STAFF", "MANAGER", "ADMIN"],
+              },
+              {
+                title: "Inventory insights",
+                description: `${formatCount(inventory?.lowStock)} low stock alerts`,
+                href: "/inventory/stock-levels",
+                icon: Layers,
+                roles: ["STAFF", "MANAGER", "ADMIN"],
+              },
+              {
+                title: "Asset maintenance",
+                description: `${formatCount(assets?.openWorkOrders)} work orders scheduled`,
+                href: "/alms",
+                icon: Factory,
+                roles: ["STAFF", "MANAGER", "ADMIN"],
+              },
+              {
+                title: "Logistics routes",
+                description: `${formatCount(logistics?.deliveriesInTransit)} routes in transit`,
+                href: "/plt",
+                icon: Truck,
+                roles: ["MANAGER", "ADMIN"],
+              },
+              {
+                title: "Document library",
+                description: `${formatCount(documents?.totalDocuments)} files stored`,
+                href: "/dtrs",
+                icon: FileText,
+                roles: ["MANAGER", "ADMIN"],
+              },
+              {
+                title: "User administration",
+                description: `${formatCount(usersSummary?.totalUsers)} registered users`,
+                href: "/admin",
+                icon: ShieldAlert,
+                roles: ["ADMIN"],
+              },
+            ]
+              .filter((link) => roleSetHas(roleSet, link.roles))
+              .map((link) => {
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.title}
+                    to={link.href}
+                    className="group rounded-xl border bg-muted/40 p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="rounded-lg bg-primary/10 p-2 text-primary">
+                        <Icon className="size-4" />
+                      </span>
+                      <div>
+                        <p className="font-medium text-foreground group-hover:text-primary">{link.title}</p>
+                        <p className="text-sm text-muted-foreground">{link.description}</p>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              );
-            })}
-            {!shortcuts.length && (
-              <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                You do not have access to any operational modules yet.
-              </p>
-            )}
+                  </Link>
+                );
+              })}
           </CardContent>
         </Card>
 
-        <Card className="border-none bg-card/60 shadow-sm">
+        <Card className="border bg-card shadow-md">
           <CardHeader>
             <CardTitle>Today's checklist</CardTitle>
-            <CardDescription>Suggested follow-ups generated from recent activity</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="rounded-lg border border-dashed p-3">
-              <p className="font-medium text-foreground">Review requisitions needing approval</p>
-              <p className="text-sm text-muted-foreground">Managers & admins - 5 items pending</p>
-            </div>
-            <div className="rounded-lg border border-dashed p-3">
-              <p className="font-medium text-foreground">Confirm inbound deliveries</p>
-              <p className="text-sm text-muted-foreground">Logistics team - 3 routes arriving today</p>
-            </div>
-            <div className="rounded-lg border border-dashed p-3">
-              <p className="font-medium text-foreground">Share weekly compliance digest</p>
-              <p className="text-sm text-muted-foreground">Document hub - Auto-generated summary ready</p>
-            </div>
+            {checklist.map((item) => (
+              <div key={item.title} className="rounded-lg border border-dashed p-3 shadow-sm">
+                <p className="font-medium text-foreground">{item.title}</p>
+                <p className="text-sm text-muted-foreground">{item.detail}</p>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>
@@ -366,4 +428,6 @@ export default function DashboardPage() {
   );
 }
 
-
+function roleSetHas(roleSet: Set<string>, allowed: string[]) {
+  return allowed.some((role) => roleSet.has(role));
+}

@@ -16,5 +16,7 @@ app.get("/health", (_req, res) => res.json({ ok: true, svc: "dtrs" }));
 app.use(authRequired);
 app.use(managerAccess);
 app.use("/documents", require("./routes/documents"));
+app.use("/dashboard", require("./routes/dashboard"));
 
 module.exports = app;
+

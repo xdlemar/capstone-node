@@ -1,0 +1,130 @@
+import { useQuery } from "@tanstack/react-query";
+
+import { api } from "@/lib/api";
+
+export type ProcurementSummary = {
+  openRequests: number;
+  pendingApprovals: number;
+  openPurchaseOrders: number;
+  receiptsThisWeek: number;
+};
+
+export type InventorySummary = {
+  lowStock: number;
+  expiringSoon: number;
+  expiringBatches: number;
+  openCounts: number;
+  movementsSeries: number[];
+  alerts: Array<{
+    id: string;
+    title: string;
+    detail: string;
+    type: string;
+    createdAt: string;
+  }>;
+};
+
+export type AssetSummary = {
+  activeAssets: number;
+  openWorkOrders: number;
+  maintenanceDueSoon: number;
+  alertsOpen: number;
+  alerts: Array<{
+    id: string;
+    message: string;
+    triggeredAt: string;
+    type: string;
+  }>;
+};
+
+export type LogisticsSummary = {
+  activeProjects: number;
+  deliveriesInTransit: number;
+  delayedDeliveries: number;
+  alertsOpen: number;
+  alerts: Array<{
+    id: string;
+    message: string;
+    type: string;
+    triggeredAt: string;
+    delivery: {
+      id: string;
+      trackingNo: string | null;
+      status: string | null;
+    } | null;
+  }>;
+};
+
+export type DocumentSummary = {
+  totalDocuments: number;
+  recentUploads: number;
+  awaitingSignatures: number;
+  recentDocs: Array<{
+    id: string;
+    title: string;
+    module: string;
+    createdAt: string;
+  }>;
+};
+
+export type AuthSummary = {
+  totalUsers: number;
+  activeUsers: number;
+  adminUsers: number;
+  newThisWeek: number;
+};
+
+export type DashboardData = {
+  procurement?: ProcurementSummary;
+  inventory?: InventorySummary;
+  assets?: AssetSummary;
+  logistics?: LogisticsSummary;
+  documents?: DocumentSummary;
+  users?: AuthSummary;
+};
+
+const SUMMARY_ENDPOINTS: Array<{
+  key: keyof DashboardData;
+  url: string;
+}> = [
+  { key: "procurement", url: "/procurement/dashboard/summary" },
+  { key: "inventory", url: "/inventory/dashboard/summary" },
+  { key: "assets", url: "/alms/dashboard/summary" },
+  { key: "logistics", url: "/plt/dashboard/summary" },
+  { key: "documents", url: "/dtrs/dashboard/summary" },
+  { key: "users", url: "/auth/dashboard/summary" },
+];
+
+async function fetchDashboard(): Promise<DashboardData> {
+  const settled = await Promise.allSettled(
+    SUMMARY_ENDPOINTS.map((entry) =>
+      api
+        .get(entry.url)
+        .then((res) => ({ key: entry.key, data: res.data }))
+        .catch((err) => {
+          // Ignore authorization or availability errors, but log them for visibility.
+          if (err?.response?.status !== 403) {
+            console.warn(`[dashboard] failed to load ${entry.url}`, err?.response?.status || err.message);
+          }
+          return null;
+        })
+    )
+  );
+
+  return settled.reduce<DashboardData>((acc, result) => {
+    if (result.status === "fulfilled" && result.value) {
+      acc[result.value.key] = result.value.data;
+    }
+    return acc;
+  }, {});
+}
+
+export function useDashboardData() {
+  return useQuery({
+    queryKey: ["dashboard", "overview"],
+    queryFn: fetchDashboard,
+    refetchInterval: 60_000,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
