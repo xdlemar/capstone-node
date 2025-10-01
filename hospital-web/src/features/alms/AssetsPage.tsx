@@ -14,8 +14,7 @@ export default function AssetsPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Asset registry</h1>
         <p className="text-muted-foreground max-w-3xl">
-          Browse tagged equipment, track warranty and location details, and launch maintenance or transfer actions. This
-          screen will render the live asset dataset once the API hook is wired in.
+          Browse tagged equipment, track warranty and location details, and launch maintenance or transfer actions. 
         </p>
       </header>
 

@@ -1,4 +1,4 @@
-﻿import { Navigate, Outlet, createBrowserRouter } from "react-router-dom";
+import { Navigate, Outlet, createBrowserRouter } from "react-router-dom";
 
 import AppLayout from "@/components/layout/AppLayout";
 import Dashboard from "@/features/dashboard/Dashboard";
@@ -64,6 +64,14 @@ export const router = createBrowserRouter([
                 element: (
                   <RoleGate allowed={MANAGER_SET}>
                     <ProcurementApprovalsPage />
+                  </RoleGate>
+                ),
+              },
+              {
+                path: "insights",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <ProcurementInsightsPage />
                   </RoleGate>
                 ),
               },

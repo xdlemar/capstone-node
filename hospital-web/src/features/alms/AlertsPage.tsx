@@ -1,7 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AlmsAlertsPage() {
   return (
@@ -16,7 +16,7 @@ export default function AlmsAlertsPage() {
       <Card className="border bg-card shadow-sm">
         <CardHeader>
           <CardTitle>Alerts queue</CardTitle>
-          <CardDescription>Dynamic feed to be populated from the /alms/alerts endpoint.</CardDescription>
+      
         </CardHeader>
         <CardContent className="space-y-3">
           <Alert>

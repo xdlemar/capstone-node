@@ -8,8 +8,7 @@ export default function WorkOrdersPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Maintenance work orders</h1>
         <p className="text-muted-foreground max-w-3xl">
-          Track upcoming and in-progress maintenance tasks. We will hydrate this board with the actual work-order feed when
-          we connect the hooks to <code>/alms/workorders</code>.
+          Track upcoming and in-progress maintenance tasks
         </p>
       </header>
 

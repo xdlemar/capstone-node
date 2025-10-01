@@ -1,7 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function MissingDocumentsPage() {
@@ -17,7 +17,7 @@ export default function MissingDocumentsPage() {
       <Card className="border bg-card shadow-sm">
         <CardHeader>
           <CardTitle>Missing documents report</CardTitle>
-          <CardDescription>Data sourced from /dtrs/dashboard/summary once wired.</CardDescription>
+         
         </CardHeader>
         <CardContent className="space-y-3">
           <Alert>

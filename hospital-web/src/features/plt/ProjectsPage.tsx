@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function ProjectsPage() {
@@ -14,7 +14,7 @@ export default function ProjectsPage() {
       <Card className="border bg-card shadow-sm">
         <CardHeader>
           <CardTitle>Projects list</CardTitle>
-          <CardDescription>Coming soon: sortable table powered by /plt/projects.</CardDescription>
+        
         </CardHeader>
         <CardContent>
           <Skeleton className="h-40" />

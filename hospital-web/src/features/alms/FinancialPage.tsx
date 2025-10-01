@@ -15,7 +15,7 @@ export default function FinancialPage() {
         <Card className="border bg-card shadow-sm">
           <CardHeader>
             <CardTitle>Depreciation summary</CardTitle>
-            <CardDescription>Values sourced from /alms/financial soon.</CardDescription>
+            
           </CardHeader>
           <CardContent>
             <Skeleton className="h-32" />

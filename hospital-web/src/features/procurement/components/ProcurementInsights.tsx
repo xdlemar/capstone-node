@@ -1,4 +1,4 @@
-﻿import { TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -6,7 +6,7 @@ import { useInventoryLookups } from "@/hooks/useInventoryLookups";
 import { useProcurementInsights } from "@/hooks/useProcurementInsights";
 import { cn } from "@/lib/utils";
 
-function Money({ value }: { value: number }) {
+function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
 }
 
@@ -61,7 +61,7 @@ export function ProcurementInsightsPanel({ className }: { className?: string }) 
                         On-time {vendor.onTimePercentage ?? "-"}% &bull; Lead time {vendor.avgLeadTimeDays ?? "-"} days
                       </p>
                     </div>
-                    <span className="text-sm font-semibold">{Money(vendor.totalSpend)}</span>
+                    <span className="text-sm font-semibold">{formatMoney(vendor.totalSpend)}</span>
                   </li>
                 ))}
               </ul>
@@ -90,7 +90,7 @@ export function ProcurementInsightsPanel({ className }: { className?: string }) 
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">{label}</p>
                       <div className="mt-2 flex items-center justify-between text-sm">
-                        <span>Avg price {Money(leader.bestVendor.avgPrice)}</span>
+                        <span>Avg price {formatMoney(leader.bestVendor.avgPrice)}</span>
                         <span className="inline-flex items-center gap-1 text-emerald-600">
                           <TrendingUp className="h-4 w-4" />
                           {leader.savingsPercent}% savings vs avg

@@ -24,7 +24,7 @@ export default function DocumentsPage() {
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-1">
             <CardTitle>Upload new document</CardTitle>
-            <CardDescription>The upload dialog will appear here once wired to the DTRS API.</CardDescription>
+            
           </div>
           <div className="flex w-full max-w-md gap-2">
             <Input placeholder="Document title" />
