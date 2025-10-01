@@ -21,7 +21,7 @@ Run this from the repository root whenever you need a fresh token:
 node -e "console.log(require('jsonwebtoken').sign({ sub: 'student1', roles: ['ADMIN','MANAGER','STAFF'] }, 'super_secret_dev'))"
 ```
 
-Store the resulting token in `localStorage` (key `token`) or paste it into `VITE_DEV_BEARER` inside `.env.local` and read it in your auth bootstrap.
+Store the resulting token via the login form or, for quick smoke tests, set it in `sessionStorage` under the key `token` using your browser devtools. Any legacy `localStorage` token is migrated automatically on load.
 
 ## 3. Start the stack
 
@@ -33,7 +33,7 @@ You should now be able to hit health routes like `/api/plt/health` or work with 
 
 ## 4. Notes
 
-- The Axios client automatically sends the bearer token stored in `localStorage` under the `token` key.
+- The Axios client automatically injects the bearer token stored in `sessionStorage` under the `token` key.
 - Adjust roles in the generated token to simulate manager/staff access as required by the backlog scenarios.
 - If you change backend ports, update `VITE_API_BASE_URL` accordingly.
 - Seeded accounts from `auth-svc`: `admin@hospital.local` / `ChangeMe123!`, `manager@hospital.local` / `ManageMe123!`, `staff@hospital.local` / `StaffMe123!`.
