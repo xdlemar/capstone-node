@@ -30,7 +30,7 @@ jobs:
       - name: Roll out to server
         uses: appleboy/ssh-action@v1.0.0
         env:
-          APP_DIR: /home/log1.health-ease-hospital.com/public_html/api
+          APP_DIR: /home/log1.health-ease-hospital.com/public_html
           REPO_URL: https://github.com/xdlemar/capstone-node.git
           GIT_REF: ${{ github.event.workflow_run.head_branch }}
           GIT_SHA: ${{ github.event.workflow_run.head_sha }}
