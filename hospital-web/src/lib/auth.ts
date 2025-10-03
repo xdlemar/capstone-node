@@ -10,7 +10,6 @@ type DecodedUser = {
   id: string;
   roles: string[];
 };
-
 const STORAGE_KEY = "token";
 let inMemoryToken: string | null = null;
 let migratedLegacyStorage = false;
