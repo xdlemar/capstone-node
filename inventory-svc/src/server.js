@@ -48,7 +48,7 @@ app.use("/counts", counts);
 app.use("/inspection", inspection);
 app.use("/notifications", managerAccess, notifications);
 app.use("/reorder-suggestions", managerAccess, reorder);
-app.use("/items", adminOnly, items);
+app.use("/items", managerAccess, items);
 app.use("/locations", adminOnly, locations);
 app.use("/batches", managerAccess, batches);
 app.use("/reports", managerAccess, reports);
@@ -58,4 +58,3 @@ app.use("/dashboard", dashboard);
 
 const port = Number(process.env.PORT || 4001);
 app.listen(port, () => console.log(`inventory-svc on http://localhost:${port}`));
-

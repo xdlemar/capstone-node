@@ -11,8 +11,9 @@ import ProcurementApprovalsPage from "@/features/procurement/ProcurementApproval
 import ProcurementVendorsPage from "@/features/procurement/ProcurementVendorsPage";
 import ProcurementInsightsPage from "@/features/procurement/ProcurementInsightsPage";
 import InventoryOverview from "@/features/inventory/InventoryOverview";
-import StorageAreasPage from "@/features/inventory/StorageAreasPage";
 import StockControlPage from "@/features/inventory/StockControlPage";
+import StorageAreasPage from "@/features/inventory/StorageAreasPage";
+import ItemCatalogPage from "@/features/inventory/ItemCatalogPage";
 import CycleCountPage from "@/features/inventory/CycleCountPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
 import AssetsPage from "@/features/alms/AssetsPage";
@@ -97,6 +98,14 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to="stock-levels" replace /> },
               { path: "stock-levels", element: <InventoryOverview /> },
               { path: "stock-control", element: <StockControlPage /> },
+              {
+                path: "item-catalog",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <ItemCatalogPage />
+                  </RoleGate>
+                ),
+              },
               {
                 path: "storage-areas",
                 element: (
