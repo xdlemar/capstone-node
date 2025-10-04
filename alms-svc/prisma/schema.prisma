@@ -61,8 +61,8 @@ model Asset {
   repairs      RepairLog[]
   disposal     AssetDisposal?
 
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
   MaintenanceSchedule MaintenanceSchedule[]
   alerts              MaintenanceAlert[]
   financialSnapshots  AssetFinancialSnapshot[]
@@ -158,15 +158,15 @@ model AssetDisposal {
 }
 
 model MaintenanceAlert {
-  id          BigInt                @id @default(autoincrement())
+  id          BigInt               @id @default(autoincrement())
   assetId     BigInt
   scheduleId  BigInt?
   type        MaintenanceAlertType
   message     String
-  triggeredAt DateTime              @default(now())
+  triggeredAt DateTime             @default(now())
   resolvedAt  DateTime?
 
-  asset    Asset               @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  asset    Asset                @relation(fields: [assetId], references: [id], onDelete: Cascade)
   schedule MaintenanceSchedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
 
   @@index([assetId, resolvedAt])

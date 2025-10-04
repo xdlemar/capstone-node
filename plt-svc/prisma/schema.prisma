@@ -73,12 +73,12 @@ model Delivery {
 }
 
 model DeliveryAlert {
-  id         BigInt            @id @default(autoincrement())
-  deliveryId BigInt
-  type       DeliveryAlertType
-  message    String
-  triggeredAt DateTime         @default(now())
-  resolvedAt DateTime?
+  id          BigInt            @id @default(autoincrement())
+  deliveryId  BigInt
+  type        DeliveryAlertType
+  message     String
+  triggeredAt DateTime          @default(now())
+  resolvedAt  DateTime?
 
   delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
 

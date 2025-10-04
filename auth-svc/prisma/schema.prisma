@@ -8,15 +8,15 @@ datasource db {
 }
 
 model User {
-  id           BigInt  @id @default(autoincrement())
-  email        String  @unique
+  id           BigInt       @id @default(autoincrement())
+  email        String       @unique
   passwordHash String
-  isActive     Boolean @default(true)
+  isActive     Boolean      @default(true)
   docScopes    Json?
-  sessions    Session[]
-  roles       UserRole[]
-  loginAudits LoginAudit[]
-  otps        OTP[]
+  sessions     Session[]
+  roles        UserRole[]
+  loginAudits  LoginAudit[]
+  otps         OTP[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -70,6 +70,3 @@ model LoginAudit {
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
-
-
-

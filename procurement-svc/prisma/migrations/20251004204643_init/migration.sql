@@ -21,6 +21,19 @@ CREATE TABLE "public"."Vendor" (
 );
 
 -- CreateTable
+CREATE TABLE "public"."VendorMetric" (
+    "id" BIGSERIAL NOT NULL,
+    "vendorId" BIGINT NOT NULL,
+    "onTimePercentage" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "avgLeadTimeDays" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "fulfillmentRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    "totalSpend" DECIMAL(65,30) NOT NULL DEFAULT 0,
+    "lastEvaluatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "VendorMetric_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "public"."PR" (
     "id" BIGSERIAL NOT NULL,
     "prNo" TEXT NOT NULL,
@@ -51,6 +64,7 @@ CREATE TABLE "public"."PO" (
     "prId" BIGINT,
     "vendorId" BIGINT NOT NULL,
     "status" "public"."POStatus" NOT NULL DEFAULT 'OPEN',
+    "orderedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -77,6 +91,7 @@ CREATE TABLE "public"."Receipt" (
     "drNo" TEXT,
     "invoiceNo" TEXT,
     "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "arrivalDate" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -115,6 +130,9 @@ CREATE TABLE "public"."Attachment" (
 CREATE UNIQUE INDEX "Vendor_name_key" ON "public"."Vendor"("name");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "VendorMetric_vendorId_key" ON "public"."VendorMetric"("vendorId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "PR_prNo_key" ON "public"."PR"("prNo");
 
 -- CreateIndex
@@ -125,6 +143,9 @@ CREATE UNIQUE INDEX "Receipt_poId_invoiceNo_key" ON "public"."Receipt"("poId", "
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Receipt_poId_drNo_key" ON "public"."Receipt"("poId", "drNo");
+
+-- AddForeignKey
+ALTER TABLE "public"."VendorMetric" ADD CONSTRAINT "VendorMetric_vendorId_fkey" FOREIGN KEY ("vendorId") REFERENCES "public"."Vendor"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."PRLine" ADD CONSTRAINT "PRLine_prId_fkey" FOREIGN KEY ("prId") REFERENCES "public"."PR"("id") ON DELETE CASCADE ON UPDATE CASCADE;
