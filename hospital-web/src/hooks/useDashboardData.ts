@@ -111,6 +111,13 @@ export type DashboardData = {
   users?: AuthSummary;
 };
 
+export type DashboardUnavailableKey = keyof DashboardData;
+
+export type DashboardFetchResult = {
+  data: DashboardData;
+  unavailable: DashboardUnavailableKey[];
+};
+
 const SUMMARY_ENDPOINTS: Array<{
   key: keyof DashboardData;
   url: string;
@@ -123,28 +130,32 @@ const SUMMARY_ENDPOINTS: Array<{
   { key: "users", url: "/auth/dashboard/summary" },
 ];
 
-async function fetchDashboard(): Promise<DashboardData> {
+async function fetchDashboard(): Promise<DashboardFetchResult> {
+  const unavailable: DashboardUnavailableKey[] = [];
+
   const settled = await Promise.allSettled(
     SUMMARY_ENDPOINTS.map((entry) =>
       api
         .get(entry.url)
         .then((res) => ({ key: entry.key, data: res.data }))
         .catch((err) => {
-          // Ignore authorization or availability errors, but log them for visibility.
           if (err?.response?.status !== 403) {
             console.warn(`[dashboard] failed to load ${entry.url}`, err?.response?.status || err.message);
+            unavailable.push(entry.key);
           }
           return null;
         })
     )
   );
 
-  return settled.reduce<DashboardData>((acc, result) => {
+  const data = settled.reduce<DashboardData>((acc, result) => {
     if (result.status === "fulfilled" && result.value) {
       acc[result.value.key] = result.value.data;
     }
     return acc;
   }, {});
+
+  return { data, unavailable };
 }
 
 export function useDashboardData() {

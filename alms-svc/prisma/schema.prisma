@@ -43,6 +43,7 @@ enum MaintenanceAlertType {
 model Asset {
   id              BigInt      @id @default(autoincrement())
   assetCode       String      @unique
+  name            String      @default("")
   itemId          BigInt?
   serialNo        String?
   category        String?

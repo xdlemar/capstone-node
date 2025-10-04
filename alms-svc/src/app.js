@@ -18,7 +18,7 @@ app.get("/health", (_req, res) => res.json({ ok: true, svc: "alms" }));
 app.use(authRequired);
 app.use(staffAccess);
 
-app.use("/assets", adminOnly, require("./routes/assets"));
+app.use("/assets", staffAccess, require("./routes/assets"));
 app.use("/workorders", staffAccess, require("./routes/workorders"));
 app.use("/schedules", managerAccess, require("./routes/schedules"));
 app.use("/repairs", staffAccess, require("./routes/repairs"));
@@ -29,4 +29,5 @@ app.use("/dashboard", require("./routes/dashboard"));
 app.use("/financial", managerAccess, require("./routes/financial"));
 
 module.exports = app;
+
 

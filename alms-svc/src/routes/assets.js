@@ -1,18 +1,43 @@
 const router = require("express").Router();
 const { prisma } = require("../prisma");
 
+function hasManagerRights(user) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  return roles.includes("MANAGER") || roles.includes("ADMIN");
+}
+
+function ensureManager(req, res, next) {
+  if (!hasManagerRights(req.user)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  return next();
+}
 // CREATE
-router.post("/", async (req, res, next) => {
+router.post("/", ensureManager, async (req, res, next) => {
   try {
     const {
-      assetCode, itemId, serialNo, category,
-      purchaseDate, acquisitionCost, vendorId,
-      warrantyUntil, status, locationId, notes
-    } = req.body;
+      assetCode,
+      name,
+      itemId,
+      serialNo,
+      category,
+      purchaseDate,
+      acquisitionCost,
+      vendorId,
+      warrantyUntil,
+      status,
+      locationId,
+      notes,
+    } = req.body || {};
+
+    if (!assetCode || !name) {
+      return res.status(400).json({ error: "assetCode and name are required" });
+    }
 
     const row = await prisma.asset.create({
       data: {
         assetCode,
+        name,
         itemId: itemId ? BigInt(itemId) : null,
         serialNo: serialNo || null,
         category: category || null,
@@ -46,8 +71,13 @@ router.get("/", async (req, res, next) => {
 
     const [rows, total] = await Promise.all([
       prisma.asset.findMany({
-        where, orderBy: { createdAt: "desc" },
-        skip: Number(skip), take: Math.min(Number(take), 200)
+        where,
+        orderBy: [
+          { status: "asc" },
+          { name: "asc" },
+        ],
+        skip: Number(skip),
+        take: Math.min(Number(take), 200),
       }),
       prisma.asset.count({ where })
     ]);
@@ -76,19 +106,29 @@ router.get("/:id", async (req, res, next) => {
 });
 
 // UPDATE (PUT – full, PATCH – partial)
-router.put("/:id", async (req, res, next) => {
+router.put("/:id", ensureManager, async (req, res, next) => {
   try {
     const id = BigInt(req.params.id);
     const {
-      assetCode, itemId, serialNo, category,
-      purchaseDate, acquisitionCost, vendorId,
-      warrantyUntil, status, locationId, notes
-    } = req.body;
+      assetCode,
+      name,
+      itemId,
+      serialNo,
+      category,
+      purchaseDate,
+      acquisitionCost,
+      vendorId,
+      warrantyUntil,
+      status,
+      locationId,
+      notes,
+    } = req.body || {};
 
     const row = await prisma.asset.update({
       where: { id },
       data: {
         assetCode,
+        name,
         itemId: itemId != null ? BigInt(itemId) : null,
         serialNo: serialNo ?? null,
         category: category ?? null,
@@ -105,7 +145,7 @@ router.put("/:id", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-router.patch("/:id", async (req, res, next) => {
+router.patch("/:id", ensureManager, async (req, res, next) => {
   try {
     const id = BigInt(req.params.id);
     const d = {};
@@ -114,6 +154,7 @@ router.patch("/:id", async (req, res, next) => {
     const setDate = (k,v)=>{ if (v !== undefined) d[k]= (v===null? null : new Date(v)); };
 
     set("assetCode", req.body.assetCode);
+    set("name", req.body.name);
     setBig("itemId", req.body.itemId);
     set("serialNo", req.body.serialNo ?? undefined);
     set("category", req.body.category ?? undefined);
@@ -132,3 +173,7 @@ router.patch("/:id", async (req, res, next) => {
 
 // NOTE: no DELETE endpoint (use status RETIRED/DISPOSED instead)
 module.exports = router;
+
+
+
+

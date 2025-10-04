@@ -29,7 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDashboardData } from "@/hooks/useDashboardData";
+import { useDashboardData, type DashboardUnavailableKey } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -43,6 +43,15 @@ const CTA_ROLES = {
   requisitions: ["STAFF", "MANAGER", "ADMIN"],
   approvals: ["MANAGER", "ADMIN"],
   admin: ["ADMIN"],
+};
+
+const MODULE_LABELS: Record<DashboardUnavailableKey, string> = {
+  procurement: "Procurement summary",
+  inventory: "Inventory metrics",
+  assets: "Asset maintenance",
+  logistics: "Project logistics",
+  documents: "Document tracking",
+  users: "User directory",
 };
 
 function formatCurrency(value?: number | null) {
@@ -59,16 +68,19 @@ function formatCount(value?: number, fallback = "0") {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { data, isLoading } = useDashboardData();
+  const { data: dashboardResult, isLoading } = useDashboardData();
+
+  const dashboardData = dashboardResult?.data;
+  const unavailable = dashboardResult?.unavailable ?? [];
 
   const roleSet = new Set(user?.roles ?? []);
 
-  const procurement = data?.procurement;
-  const inventory = data?.inventory;
-  const assets = data?.assets;
-  const logistics = data?.logistics;
-  const documents = data?.documents;
-  const usersSummary = data?.users;
+  const procurement = dashboardData?.procurement;
+  const inventory = dashboardData?.inventory;
+  const assets = dashboardData?.assets;
+  const logistics = dashboardData?.logistics;
+  const documents = dashboardData?.documents;
+  const usersSummary = dashboardData?.users;
 
   const heroActions = [
     roleSetHas(roleSet, CTA_ROLES.inventory) && (
@@ -101,6 +113,18 @@ export default function DashboardPage() {
       </Button>
     ),
   ].filter(Boolean);
+
+  const heroActionSection = isLoading ? (
+    <div className="flex w-full flex-col gap-2 sm:flex-row">
+      {Array.from({ length: 3 }).map((_, idx) => (
+        <Skeleton key={idx} className="h-10 w-full sm:w-40 bg-white/20" />
+      ))}
+    </div>
+  ) : heroActions.length > 0 ? (
+    <div className="flex flex-col gap-2 sm:flex-row">{heroActions}</div>
+  ) : (
+    <div className="text-sm text-white/70">No quick actions available for your role yet.</div>
+  );
 
   const kpiCards = [
     {
@@ -202,7 +226,7 @@ export default function DashboardPage() {
     },
   ];
 
-  if (isLoading && !data) {
+  if (isLoading && !dashboardData) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-52 w-full rounded-3xl" />
@@ -234,9 +258,20 @@ export default function DashboardPage() {
               <span className="rounded-full bg-white/10 px-3 py-1">System uptime: 99.98%</span>
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">{heroActions}</div>
+          {heroActionSection}
         </div>
       </section>
+
+      {unavailable.length > 0 && (
+        <div className="rounded-lg border border-amber-400/60 bg-amber-50/70 px-4 py-3 shadow-sm">
+          <p className="text-sm font-semibold text-amber-900">Some summaries are temporarily unavailable:</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-800">
+            {unavailable.map((key) => (
+              <li key={key}>{MODULE_LABELS[key] ?? key}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {kpiCards
@@ -421,10 +456,10 @@ export default function DashboardPage() {
               },
               {
                 title: "Document library",
-                description: `${formatCount(documents?.totalDocuments)} files stored`,
+                description: `${formatCount(documents?.totalDocuments)} files available (role-scoped)`,
                 href: "/dtrs",
                 icon: FileText,
-                roles: ["MANAGER", "ADMIN"],
+                roles: ["STAFF", "MANAGER", "ADMIN"],
               },
               {
                 title: "User administration",
@@ -544,3 +579,5 @@ export default function DashboardPage() {
 function roleSetHas(roleSet: Set<string>, allowed: string[]) {
   return allowed.some((role) => roleSet.has(role));
 }
+
+

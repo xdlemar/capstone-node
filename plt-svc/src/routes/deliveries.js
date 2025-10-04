@@ -193,6 +193,20 @@ router.get("/", async (req, res, next) => {
           where: { resolvedAt: null },
           orderBy: { triggeredAt: "desc" },
         },
+        project: {
+          select: { id: true, code: true, name: true, status: true },
+        },
+        updates: {
+          orderBy: { occurredAt: "desc" },
+          take: 10,
+          select: {
+            id: true,
+            status: true,
+            message: true,
+            place: true,
+            occurredAt: true,
+          },
+        },
       },
     });
     res.json(rows);
@@ -203,3 +217,4 @@ router.get("/", async (req, res, next) => {
 });
 
 module.exports = router;
+

@@ -1,6 +1,17 @@
 const router = require("express").Router();
 const { prisma } = require("../prisma");
 
+function hasManagerRights(user) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  return roles.includes("MANAGER") || roles.includes("ADMIN");
+}
+
+function ensureManager(req, res, next) {
+  if (!hasManagerRights(req.user)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  return next();
+}
 const ALLOWED = {
   OPEN: ["SCHEDULED", "CANCELLED"],
   SCHEDULED: ["IN_PROGRESS", "CANCELLED"],
@@ -99,7 +110,7 @@ router.get("/:id", async (req, res, next) => {
 });
 
 // STATUS transition
-router.patch("/:id/status", async (req, res, next) => {
+router.patch("/:id/status", ensureManager, async (req, res, next) => {
   try {
     const id = toBigInt(req.params.id, "id");
     const { status, cost, technician, message } = req.body || {};
@@ -145,3 +156,5 @@ router.patch("/:id/status", async (req, res, next) => {
 });
 
 module.exports = router;
+
+
