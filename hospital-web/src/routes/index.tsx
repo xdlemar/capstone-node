@@ -11,6 +11,7 @@ import ProcurementApprovalsPage from "@/features/procurement/ProcurementApproval
 import ProcurementVendorsPage from "@/features/procurement/ProcurementVendorsPage";
 import ProcurementInsightsPage from "@/features/procurement/ProcurementInsightsPage";
 import InventoryOverview from "@/features/inventory/InventoryOverview";
+import StorageAreasPage from "@/features/inventory/StorageAreasPage";
 import StockControlPage from "@/features/inventory/StockControlPage";
 import CycleCountPage from "@/features/inventory/CycleCountPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
@@ -96,6 +97,14 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to="stock-levels" replace /> },
               { path: "stock-levels", element: <InventoryOverview /> },
               { path: "stock-control", element: <StockControlPage /> },
+              {
+                path: "storage-areas",
+                element: (
+                  <RoleGate allowed={ADMIN_SET}>
+                    <StorageAreasPage />
+                  </RoleGate>
+                ),
+              },
               {
                 path: "cycle-counts",
                 element: (
@@ -221,13 +230,3 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
-
-
-
-
-
-
-
-
-
-
