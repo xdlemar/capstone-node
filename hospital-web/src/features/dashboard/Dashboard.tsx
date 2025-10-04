@@ -97,7 +97,7 @@ export default function DashboardPage() {
       </Button>
     ),
     roleSetHas(roleSet, CTA_ROLES.requisitions) && (
-      <Button key="requisition" asChild variant="secondary" className={cn("w-full sm:w-auto justify-between", "bg-white text-slate-900 hover:bg-white/90")}>
+      <Button key="requisition" asChild variant="secondary" className={cn("w-full sm:w-auto justify-between", "bg-white/15 text-white hover:bg-white/25")}>
         <Link to="/procurement/requisitions">
           Create requisition
           <ArrowUpRight className="ml-2 size-4" />
@@ -105,7 +105,7 @@ export default function DashboardPage() {
       </Button>
     ),
     roleSetHas(roleSet, CTA_ROLES.approvals) && (
-      <Button key="approvals" asChild variant="outline" className={cn("w-full sm:w-auto justify-between", "border-white/40 text-white hover:bg-white/10")}>
+      <Button key="approvals" asChild variant="secondary" className={cn("w-full sm:w-auto justify-between", "bg-white/15 text-white hover:bg-white/25")}>
         <Link to="/procurement/approvals">
           Review approvals
           <ArrowUpRight className="ml-2 size-4" />
@@ -249,7 +249,7 @@ export default function DashboardPage() {
               Logistics Control Centre
             </Badge>
             <h1 className="text-3xl font-semibold leading-tight lg:text-4xl">
-              Welcome back{user ? `, user ${user.id}` : ""}
+              Welcome{user ? `, user ${user.id}` : ""}
             </h1>
             <p className="text-white/70">
               Stay ahead of requisitions, inventory health, deliveries, and compliance from a single command dashboard.
