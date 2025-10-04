@@ -1,60 +1,21 @@
-/*
-  Warnings:
+-- Safe rebuild of legacy logistics tables (drop optional inventory tables before creating project assets)
 
-  - You are about to drop the `bins` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `inventory_balances` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `inventory_txns` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `item_lots` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `items` table. If the table is not empty, all the data it contains will be lost.
-  - You are about to drop the `locations` table. If the table is not empty, all the data it contains will be lost.
+DO $$ BEGIN
+  EXECUTE 'DROP TABLE IF EXISTS "public"."asset_maint" CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS "public"."assets" CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS "public"."inventory_balances" CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS "public"."inventory_txns" CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS "public"."item_lots" CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS "public"."bins" CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS "public"."items" CASCADE';
+  EXECUTE 'DROP TABLE IF EXISTS "public"."locations" CASCADE';
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
 
-*/
--- CreateEnum
+DROP TYPE IF EXISTS "public"."AssetStatus";
 CREATE TYPE "public"."AssetStatus" AS ENUM ('IN_SERVICE', 'MAINTENANCE', 'RETIRED');
 
--- DropForeignKey
-ALTER TABLE "public"."bins" DROP CONSTRAINT "bins_locationId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."inventory_balances" DROP CONSTRAINT "inventory_balances_binId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."inventory_balances" DROP CONSTRAINT "inventory_balances_itemId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."inventory_balances" DROP CONSTRAINT "inventory_balances_locationId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."inventory_balances" DROP CONSTRAINT "inventory_balances_lotId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."inventory_txns" DROP CONSTRAINT "inventory_txns_itemId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."inventory_txns" DROP CONSTRAINT "inventory_txns_lotId_fkey";
-
--- DropForeignKey
-ALTER TABLE "public"."item_lots" DROP CONSTRAINT "item_lots_itemId_fkey";
-
--- DropTable
-DROP TABLE "public"."bins";
-
--- DropTable
-DROP TABLE "public"."inventory_balances";
-
--- DropTable
-DROP TABLE "public"."inventory_txns";
-
--- DropTable
-DROP TABLE "public"."item_lots";
-
--- DropTable
-DROP TABLE "public"."items";
-
--- DropTable
-DROP TABLE "public"."locations";
-
--- CreateTable
 CREATE TABLE "public"."assets" (
     "id" BIGSERIAL NOT NULL,
     "tag" TEXT NOT NULL,
@@ -67,7 +28,6 @@ CREATE TABLE "public"."assets" (
     CONSTRAINT "assets_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
 CREATE TABLE "public"."asset_maint" (
     "id" BIGSERIAL NOT NULL,
     "assetId" BIGINT NOT NULL,
@@ -80,14 +40,11 @@ CREATE TABLE "public"."asset_maint" (
     CONSTRAINT "asset_maint_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "assets_tag_key" ON "public"."assets"("tag");
+CREATE UNIQUE INDEX IF NOT EXISTS "assets_tag_key" ON "public"."assets"("tag");
+CREATE INDEX IF NOT EXISTS "assets_status_idx" ON "public"."assets"("status");
+CREATE INDEX IF NOT EXISTS "asset_maint_assetId_idx" ON "public"."asset_maint"("assetId");
 
--- CreateIndex
-CREATE INDEX "assets_status_idx" ON "public"."assets"("status");
-
--- CreateIndex
-CREATE INDEX "asset_maint_assetId_idx" ON "public"."asset_maint"("assetId");
-
--- AddForeignKey
-ALTER TABLE "public"."asset_maint" ADD CONSTRAINT "asset_maint_assetId_fkey" FOREIGN KEY ("assetId") REFERENCES "public"."assets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "public"."asset_maint"
+  ADD CONSTRAINT "asset_maint_assetId_fkey"
+  FOREIGN KEY ("assetId") REFERENCES "public"."assets"("id")
+  ON DELETE CASCADE ON UPDATE CASCADE;
