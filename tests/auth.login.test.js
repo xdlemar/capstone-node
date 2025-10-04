@@ -1,5 +1,15 @@
 require("./setup-env");
 
+const path = require("path");
+const dotenv = require("dotenv");
+
+const authEnv = dotenv.config({ path: path.join(__dirname, "..", "auth-svc", ".env") });
+const originalDbUrl = process.env.DATABASE_URL;
+if (authEnv?.parsed?.DATABASE_URL) {
+  process.env.DATABASE_URL = authEnv.parsed.DATABASE_URL;
+  process.env.AUTH_DATABASE_URL = authEnv.parsed.DATABASE_URL;
+}
+
 const request = require("supertest");
 const bcrypt = require("../auth-svc/node_modules/bcryptjs");
 
@@ -65,6 +75,11 @@ describe("POST /login", () => {
       where: { id: { in: [activeUserId, inactiveUserId].filter(Boolean) } },
     });
     await prisma.$disconnect();
+    if (originalDbUrl) {
+      process.env.DATABASE_URL = originalDbUrl;
+    } else {
+      delete process.env.DATABASE_URL;
+    }
   });
 
   test("rejects login for inactive users", async () => {
@@ -101,4 +116,5 @@ describe("POST /login", () => {
     expect(audit?.success).toBe(true);
   });
 });
+
 

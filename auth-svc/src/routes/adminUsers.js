@@ -2,6 +2,7 @@ const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { prisma } = require("../prisma");
+const { sanitizeDocScopesInput } = require("../lib/docScopes");
 
 const router = Router();
 
@@ -53,6 +54,7 @@ router.get("/users", async (_req, res) => {
       email: user.email,
       isActive: user.isActive,
       roles: user.roles.map((r) => r.role.name),
+      docScopes: user.docScopes || {},
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     }))
@@ -61,7 +63,7 @@ router.get("/users", async (_req, res) => {
 
 router.post("/users", async (req, res) => {
   try {
-    const { email, password, roles = ["STAFF"], isActive = true } = req.body || {};
+    const { email, password, roles = ["STAFF"], isActive = true, docScopes } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: "email and password are required" });
     }
@@ -71,9 +73,10 @@ router.post("/users", async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const scopes = sanitizeDocScopesInput(docScopes);
 
     const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { email, passwordHash, isActive } });
+      const user = await tx.user.create({ data: { email, passwordHash, isActive, docScopes: scopes } });
       const roleRecords = await upsertRoles(roles, tx);
       await tx.userRole.createMany({
         data: roleRecords.map((role) => ({ userId: user.id, roleId: role.id })),
@@ -92,6 +95,7 @@ router.post("/users", async (req, res) => {
       email: created.email,
       isActive: created.isActive,
       roles: created.roles.map((r) => r.role.name),
+      docScopes: created.docScopes || {},
       createdAt: created.createdAt,
       updatedAt: created.updatedAt,
     });
@@ -104,7 +108,7 @@ router.post("/users", async (req, res) => {
 router.patch("/users/:id", async (req, res) => {
   try {
     const userId = BigInt(req.params.id);
-    const { email, password, roles, isActive } = req.body || {};
+    const { email, password, roles, isActive, docScopes } = req.body || {};
 
     const updates = {};
     if (typeof email === "string" && email.length > 0) {
@@ -115,6 +119,9 @@ router.patch("/users/:id", async (req, res) => {
     }
     if (typeof password === "string" && password.length > 0) {
       updates.passwordHash = await bcrypt.hash(password, 10);
+    }
+    if (docScopes !== undefined) {
+      updates.docScopes = sanitizeDocScopesInput(docScopes);
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -142,6 +149,7 @@ router.patch("/users/:id", async (req, res) => {
       email: updated.email,
       isActive: updated.isActive,
       roles: updated.roles.map((r) => r.role.name),
+      docScopes: updated.docScopes || {},
       createdAt: updated.createdAt,
       updatedAt: updated.updatedAt,
     });
@@ -167,6 +175,7 @@ router.delete("/users/:id", async (req, res) => {
       email: user.email,
       isActive: user.isActive,
       roles: user.roles.map((r) => r.role.name),
+      docScopes: user.docScopes || {},
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     });
@@ -177,3 +186,11 @@ router.delete("/users/:id", async (req, res) => {
 });
 
 module.exports = router;
+
+
+
+
+
+
+
+

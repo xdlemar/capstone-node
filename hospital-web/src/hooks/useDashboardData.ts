@@ -24,6 +24,20 @@ export type InventorySummary = {
   }>;
 };
 
+export type AssetFinancialSummary = {
+  acquisitionValue: number;
+  bookValue: number;
+  maintenanceCost30d: number;
+  maintenanceCostYtd: number;
+  topAssetsByMaintenance: Array<{
+    assetId: string;
+    assetCode: string;
+    status: string;
+    category: string | null;
+    spendYtd: number;
+  }>;
+};
+
 export type AssetSummary = {
   activeAssets: number;
   openWorkOrders: number;
@@ -34,6 +48,19 @@ export type AssetSummary = {
     message: string;
     triggeredAt: string;
     type: string;
+  }>;
+  financials?: AssetFinancialSummary;
+};
+
+export type LogisticsCostSummary = {
+  totalDeliverySpend: number;
+  perProject: Array<{
+    projectId: string;
+    code: string;
+    name: string;
+    status: string;
+    budget: number | null;
+    deliveryCost: number;
   }>;
 };
 
@@ -53,6 +80,7 @@ export type LogisticsSummary = {
       status: string | null;
     } | null;
   }>;
+  deliveryCosts?: LogisticsCostSummary;
 };
 
 export type DocumentSummary = {
@@ -128,3 +156,4 @@ export function useDashboardData() {
     retry: false,
   });
 }
+

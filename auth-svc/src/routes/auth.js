@@ -2,16 +2,18 @@ const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const { prisma } = require("../prisma");
+const { buildDocScopes, sanitizeDocScopesInput } = require("../lib/docScopes");
 
 const router = Router();
 
 router.post("/register", async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, docScopes } = req.body || {};
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) return res.status(409).json({ error: "Email exists" });
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const u = await prisma.user.create({ data: { email, passwordHash } });
+  const initialScopes = sanitizeDocScopesInput(docScopes);
+  const u = await prisma.user.create({ data: { email, passwordHash, docScopes: initialScopes } });
 
   const staff = await prisma.role.upsert({
     where: { name: "STAFF" },
@@ -20,7 +22,7 @@ router.post("/register", async (req, res) => {
   });
   await prisma.userRole.create({ data: { userId: u.id, roleId: staff.id } });
 
-  res.status(201).json({ id: u.id, email: u.email });
+  res.status(201).json({ id: u.id, email: u.email, docScopes: initialScopes });
 });
 
 router.post("/login", async (req, res) => {
@@ -50,12 +52,17 @@ router.post("/login", async (req, res) => {
   }
 
   const roles = user.roles.map((r) => r.role.name);
-  const token = jwt.sign(
-    { sub: String(user.id), roles },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES || "8h" }
-  );
-  res.json({ access_token: token });
+  const docScopes = buildDocScopes(user, roles);
+  const payload = {
+    sub: String(user.id),
+    roles,
+    docScopes,
+  };
+  const token = jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES || "8h",
+  });
+  res.json({ access_token: token, roles, docScopes });
 });
 
 module.exports = router;
+

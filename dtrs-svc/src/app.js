@@ -10,13 +10,14 @@ app.use(morgan("dev"));
 app.set("json replacer", (_k, v) => (typeof v === "bigint" ? v.toString() : v));
 
 const managerAccess = requireRole("MANAGER", "ADMIN");
+const documentAccess = requireRole("STAFF", "MANAGER", "ADMIN");
 
 app.get("/health", (_req, res) => res.json({ ok: true, svc: "dtrs" }));
 
 app.use(authRequired);
-app.use(managerAccess);
-app.use("/documents", require("./routes/documents"));
-app.use("/dashboard", require("./routes/dashboard"));
+
+app.use("/documents", documentAccess, require("./routes/documents"));
+app.use("/dashboard", managerAccess, require("./routes/dashboard"));
 
 module.exports = app;
 

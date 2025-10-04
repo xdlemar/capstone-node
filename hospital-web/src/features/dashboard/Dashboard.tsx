@@ -13,6 +13,8 @@ import {
   Stethoscope,
   Truck,
   Users2,
+  Coins,
+  PiggyBank,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,6 +33,10 @@ import { useDashboardData } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
 
 const CTA_ROLES = {
   inventory: ["STAFF", "MANAGER", "ADMIN"],
@@ -38,6 +44,11 @@ const CTA_ROLES = {
   approvals: ["MANAGER", "ADMIN"],
   admin: ["ADMIN"],
 };
+
+function formatCurrency(value?: number | null) {
+  return currencyFormatter.format(value ?? 0);
+}
+
 
 function formatCount(value?: number, fallback = "0") {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -65,7 +76,7 @@ export default function DashboardPage() {
         key="inventory"
         asChild
         variant="secondary"
-        className="bg-white/15 text-white hover:bg-white/25"
+        className={cn("w-full sm:w-auto justify-between", "bg-white/15 text-white hover:bg-white/25")}
       >
         <Link to="/inventory/stock-levels">
           View inventory
@@ -74,7 +85,7 @@ export default function DashboardPage() {
       </Button>
     ),
     roleSetHas(roleSet, CTA_ROLES.requisitions) && (
-      <Button key="requisition" asChild variant="secondary" className="bg-white text-slate-900 hover:bg-white/90">
+      <Button key="requisition" asChild variant="secondary" className={cn("w-full sm:w-auto justify-between", "bg-white text-slate-900 hover:bg-white/90")}>
         <Link to="/procurement/requisitions">
           Create requisition
           <ArrowUpRight className="ml-2 size-4" />
@@ -82,7 +93,7 @@ export default function DashboardPage() {
       </Button>
     ),
     roleSetHas(roleSet, CTA_ROLES.approvals) && (
-      <Button key="approvals" asChild variant="outline" className="border-white/40 text-white hover:bg-white/10">
+      <Button key="approvals" asChild variant="outline" className={cn("w-full sm:w-auto justify-between", "border-white/40 text-white hover:bg-white/10")}>
         <Link to="/procurement/approvals">
           Review approvals
           <ArrowUpRight className="ml-2 size-4" />
@@ -165,6 +176,14 @@ export default function DashboardPage() {
     detail: alert.message,
     type: alert.type === "ETA_MISSED" ? "critical" : "warning",
   }));
+
+  const logisticsCostSummary = logistics?.deliveryCosts;
+  const logisticsCostProjects = logisticsCostSummary?.perProject ?? [];
+  const totalDeliverySpend = logisticsCostSummary ? logisticsCostSummary.totalDeliverySpend : 0;
+
+  const assetFinancials = assets?.financials;
+  const topMaintenanceAssets = assetFinancials?.topAssetsByMaintenance ?? [];
+
 
   const liveAlerts = [...inventoryAlerts, ...assetAlerts, ...logisticsAlerts].slice(0, 5);
 
@@ -287,6 +306,36 @@ export default function DashboardPage() {
                 <p className="text-lg font-semibold text-rose-600">{formatCount(logistics?.delayedDeliveries)}</p>
               </div>
             </div>
+            {logisticsCostProjects.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Coins className="size-4 text-primary" />
+                    <span>Top delivery spend</span>
+                  </div>
+                  <span className="font-semibold text-primary">{formatCurrency(totalDeliverySpend)}</span>
+                </div>
+                <div className="space-y-2">
+                  {logisticsCostProjects.map((project) => (
+                    <div
+                      key={project.projectId}
+                      className="flex items-center justify-between rounded-md border border-primary/10 bg-background/80 px-3 py-2 text-sm"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium text-foreground">{project.code || project.name}</span>
+                        <span className="text-xs text-muted-foreground">{project.name}</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-primary">{formatCurrency(project.deliveryCost)}</p>
+                        {project.budget ? (
+                          <p className="text-xs text-muted-foreground">Budget {formatCurrency(project.budget)}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -422,6 +471,71 @@ export default function DashboardPage() {
             ))}
           </CardContent>
         </Card>
+        {assetFinancials && (
+          <Card className="border bg-card shadow-md">
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle>Asset financials</CardTitle>
+                  <CardDescription>Book value and maintenance spend snapshot</CardDescription>
+                </div>
+                <PiggyBank className="size-5 text-primary" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Acquisition value</p>
+                  <p className="text-lg font-semibold text-primary">{formatCurrency(assetFinancials.acquisitionValue)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Book value</p>
+                  <p className="text-lg font-semibold text-primary">{formatCurrency(assetFinancials.bookValue)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Maintenance (30 days)</p>
+                  <p className="text-lg font-semibold text-emerald-600">{formatCurrency(assetFinancials.maintenanceCost30d)}</p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-muted/60 bg-muted/30 p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Maintenance spend (YTD)</p>
+                  <p className="text-lg font-semibold text-foreground">{formatCurrency(assetFinancials.maintenanceCostYtd)}</p>
+                </div>
+                <div className="rounded-md border border-muted/60 bg-muted/30 p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Spend vs acquisition</p>
+                  <p className="text-lg font-semibold text-foreground">
+                    {assetFinancials.acquisitionValue
+                      ? `${Math.round((assetFinancials.maintenanceCostYtd / assetFinancials.acquisitionValue) * 100)}%`
+                      : "0%"}
+                  </p>
+                </div>
+              </div>
+              {topMaintenanceAssets.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">Top assets by maintenance (YTD)</p>
+                  <ul className="space-y-2">
+                    {topMaintenanceAssets.map((asset) => (
+                      <li
+                        key={asset.assetId}
+                        className="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 px-3 py-2 text-sm"
+                      >
+                        <div className="flex flex-col">
+                          <span className="font-medium text-foreground">{asset.assetCode}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {asset.category ?? asset.status}
+                          </span>
+                        </div>
+                        <span className="font-semibold text-primary">{formatCurrency(asset.spendYtd)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
       </div>
     </div>
   );

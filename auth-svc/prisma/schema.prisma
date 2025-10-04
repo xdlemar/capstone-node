@@ -12,7 +12,7 @@ model User {
   email        String  @unique
   passwordHash String
   isActive     Boolean @default(true)
-
+  docScopes    Json?
   sessions    Session[]
   roles       UserRole[]
   loginAudits LoginAudit[]
@@ -70,3 +70,6 @@ model LoginAudit {
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
+
+
+
