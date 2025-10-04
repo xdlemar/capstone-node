@@ -85,12 +85,14 @@ jobs:
             PORT=$GATEWAY_PORT
             JWT_SECRET=$JWT_SECRET
             JWT_EXPIRES=$JWT_EXPIRES
-            AUTH_URL=http://23.94.230.146:$AUTH_PORT
-            INVENTORY_URL=http://23.94.230.146:$INVENTORY_PORT
-            PROCUREMENT_URL=http://23.94.230.146:$PROCUREMENT_PORT
-            PLT_URL=http://23.94.230.146:$PLT_PORT
-            DTRS_URL=http://23.94.230.146:$DTRS_PORT
-            ALMS_URL=http://23.94.230.146:$ALMS_PORT
+            AUTH_URL=http://127.0.0.1:$AUTH_PORT
+            INVENTORY_URL=http://127.0.0.1:$INVENTORY_PORT
+            PROCUREMENT_URL=http://127.0.0.1:$PROCUREMENT_PORT
+            PLT_URL=http://127.0.0.1:$PLT_PORT
+            DTRS_URL=http://127.0.0.1:$DTRS_PORT
+            ALMS_URL=http://127.0.0.1:$ALMS_PORT
+            HOST=127.0.0.1
+            CORS_ORIGIN=https://log1.health-ease-hospital.com
             EOF
 
 
@@ -113,7 +115,7 @@ jobs:
             cat > procurement-svc/.env <<EOF
             PORT=$PROCUREMENT_PORT
             DATABASE_URL="$PROCUREMENT_DB_URL"
-            INVENTORY_URL=http://23.94.230.146:$INVENTORY_PORT
+            INVENTORY_URL=http://127.0.0.1:$INVENTORY_PORT
             JWT_SECRET=$JWT_SECRET
             JWT_EXPIRES=$JWT_EXPIRES
             EOF
