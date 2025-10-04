@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { auth, type DecodedUser } from "@/lib/auth";
+import { auth, TOKEN_STORAGE_KEY, type DecodedUser } from "@/lib/auth";
 
 export type AuthContextValue = {
   user: DecodedUser | null;
@@ -18,9 +18,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setToken(auth.get());
-    setUser(auth.getUser());
-    setLoading(false);
+    const syncFromStorage = () => {
+      setToken(auth.get());
+      setUser(auth.getUser());
+      setLoading(false);
+    };
+
+    syncFromStorage();
+
+    if (typeof window === "undefined") return;
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== TOKEN_STORAGE_KEY) return;
+      syncFromStorage();
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   const login = useCallback((newToken: string) => {

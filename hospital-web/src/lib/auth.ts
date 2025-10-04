@@ -10,9 +10,10 @@ type DecodedUser = {
   id: string;
   roles: string[];
 };
+
 const STORAGE_KEY = "token";
+
 let inMemoryToken: string | null = null;
-let migratedLegacyStorage = false;
 
 function normalizeToken(raw: string | null): string | null {
   if (!raw) return null;
@@ -21,33 +22,17 @@ function normalizeToken(raw: string | null): string | null {
   return trimmed;
 }
 
-function getSessionStorage(): Storage | null {
+function getStorage(kind: "session" | "local"): Storage | null {
   if (typeof window === "undefined") return null;
   try {
-    return window.sessionStorage;
+    return kind === "local" ? window.localStorage : window.sessionStorage;
   } catch (err) {
-    console.warn("[auth] sessionStorage unavailable", err);
+    console.warn(`[auth] ${kind}Storage unavailable`, err);
     return null;
   }
 }
 
-function migrateLegacyLocalStorage(): string | null {
-  if (typeof window === "undefined" || migratedLegacyStorage) return null;
-  migratedLegacyStorage = true;
-  try {
-    const legacy = window.localStorage.getItem(STORAGE_KEY);
-    if (!legacy) return null;
-    window.localStorage.removeItem(STORAGE_KEY);
-    return normalizeToken(legacy);
-  } catch (err) {
-    console.warn("[auth] failed to access legacy localStorage", err);
-    return null;
-  }
-}
-
-function persistToken(token: string | null) {
-  inMemoryToken = token;
-  const storage = getSessionStorage();
+function writeToken(storage: Storage | null, token: string | null, kind: "session" | "local") {
   if (!storage) return;
   try {
     if (token) {
@@ -56,29 +41,44 @@ function persistToken(token: string | null) {
       storage.removeItem(STORAGE_KEY);
     }
   } catch (err) {
-    console.warn("[auth] failed to persist token", err);
+    console.warn(`[auth] failed to persist ${kind}Storage token`, err);
+  }
+}
+
+function readToken(storage: Storage | null, kind: "session" | "local"): string | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(STORAGE_KEY);
+    return normalizeToken(raw);
+  } catch (err) {
+    console.warn(`[auth] failed to read ${kind}Storage`, err);
+    return null;
+  }
+}
+
+function persistToken(token: string | null) {
+  inMemoryToken = token;
+  const storages: Array<["session" | "local", Storage | null]> = [
+    ["session", getStorage("session")],
+    ["local", getStorage("local")],
+  ];
+  for (const [kind, storage] of storages) {
+    writeToken(storage, token, kind);
   }
 }
 
 function hydrateToken(): string | null {
   if (inMemoryToken) return inMemoryToken;
 
-  const storage = getSessionStorage();
-  if (storage) {
-    try {
-      const stored = storage.getItem(STORAGE_KEY);
-      inMemoryToken = normalizeToken(stored);
-      if (inMemoryToken) {
-        return inMemoryToken;
-      }
-    } catch (err) {
-      console.warn("[auth] failed to read sessionStorage", err);
-    }
+  const sessionToken = readToken(getStorage("session"), "session");
+  if (sessionToken) {
+    inMemoryToken = sessionToken;
+    return inMemoryToken;
   }
 
-  const legacyToken = migrateLegacyLocalStorage();
-  if (legacyToken) {
-    persistToken(legacyToken);
+  const localToken = readToken(getStorage("local"), "local");
+  if (localToken) {
+    persistToken(localToken);
     return inMemoryToken;
   }
 
@@ -106,6 +106,8 @@ function buildUser(payload: TokenPayload | null): DecodedUser | null {
   const roles = Array.isArray(payload.roles) ? payload.roles : [];
   return { id: String(payload.sub), roles };
 }
+
+export const TOKEN_STORAGE_KEY = STORAGE_KEY;
 
 export const auth = {
   set(token: string) {
