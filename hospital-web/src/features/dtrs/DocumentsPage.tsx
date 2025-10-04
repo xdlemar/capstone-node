@@ -48,10 +48,10 @@ type StatusTotals = {
   pending: number;
 };
 
-enum DocumentStatus {
-  FILED = "Filed",
-  PLACEHOLDER = "Pending upload",
-}
+const DOCUMENT_STATUS = {
+  FILED: "Filed",
+  PLACEHOLDER: "Pending upload",
+} as const;
 
 const uploadSchema = z.object({
   module: z.enum(MODULE_OPTIONS, { required_error: "Select a module" }),
@@ -94,9 +94,9 @@ type DocumentRowProps = {
   onCopyKey: (key?: string | null) => void;
 };
 
-function computeStatus(storageKey?: string | null) {
-  if (!storageKey) return DocumentStatus.PLACEHOLDER;
-  return storageKey.startsWith("placeholder:") ? DocumentStatus.PLACEHOLDER : DocumentStatus.FILED;
+function computeStatus(storageKey?: string | null): typeof DOCUMENT_STATUS[keyof typeof DOCUMENT_STATUS] {
+  if (!storageKey) return DOCUMENT_STATUS.PLACEHOLDER;
+  return storageKey.startsWith("placeholder:") ? DOCUMENT_STATUS.PLACEHOLDER : DOCUMENT_STATUS.FILED;
 }
 
 function getHighestRole(roles: string[]): HighestRole {
@@ -135,7 +135,7 @@ export default function DocumentsPage() {
     const totals: StatusTotals = { all: documents.length, filed: 0, pending: 0 };
     for (const doc of documents) {
       const status = computeStatus(doc.storageKey);
-      if (status === DocumentStatus.FILED) totals.filed += 1;
+      if (status === DOCUMENT_STATUS.FILED) totals.filed += 1;
       else totals.pending += 1;
     }
     return totals;
@@ -147,8 +147,8 @@ export default function DocumentsPage() {
       rows = rows.filter((doc) => {
         const status = computeStatus(doc.storageKey);
         return statusFilter === "filed"
-          ? status === DocumentStatus.FILED
-          : status === DocumentStatus.PLACEHOLDER;
+          ? status === DOCUMENT_STATUS.FILED
+          : status === DOCUMENT_STATUS.PLACEHOLDER;
       });
     }
 
@@ -175,8 +175,8 @@ export default function DocumentsPage() {
           if (statusA === statusB) {
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           }
-          if (statusA === DocumentStatus.PLACEHOLDER) return -1;
-          if (statusB === DocumentStatus.PLACEHOLDER) return 1;
+          if (statusA === DOCUMENT_STATUS.PLACEHOLDER) return -1;
+          if (statusB === DOCUMENT_STATUS.PLACEHOLDER) return 1;
           return 0;
         }
         case "created-desc":
@@ -198,8 +198,7 @@ export default function DocumentsPage() {
   const { toast } = useToast();
 
   const awaitingSignatures = summary?.awaitingSignatures ?? 0;
-  const totalDocuments = summary?.totalDocuments ?? documents.length;
-  const recentUploads = summary?.recentUploads ?? 0;
+
 
   const handleResetFilters = () => {
     setModuleFilter("");
@@ -666,7 +665,7 @@ function DocumentRow({ doc, onCopyKey }: DocumentRowProps) {
         )}
       </TableCell>
       <TableCell className="align-top">
-        <Badge variant={status === DocumentStatus.FILED ? "secondary" : "destructive"}>{status}</Badge>
+        <Badge variant={status === DOCUMENT_STATUS.FILED ? "secondary" : "destructive"}>{status}</Badge>
       </TableCell>
       <TableCell className="align-top text-sm text-muted-foreground">{formatDate(doc.createdAt)}</TableCell>
       <TableCell className="align-top font-mono text-xs">

@@ -24,7 +24,7 @@ function formatDate(value?: string | null) {
 
 const STATUS_VARIANTS: Record<string, string> = {
   ACTIVE: "default",
-  UNDER_MAINTENANCE: "warning",
+  UNDER_MAINTENANCE: "outline",
   RETIRED: "secondary",
   DISPOSED: "destructive",
 };
@@ -246,12 +246,7 @@ export default function AssetsPage() {
               ) : (
                 filteredAssets.map((asset) => {
                   const locationName = asset.locationId ? locationMap.get(asset.locationId) ?? `Location ${asset.locationId}` : "Unassigned";
-                  const statusVariant = (STATUS_VARIANTS[asset.status] ?? "secondary") as
-                    | "default"
-                    | "secondary"
-                    | "destructive"
-                    | "outline"
-                    | "warning";
+                  const statusVariant = (STATUS_VARIANTS[asset.status] ?? "secondary") as "default" | "secondary" | "destructive" | "outline";
                   return (
                     <TableRow key={asset.id}>
                       <TableCell className="font-medium">

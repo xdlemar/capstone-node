@@ -144,6 +144,7 @@ jobs:
             if [ -n "${WEB_API_BASE_URL:-}" ]; then
               cat > hospital-web/.env.production <<EOF
             VITE_API_BASE_URL=$WEB_API_BASE_URL
+            VITE_JWT_SECRET=$JWT_SECRET
             EOF
             fi
 

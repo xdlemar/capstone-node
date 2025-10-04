@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -205,8 +205,8 @@ export function MaintenanceRequestDialog({ assets, defaultAssetId, trigger, onSu
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={mutation.isLoading || assets.length === 0}>
-                {mutation.isLoading ? "Submitting..." : "Submit request"}
+              <Button type="submit" disabled={mutation.isPending || assets.length === 0}>
+                {mutation.isPending ? "Submitting..." : "Submit request"}
               </Button>
             </DialogFooter>
           </form>
@@ -448,8 +448,8 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={mutation.isLoading}>
-                {mutation.isLoading ? "Saving..." : "Save asset"}
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending ? "Saving..." : "Save asset"}
               </Button>
             </DialogFooter>
           </form>

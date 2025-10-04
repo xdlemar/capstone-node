@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, type UseFormReturn } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -94,7 +94,7 @@ export function AddScheduleDialog({ assets, trigger, onSaved }: ScheduleDialogPr
           <DialogTitle>Create maintenance schedule</DialogTitle>
           <DialogDescription>Define a preventive or inspection cycle for an asset.</DialogDescription>
         </DialogHeader>
-        <ScheduleForm assets={assets} form={form} onSubmit={(values) => mutation.mutate(values)} submitting={mutation.isLoading} />
+        <ScheduleForm assets={assets} form={form} onSubmit={(values) => mutation.mutate(values)} submitting={mutation.isPending} />
       </DialogContent>
     </Dialog>
   );
@@ -182,11 +182,11 @@ export function EditScheduleDialog({ assets, schedule, trigger, onSaved, onDelet
           assets={assets}
           form={form}
           onSubmit={(values) => updateMutation.mutate(values)}
-          submitting={updateMutation.isLoading}
+          submitting={updateMutation.isPending}
           allowAssetChange={false}
           extraFooter={
-            <Button type="button" variant="destructive" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isLoading}>
-              {deleteMutation.isLoading ? "Removing..." : "Remove"}
+            <Button type="button" variant="destructive" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
+              {deleteMutation.isPending ? "Removing..." : "Remove"}
             </Button>
           }
         />

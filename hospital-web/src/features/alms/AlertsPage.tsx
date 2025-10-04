@@ -117,9 +117,9 @@ export default function AlertsPage() {
                         <Button
                           size="sm"
                           onClick={() => resolveMutation.mutate(alert.id)}
-                          disabled={resolveMutation.isLoading}
+                          disabled={resolveMutation.isPending}
                         >
-                          {resolveMutation.isLoading ? "Resolving..." : "Resolve"}
+                          {resolveMutation.isPending ? "Resolving..." : "Resolve"}
                         </Button>
                       ) : null}
                     </TableCell>

@@ -52,7 +52,10 @@ export function WorkOrderStatusDialog({ workOrderId, workOrderNo, currentStatus,
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
 
-  const effectiveAllowed = WORK_ORDER_TRANSITIONS[currentStatus].filter((status) => allowedStatuses.includes(status));
+  const effectiveAllowed = WORK_ORDER_TRANSITIONS[currentStatus]
+    .filter((status): status is StatusFormValues["status"] =>
+      allowedStatuses.includes(status) && status !== "OPEN"
+    );
 
   const form = useForm<StatusFormValues>({
     resolver: zodResolver(statusSchema),
@@ -162,8 +165,8 @@ export function WorkOrderStatusDialog({ workOrderId, workOrderNo, currentStatus,
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={mutation.isLoading}>
-                {mutation.isLoading ? "Updating..." : "Apply"}
+              <Button type="submit" disabled={mutation.isPending}>
+                {mutation.isPending ? "Updating..." : "Apply"}
               </Button>
             </DialogFooter>
           </form>
