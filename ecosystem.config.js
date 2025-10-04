@@ -5,7 +5,7 @@ module.exports = {
       script: "gateway/src/index.js",
       env: {
         NODE_ENV: "production",
-        PORT: 8080
+        PORT: 55559
       }
     },
     {

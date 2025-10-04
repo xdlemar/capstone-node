@@ -80,9 +80,9 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     icon: FileText,
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
-      { title: "Workspace", url: "/dtrs", roles: ["STAFF", "MANAGER", "ADMIN"] },
-      { title: "Upload", url: "/dtrs/documents", roles: ["STAFF", "MANAGER", "ADMIN"] },
-      { title: "Missing docs", url: "/dtrs/missing", roles: ["MANAGER", "ADMIN"] }
+      { title: "Overview", url: "/dtrs", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Library & uploads", url: "/dtrs/documents", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Missing docs ", url: "/dtrs/missing", roles: ["MANAGER", "ADMIN"] }
     ],
   },
   {
