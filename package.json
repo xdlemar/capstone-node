@@ -14,7 +14,7 @@
     "@prisma/client": "^6.15.0"
   },
   "scripts": {
-    "pretest": "node tests/seedInventory.js",
+    "pretest": "npm run db:migrate && node tests/seedInventory.js",
     "test": "cross-env NODE_ENV=test jest --runInBand --testTimeout=60000",
     "gen:clients": "npx prisma generate --schema=inventory-svc/prisma/schema.prisma && npx prisma generate --schema=procurement-svc/prisma/schema.prisma && npx prisma generate --schema=auth-svc/prisma/schema.prisma && npx prisma generate --schema=plt-svc/prisma/schema.prisma && npx prisma generate --schema=dtrs-svc/prisma/schema.prisma && npx prisma generate --schema=alms-svc/prisma/schema.prisma",
     "db:migrate": "dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=inventory-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=procurement-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=auth-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=plt-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=dtrs-svc/prisma/schema.prisma && dotenv -e tests/.env.test -- npx prisma migrate deploy --schema=alms-svc/prisma/schema.prisma",
@@ -25,4 +25,3 @@
     "jobs:procurement": "node procurement-svc/src/jobs/recalcVendorMetrics.js"
   }
 }
-

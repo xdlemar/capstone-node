@@ -30,14 +30,16 @@ router.post("/", ensureManager, async (req, res, next) => {
       notes,
     } = req.body || {};
 
-    if (!assetCode || !name) {
-      return res.status(400).json({ error: "assetCode and name are required" });
+    if (!assetCode) {
+      return res.status(400).json({ error: "assetCode is required" });
     }
+
+    const finalName = (name || assetCode).trim();
 
     const row = await prisma.asset.create({
       data: {
         assetCode,
-        name,
+        name: finalName || null,
         itemId: itemId ? BigInt(itemId) : null,
         serialNo: serialNo || null,
         category: category || null,
@@ -51,7 +53,10 @@ router.post("/", ensureManager, async (req, res, next) => {
       }
     });
     res.status(201).json(row);
-  } catch (e) { next(e); }
+  } catch (e) {
+    console.error("[POST /assets]", e);
+    next(e);
+  }
 });
 
 // LIST + filters + pagination
@@ -83,7 +88,10 @@ router.get("/", async (req, res, next) => {
     ]);
 
     res.json({ total, rows });
-  } catch (e) { next(e); }
+  } catch (e) {
+    console.error("[GET /assets]", e);
+    next(e);
+  }
 });
 
 // READ by id
@@ -102,7 +110,10 @@ router.get("/:id", async (req, res, next) => {
     });
     if (!row) return res.status(404).json({ error: "Not found" });
     res.json(row);
-  } catch (e) { next(e); }
+  } catch (e) {
+    console.error("[GET /assets/:id]", e);
+    next(e);
+  }
 });
 
 // UPDATE (PUT – full, PATCH – partial)
@@ -124,11 +135,13 @@ router.put("/:id", ensureManager, async (req, res, next) => {
       notes,
     } = req.body || {};
 
+    const finalName = (name || assetCode || "").trim();
+
     const row = await prisma.asset.update({
       where: { id },
       data: {
         assetCode,
-        name,
+        name: finalName || null,
         itemId: itemId != null ? BigInt(itemId) : null,
         serialNo: serialNo ?? null,
         category: category ?? null,
@@ -142,7 +155,10 @@ router.put("/:id", ensureManager, async (req, res, next) => {
       }
     });
     res.json(row);
-  } catch (e) { next(e); }
+  } catch (e) {
+    console.error("[PUT /assets/:id]", e);
+    next(e);
+  }
 });
 
 router.patch("/:id", ensureManager, async (req, res, next) => {
@@ -168,7 +184,10 @@ router.patch("/:id", ensureManager, async (req, res, next) => {
 
     const row = await prisma.asset.update({ where: { id }, data: d });
     res.json(row);
-  } catch (e) { next(e); }
+  } catch (e) {
+    console.error("[PUT /assets/:id]", e);
+    next(e);
+  }
 });
 
 // NOTE: no DELETE endpoint (use status RETIRED/DISPOSED instead)
