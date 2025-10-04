@@ -3,12 +3,18 @@ require("./setup-env");
 const path = require("path");
 const dotenv = require("dotenv");
 
-const authEnv = dotenv.config({ path: path.join(__dirname, "..", "auth-svc", ".env") });
 const originalDbUrl = process.env.DATABASE_URL;
-if (authEnv?.parsed?.DATABASE_URL) {
-  process.env.DATABASE_URL = authEnv.parsed.DATABASE_URL;
-  process.env.AUTH_DATABASE_URL = authEnv.parsed.DATABASE_URL;
+const originalAuthDbUrl = process.env.AUTH_DATABASE_URL;
+
+const authEnv = dotenv.config({ path: path.join(__dirname, "..", "auth-svc", ".env") });
+const effectiveAuthDbUrl = process.env.AUTH_DATABASE_URL || authEnv.parsed?.DATABASE_URL;
+
+if (!effectiveAuthDbUrl) {
+  throw new Error("AUTH_DATABASE_URL is required for auth login tests");
 }
+
+process.env.DATABASE_URL = effectiveAuthDbUrl;
+process.env.AUTH_DATABASE_URL = effectiveAuthDbUrl;
 
 const request = require("supertest");
 const bcrypt = require("../auth-svc/node_modules/bcryptjs");
@@ -80,6 +86,11 @@ describe("POST /login", () => {
     } else {
       delete process.env.DATABASE_URL;
     }
+    if (originalAuthDbUrl) {
+      process.env.AUTH_DATABASE_URL = originalAuthDbUrl;
+    } else {
+      delete process.env.AUTH_DATABASE_URL;
+    }
   });
 
   test("rejects login for inactive users", async () => {
@@ -116,5 +127,4 @@ describe("POST /login", () => {
     expect(audit?.success).toBe(true);
   });
 });
-
 
