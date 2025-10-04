@@ -32,7 +32,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboardData, type DashboardUnavailableKey } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
 
-const numberFormatter = new Intl.NumberFormat("en-US");
+const numberFormatter = new Intl.NumberFormat("en-PH");
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",

@@ -7,7 +7,7 @@ import { useProcurementInsights } from "@/hooks/useProcurementInsights";
 import { cn } from "@/lib/utils";
 
 function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+  return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(value);
 }
 
 export function ProcurementInsightsPanel({ className }: { className?: string }) {

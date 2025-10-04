@@ -1,12 +1,21 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAlmsAssets, useAlmsWorkOrders, WORK_ORDER_TRANSITIONS, type WorkOrderRecord, type WorkOrderStatus } from "@/hooks/useAlmsData";
+import {
+  useAlmsAssets,
+  useAlmsWorkOrders,
+  WORK_ORDER_TRANSITIONS,
+  type MaintenanceType,
+  type WorkOrderRecord,
+  type WorkOrderStatus,
+} from "@/hooks/useAlmsData";
 
 import { MaintenanceRequestDialog } from "./components/AssetDialogs";
 import { WorkOrderStatusDialog } from "./components/WorkOrderDialogs";
@@ -19,8 +28,15 @@ const STATUS_LABELS: Record<WorkOrderStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
+const STATUS_SUMMARY: Record<WorkOrderStatus, string> = {
+  OPEN: "Awaiting triage",
+  SCHEDULED: "Planned work",
+  IN_PROGRESS: "Technicians busy",
+  COMPLETED: "Successfully closed",
+  CANCELLED: "Cancelled",
+};
+
 const ACTIVE_STATUSES: WorkOrderStatus[] = ["OPEN", "SCHEDULED", "IN_PROGRESS"];
-const COMPLETED_STATUSES: WorkOrderStatus[] = ["COMPLETED", "CANCELLED"];
 
 const currency = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 const dateFormatter = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" });
@@ -31,6 +47,14 @@ function formatDate(value?: string | null) {
   if (Number.isNaN(dt.getTime())) return "-";
   return dateFormatter.format(dt);
 }
+
+const STATUS_ORDER: Record<WorkOrderStatus, number> = {
+  OPEN: 0,
+  SCHEDULED: 1,
+  IN_PROGRESS: 2,
+  COMPLETED: 3,
+  CANCELLED: 4,
+};
 
 export default function WorkOrdersPage() {
   const { user } = useAuth();
@@ -73,6 +97,79 @@ export default function WorkOrdersPage() {
 
     return bucket;
   }, [workOrdersQuery.data?.rows]);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | MaintenanceType>("all");
+  const [technicianFilter, setTechnicianFilter] = useState("all");
+  const [sortOption, setSortOption] = useState("newest");
+
+  const typeOptions = useMemo(() => {
+    const set = new Set<MaintenanceType>();
+    workOrdersQuery.data?.rows.forEach((wo) => set.add(wo.type));
+    return Array.from(set).sort();
+  }, [workOrdersQuery.data?.rows]);
+
+  const technicianOptions = useMemo(() => {
+    const set = new Set<string>();
+    workOrdersQuery.data?.rows.forEach((wo) => {
+      if (wo.technician) {
+        set.add(wo.technician);
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [workOrdersQuery.data?.rows]);
+
+  const filtersActive =
+    searchTerm.trim().length > 0 || typeFilter !== "all" || technicianFilter !== "all" || sortOption !== "newest";
+
+  const filterAndSortOrders = useMemo(() => {
+    function matches(order: WorkOrderRecord) {
+      const search = searchTerm.trim().toLowerCase();
+      const assetInfo = assetMap.get(order.assetId);
+      const matchesType = typeFilter === "all" || order.type === typeFilter;
+      const matchesTechnician = technicianFilter === "all" || order.technician === technicianFilter;
+      const matchesSearch =
+        !search ||
+        [order.woNo, order.notes, assetInfo?.code, assetInfo?.category, order.technician]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => value.toLowerCase().includes(search));
+      return matchesType && matchesTechnician && matchesSearch;
+    }
+
+    function sortOrders(list: WorkOrderRecord[]) {
+      const sorted = [...list];
+      sorted.sort((a, b) => {
+        if (sortOption === "asset") {
+          const assetA = assetMap.get(a.assetId)?.code ?? a.assetId;
+          const assetB = assetMap.get(b.assetId)?.code ?? b.assetId;
+          return assetA.localeCompare(assetB);
+        }
+        if (sortOption === "status") {
+          return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+        }
+        const aTime = new Date(a.createdAt).getTime();
+        const bTime = new Date(b.createdAt).getTime();
+        if (sortOption === "oldest") {
+          return aTime - bTime;
+        }
+        return bTime - aTime;
+      });
+      return sorted;
+    }
+
+    const activeFiltered = sortOrders(activeOrders.filter(matches));
+    const completedFiltered = sortOrders(completedOrders.filter(matches));
+
+    return {
+      active: activeFiltered,
+      completed: completedFiltered,
+    };
+  }, [activeOrders, completedOrders, searchTerm, typeFilter, technicianFilter, sortOption, assetMap]);
+
+  const filteredActiveOrders = filterAndSortOrders.active;
+  const filteredCompletedOrders = filterAndSortOrders.completed;
+
+  const canReset = filtersActive;
 
   return (
     <section className="space-y-6">
@@ -128,27 +225,91 @@ export default function WorkOrdersPage() {
         </Card>
       </div>
 
+      <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 p-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex w-full flex-col gap-3 md:flex-row">
+          <Input
+            className="md:w-72"
+            placeholder="Search WO number, asset, technician"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+          />
+          <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value as typeof typeFilter)}>
+            <SelectTrigger className="md:w-48">
+              <SelectValue placeholder="All maintenance types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All maintenance types</SelectItem>
+              {typeOptions.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type.replace(/_/g, " ")}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={technicianFilter} onValueChange={setTechnicianFilter}>
+            <SelectTrigger className="md:w-48">
+              <SelectValue placeholder="All technicians" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All technicians</SelectItem>
+              {technicianOptions.map((tech) => (
+                <SelectItem key={tech} value={tech}>
+                  {tech}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-3">
+          <Select value={sortOption} onValueChange={setSortOption}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Sort" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest first</SelectItem>
+              <SelectItem value="oldest">Oldest first</SelectItem>
+              <SelectItem value="asset">Asset code</SelectItem>
+              <SelectItem value="status">Status</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearchTerm("");
+              setTypeFilter("all");
+              setTechnicianFilter("all");
+              setSortOption("newest");
+            }}
+            disabled={!canReset}
+          >
+            Reset
+          </Button>
+        </div>
+      </div>
+
       <Tabs defaultValue="active" className="space-y-4">
         <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="active">Active queue</TabsTrigger>
-          <TabsTrigger value="completed">Completed & cancelled</TabsTrigger>
+          <TabsTrigger value="active">Active queue ({filteredActiveOrders.length})</TabsTrigger>
+          <TabsTrigger value="completed">Completed & cancelled ({filteredCompletedOrders.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="space-y-3">
           {workOrdersQuery.isLoading ? (
             <Skeleton className="h-40 w-full" />
-          ) : activeOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No active work orders at the moment.</p>
+          ) : filteredActiveOrders.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No active work orders match the current filters.</p>
           ) : (
             <div className="space-y-3">
-              {activeOrders.map((order) => {
+              {filteredActiveOrders.map((order) => {
                 const assetInfo = assetMap.get(order.assetId);
                 const transitions = WORK_ORDER_TRANSITIONS[order.status];
                 return (
                   <OrderCard
                     key={order.id}
                     order={order}
-                    assetCode={assetInfo?.code ?? `Asset ${order.assetId}`}
+                    assetCode={assetInfo?.code ?? `Asset ${order.assetId}`} 
                     assetCategory={assetInfo?.category}
                     canAdvance={isManager && transitions.length > 0}
                     nextStatuses={transitions}
@@ -162,17 +323,17 @@ export default function WorkOrdersPage() {
         <TabsContent value="completed" className="space-y-3">
           {workOrdersQuery.isLoading ? (
             <Skeleton className="h-40 w-full" />
-          ) : completedOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No completed records yet.</p>
+          ) : filteredCompletedOrders.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No completed records match the current filters.</p>
           ) : (
             <div className="space-y-3">
-              {completedOrders.map((order) => {
+              {filteredCompletedOrders.map((order) => {
                 const assetInfo = assetMap.get(order.assetId);
                 return (
                   <OrderCard
                     key={order.id}
                     order={order}
-                    assetCode={assetInfo?.code ?? `Asset ${order.assetId}`}
+                    assetCode={assetInfo?.code ?? `Asset ${order.assetId}`} 
                     assetCategory={assetInfo?.category}
                     canAdvance={false}
                     nextStatuses={[]}
@@ -187,31 +348,30 @@ export default function WorkOrdersPage() {
   );
 }
 
-const STATUS_SUMMARY: Record<WorkOrderStatus, string> = {
-  OPEN: "Awaiting triage",
-  SCHEDULED: "Planned work",
-  IN_PROGRESS: "Technicians busy",
-  COMPLETED: "Successfully closed",
-  CANCELLED: "Cancelled",
-};
-
 interface OrderCardProps {
   order: WorkOrderRecord;
   assetCode: string;
-  assetCategory?: string | null;
+  assetCategory: string | null | undefined;
   canAdvance: boolean;
   nextStatuses: WorkOrderStatus[];
 }
+function OrderCard({ order, assetCode, assetCategory, canAdvance, nextStatuses }: OrderCardProps) {
+  const statusVariant: Record<WorkOrderStatus, "default" | "secondary" | "outline" | "destructive"> = {
+    OPEN: "outline",
+    SCHEDULED: "secondary",
+    IN_PROGRESS: "default",
+    COMPLETED: "secondary",
+    CANCELLED: "destructive",
+  };
 
-function OrderCard({ order, assetName, assetCode, assetCategory, canAdvance, nextStatuses }: OrderCardProps) {
   return (
     <Card className="border bg-card shadow-sm">
-      <CardHeader className="flex flex-row items-start justify-between gap-3">
+      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <CardTitle className="text-sm font-semibold text-foreground">{order.woNo}</CardTitle>
           <CardDescription>
             {assetCode}
-            {assetCategory ? ` • ${assetCategory}` : ""}
+            {assetCategory ? ` - ${assetCategory}` : ""}
           </CardDescription>
         </div>
         {canAdvance ? (
@@ -223,23 +383,21 @@ function OrderCard({ order, assetName, assetCode, assetCategory, canAdvance, nex
           />
         ) : null}
       </CardHeader>
-      <CardContent className="space-y-2 text-sm text-muted-foreground">
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="outline">{STATUS_LABELS[order.status]}</Badge>
-          {order.technician ? <Badge variant="secondary">Tech: {order.technician}</Badge> : null}
+      <CardContent className="space-y-3 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={statusVariant[order.status]}>Status: {STATUS_LABELS[order.status]}</Badge>
+          <Badge variant="secondary">Type: {order.type.replace(/_/g, " ")}</Badge>
+          {order.technician ? <Badge variant="outline">Tech: {order.technician}</Badge> : null}
         </div>
         <div className="grid gap-1 sm:grid-cols-2">
           <span>Created {formatDate(order.createdAt)}</span>
           {order.scheduledAt ? <span>Scheduled {formatDate(order.scheduledAt)}</span> : null}
           {order.startedAt ? <span>Started {formatDate(order.startedAt)}</span> : null}
           {order.completedAt ? <span>Completed {formatDate(order.completedAt)}</span> : null}
-          {order.cost ? <span>Cost: {currency.format(Number(order.cost))}</span> : null}
+          {order.cost != null ? <span>Cost: {currency.format(Number(order.cost))}</span> : null}
         </div>
         {order.notes ? <p className="text-sm text-muted-foreground">{order.notes}</p> : null}
       </CardContent>
     </Card>
   );
 }
-
-
-

@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,7 +21,6 @@ function formatDate(value?: string | null) {
   if (Number.isNaN(dt.getTime())) return "-";
   return dateFormatter.format(dt);
 }
-
 
 const STATUS_VARIANTS: Record<string, string> = {
   ACTIVE: "default",
@@ -46,6 +47,66 @@ export default function AssetsPage() {
     });
     return map;
   }, [lookupsQuery.data?.locations]);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [sortOption, setSortOption] = useState("name");
+
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    assets.forEach((asset) => set.add(asset.status));
+    return Array.from(set).sort();
+  }, [assets]);
+
+  const locationOptions = useMemo(() => {
+    const set = new Set<string>();
+    assets.forEach((asset) => {
+      const name = asset.locationId ? locationMap.get(asset.locationId) ?? `Location ${asset.locationId}` : "Unassigned";
+      set.add(name);
+    });
+    return Array.from(set).sort();
+  }, [assets, locationMap]);
+
+  const filteredAssets = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+
+    const base = assets.filter((asset) => {
+      const locationName = asset.locationId ? locationMap.get(asset.locationId) ?? `Location ${asset.locationId}` : "Unassigned";
+      const matchesSearch =
+        !search ||
+        [asset.assetCode, asset.name, asset.serialNo]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => value.toLowerCase().includes(search));
+      const matchesStatus = statusFilter === "all" || asset.status === statusFilter;
+      const matchesLocation = locationFilter === "all" || locationName === locationFilter;
+      return matchesSearch && matchesStatus && matchesLocation;
+    });
+
+    const sorted = [...base];
+    sorted.sort((a, b) => {
+      if (sortOption === "status") {
+        return a.status.localeCompare(b.status);
+      }
+      if (sortOption === "warranty") {
+        const aTime = a.warrantyUntil ? new Date(a.warrantyUntil).getTime() : Number.POSITIVE_INFINITY;
+        const bTime = b.warrantyUntil ? new Date(b.warrantyUntil).getTime() : Number.POSITIVE_INFINITY;
+        if (aTime === bTime) {
+          return (a.assetCode || a.name || "").localeCompare(b.assetCode || b.name || "");
+        }
+        return aTime - bTime;
+      }
+      const aLabel = (a.name || a.assetCode || "").toLowerCase();
+      const bLabel = (b.name || b.assetCode || "").toLowerCase();
+      return aLabel.localeCompare(bLabel);
+    });
+
+    return sorted;
+  }, [assets, locationFilter, locationMap, searchTerm, sortOption, statusFilter]);
+
+  const totalAssets = assetsQuery.data?.total ?? assets.length;
+  const filtersActive = statusFilter !== "all" || locationFilter !== "all" || searchTerm.trim().length > 0;
+  const canReset = filtersActive || sortOption !== "name";
 
   return (
     <section className="space-y-6">
@@ -77,18 +138,81 @@ export default function AssetsPage() {
             )}
           </div>
         </div>
-        {lookupsQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading reference data…</p> : null}
+        {lookupsQuery.isLoading ? <p className="text-sm text-muted-foreground">Loading reference data.</p> : null}
       </header>
 
       <Card className="border bg-card shadow-sm">
         <CardHeader>
           <CardTitle>Assets</CardTitle>
           <CardDescription>
-            Showing {assets.length} of {assetsQuery.data?.total ?? "—"} assets. Managers can register equipment; staff can
-            raise maintenance requests only.
+            Showing {filteredAssets.length} of {totalAssets} assets{filtersActive ? " (filters applied)" : ""}. Managers can
+            register equipment; staff can raise maintenance requests only.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex w-full flex-col gap-3 sm:flex-row">
+              <Input
+                className="sm:w-72"
+                placeholder="Search asset name, code, or serial"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="sm:w-48">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  {statusOptions.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {status.replace(/_/g, " ")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={locationFilter} onValueChange={setLocationFilter}>
+                <SelectTrigger className="sm:w-48">
+                  <SelectValue placeholder="All locations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All locations</SelectItem>
+                  {locationOptions.map((location) => (
+                    <SelectItem key={location} value={location}>
+                      {location}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-3">
+              <Select value={sortOption} onValueChange={setSortOption}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">Name (A-Z)</SelectItem>
+                  <SelectItem value="status">Status</SelectItem>
+                  <SelectItem value="warranty">Warranty (soonest)</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                  setLocationFilter("all");
+                  setSortOption("name");
+                }}
+                disabled={!canReset}
+              >
+                Reset
+              </Button>
+            </div>
+          </div>
+
           <Table>
             <TableHeader>
               <TableRow>
@@ -110,11 +234,17 @@ export default function AssetsPage() {
               ) : assets.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
-                    No assets found yet. {isManager ? "Use \"Register asset\" to add one." : "Managers can register equipment; you can raise maintenance requests."}
+                    No assets found yet. {isManager ? "Use the Register asset button to add one." : "Managers can register equipment; you can raise maintenance requests."}
+                  </TableCell>
+                </TableRow>
+              ) : filteredAssets.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
+                    No assets match the current filters. Adjust filters or reset to view all assets.
                   </TableCell>
                 </TableRow>
               ) : (
-                assets.map((asset) => {
+                filteredAssets.map((asset) => {
                   const locationName = asset.locationId ? locationMap.get(asset.locationId) ?? `Location ${asset.locationId}` : "Unassigned";
                   const statusVariant = (STATUS_VARIANTS[asset.status] ?? "secondary") as
                     | "default"
@@ -132,14 +262,14 @@ export default function AssetsPage() {
                           ) : null}
                         </div>
                       </TableCell>
-                      <TableCell>{asset.category ?? "—"}</TableCell>
+                      <TableCell>{asset.category ?? "-"}</TableCell>
                       <TableCell>{locationName}</TableCell>
                       <TableCell>
                         <Badge variant={statusVariant}>{asset.status.replace(/_/g, " ")}</Badge>
                       </TableCell>
                       <TableCell>{formatDate(asset.warrantyUntil)}</TableCell>
                       <TableCell className="max-w-xs text-sm text-muted-foreground">
-                        {asset.notes ? asset.notes : "—"}
+                        {asset.notes ? asset.notes : "-"}
                       </TableCell>
                     </TableRow>
                   );
@@ -152,10 +282,3 @@ export default function AssetsPage() {
     </section>
   );
 }
-
-
-
-
-
-
-

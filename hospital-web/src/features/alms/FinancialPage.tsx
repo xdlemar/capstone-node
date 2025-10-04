@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAlmsAssets, useAlmsFinancialSummary } from "@/hooks/useAlmsData";
 
-const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const currency = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" });
 
 export default function FinancialPage() {

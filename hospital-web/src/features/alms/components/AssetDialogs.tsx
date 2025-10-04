@@ -124,7 +124,7 @@ export function MaintenanceRequestDialog({ assets, defaultAssetId, trigger, onSu
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Request maintenance</DialogTitle>
           <DialogDescription>Select the asset and maintenance type. Managers will schedule and approve the work order.</DialogDescription>
@@ -287,7 +287,7 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
       <DialogTrigger asChild>
         <Button disabled={disabled}>Register asset</Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Register new asset</DialogTitle>
           <DialogDescription>Provide asset details. Asset codes must be unique.</DialogDescription>

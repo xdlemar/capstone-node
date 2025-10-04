@@ -1,4 +1,4 @@
-﻿import { useMemo } from "react";
+import { useMemo } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -864,7 +864,7 @@ export function VendorPerformanceTable({ className }: { className?: string }) {
                 <TableCell>{vendor.metrics?.avgLeadTimeDays ?? "-"}</TableCell>
                 <TableCell>{vendor.metrics?.fulfillmentRate ?? "-"}</TableCell>
                 <TableCell>
-                  {vendor.metrics ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(vendor.metrics.totalSpend) : "-"}
+                  {vendor.metrics ? new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(vendor.metrics.totalSpend) : "-"}
                 </TableCell>
               </TableRow>
             ))}
