@@ -30,6 +30,12 @@ app.use("/dashboard", dashboard);
 app.use(["/login", "/register"], authLimiter);
 app.use("/", auth);
 
-app.listen(Number(process.env.PORT || 4000), () =>
-  console.log(`auth-svc on http://localhost:${process.env.PORT || 4000}`)
-);
+const port = Number(process.env.PORT || 4000);
+
+if (require.main === module) {
+  app.listen(port, () =>
+    console.log(`auth-svc on http://localhost:${port}`)
+  );
+}
+
+module.exports = app;

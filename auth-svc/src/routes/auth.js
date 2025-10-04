@@ -24,18 +24,30 @@ router.post("/register", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password } = req.body || {};
   const user = await prisma.user.findUnique({
     where: { email },
     include: { roles: { include: { role: true } } },
   });
 
-  const ok = user && (await bcrypt.compare(password, user.passwordHash));
+  const passwordOk = user ? await bcrypt.compare(password, user.passwordHash) : false;
+  const active = !!user?.isActive;
+
   await prisma.loginAudit.create({
-    data: { userId: user?.id ?? null, emailTried: email, success: !!ok },
+    data: {
+      userId: user?.id ?? null,
+      emailTried: email,
+      success: passwordOk && active,
+    },
   });
 
-  if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+  if (!passwordOk) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  if (!active) {
+    return res.status(403).json({ error: "Account disabled" });
+  }
 
   const roles = user.roles.map((r) => r.role.name);
   const token = jwt.sign(
