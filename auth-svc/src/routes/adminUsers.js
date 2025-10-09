@@ -52,6 +52,7 @@ router.get("/users", async (_req, res) => {
     users.map((user) => ({
       id: user.id.toString(),
       email: user.email,
+      name: user.name,
       isActive: user.isActive,
       roles: user.roles.map((r) => r.role.name),
       docScopes: user.docScopes || {},
@@ -63,7 +64,7 @@ router.get("/users", async (_req, res) => {
 
 router.post("/users", async (req, res) => {
   try {
-    const { email, password, roles = ["STAFF"], isActive = true, docScopes } = req.body || {};
+    const { email, name, password, roles = ["STAFF"], isActive = true, docScopes } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ error: "email and password are required" });
     }
@@ -76,7 +77,9 @@ router.post("/users", async (req, res) => {
     const scopes = sanitizeDocScopesInput(docScopes);
 
     const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { email, passwordHash, isActive, docScopes: scopes } });
+      const user = await tx.user.create({
+        data: { email, name: name?.trim() || null, passwordHash, isActive, docScopes: scopes },
+      });
       const roleRecords = await upsertRoles(roles, tx);
       await tx.userRole.createMany({
         data: roleRecords.map((role) => ({ userId: user.id, roleId: role.id })),
@@ -93,6 +96,7 @@ router.post("/users", async (req, res) => {
     res.status(201).json({
       id: created.id.toString(),
       email: created.email,
+      name: created.name,
       isActive: created.isActive,
       roles: created.roles.map((r) => r.role.name),
       docScopes: created.docScopes || {},
@@ -108,11 +112,14 @@ router.post("/users", async (req, res) => {
 router.patch("/users/:id", async (req, res) => {
   try {
     const userId = BigInt(req.params.id);
-    const { email, password, roles, isActive, docScopes } = req.body || {};
+    const { email, name, password, roles, isActive, docScopes } = req.body || {};
 
     const updates = {};
     if (typeof email === "string" && email.length > 0) {
       updates.email = email;
+    }
+    if (typeof name === "string") {
+      updates.name = name.trim().length ? name.trim() : null;
     }
     if (typeof isActive === "boolean") {
       updates.isActive = isActive;
@@ -147,6 +154,7 @@ router.patch("/users/:id", async (req, res) => {
     res.json({
       id: updated.id.toString(),
       email: updated.email,
+      name: updated.name,
       isActive: updated.isActive,
       roles: updated.roles.map((r) => r.role.name),
       docScopes: updated.docScopes || {},
@@ -173,6 +181,7 @@ router.delete("/users/:id", async (req, res) => {
     res.json({
       id: user.id.toString(),
       email: user.email,
+      name: user.name,
       isActive: user.isActive,
       roles: user.roles.map((r) => r.role.name),
       docScopes: user.docScopes || {},

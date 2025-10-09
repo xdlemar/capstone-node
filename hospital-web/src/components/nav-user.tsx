@@ -34,8 +34,17 @@ export function NavUser({ roles }: { roles: string[] }) {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const initials = user?.id ? user.id.slice(-2).toUpperCase() : "L1";
-  const displayName = user ? `User ${user.id}` : "Logistics access";
+  const name = user?.name?.trim();
+  const initials = name
+    ? name
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join("")
+    : user?.id
+    ? user.id.slice(-2).toUpperCase()
+    : "L1";
+  const displayName = name || (user ? `User ${user.id}` : "Logistics access");
 
   const handleLogout = () => {
     logout();
@@ -103,3 +112,4 @@ export function NavUser({ roles }: { roles: string[] }) {
     </SidebarMenu>
   );
 }
+

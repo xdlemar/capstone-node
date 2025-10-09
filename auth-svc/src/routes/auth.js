@@ -57,11 +57,12 @@ router.post("/login", async (req, res) => {
     sub: String(user.id),
     roles,
     docScopes,
+    name: user.name || null,
   };
   const token = jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES || "8h",
   });
-  res.json({ access_token: token, roles, docScopes });
+  res.json({ access_token: token, roles, docScopes, name: user.name || null });
 });
 
 module.exports = router;

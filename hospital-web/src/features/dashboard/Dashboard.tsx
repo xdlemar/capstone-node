@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+﻿import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -249,7 +249,7 @@ export default function DashboardPage() {
               Logistics Control Centre
             </Badge>
             <h1 className="text-3xl font-semibold leading-tight lg:text-4xl">
-              Welcome{user ? `, user ${user.id}` : ""}
+              Welcome{user ? (user.name ? `, ${user.name}` : `, user ${user.id}`) : ""}
             </h1>
             <p className="text-white/70">
               Stay ahead of requisitions, inventory health, deliveries, and compliance from a single command dashboard.
@@ -575,5 +575,6 @@ export default function DashboardPage() {
 function roleSetHas(roleSet: Set<string>, allowed: string[]) {
   return allowed.some((role) => roleSet.has(role));
 }
+
 
 

@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 export type AdminUser = {
   id: string;
   email: string;
+  name: string | null;
   isActive: boolean;
   roles: string[];
   createdAt: string;
@@ -26,6 +27,7 @@ export function useAdminUsers() {
 
 export type CreateAdminUserPayload = {
   email: string;
+  name: string;
   password: string;
   roles: string[];
   isActive?: boolean;
@@ -47,6 +49,7 @@ export function useCreateAdminUser() {
 export type UpdateAdminUserPayload = {
   id: string;
   email?: string;
+  name?: string;
   password?: string;
   roles?: string[];
   isActive?: boolean;

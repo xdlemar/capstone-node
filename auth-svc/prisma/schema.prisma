@@ -10,6 +10,7 @@ datasource db {
 model User {
   id           BigInt       @id @default(autoincrement())
   email        String       @unique
+  name         String?
   passwordHash String
   isActive     Boolean      @default(true)
   docScopes    Json?

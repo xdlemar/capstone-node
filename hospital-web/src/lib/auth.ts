@@ -3,11 +3,14 @@ import { jwtDecode } from "jwt-decode";
 type TokenPayload = {
   sub?: string | number;
   roles?: string[];
+  docScopes?: Record<string, unknown>;
+  name?: string | null;
   exp?: number;
 };
 
 type DecodedUser = {
   id: string;
+  name: string | null;
   roles: string[];
 };
 
@@ -104,7 +107,7 @@ function buildUser(payload: TokenPayload | null): DecodedUser | null {
   if (!payload || isExpired(payload)) return null;
   if (!payload.sub) return null;
   const roles = Array.isArray(payload.roles) ? payload.roles : [];
-  return { id: String(payload.sub), roles };
+  return { id: String(payload.sub), name: payload.name ?? null, roles };
 }
 
 export const TOKEN_STORAGE_KEY = STORAGE_KEY;

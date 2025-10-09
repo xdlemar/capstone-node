@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,15 +20,17 @@ const ROLE_OPTIONS = ["STAFF", "MANAGER", "ADMIN"] as const;
 const RoleEnum = z.enum(ROLE_OPTIONS);
 
 const CreateUserSchema = z.object({
+  name: z.string().min(2, "Name required"),
   email: z.string().email({ message: "Enter a valid hospital email" }),
   password: z.string().min(8, "Password must be at least 8 characters"),
   roles: z.array(RoleEnum).min(1, "Assign at least one role"),
-  isActive: z.boolean().default(true)
+  isActive: z.boolean().default(true),
 });
 
 type CreateUserFormValues = z.infer<typeof CreateUserSchema>;
 
 const EditUserSchema = z.object({
+  name: z.string().min(2, "Name required"),
   roles: z.array(RoleEnum).min(1, "Assign at least one role"),
   isActive: z.boolean(),
   password: z.string().optional(),
@@ -48,6 +50,7 @@ export default function AdminOverview() {
   const createForm = useForm<CreateUserFormValues>({
     resolver: zodResolver(CreateUserSchema),
     defaultValues: {
+      name: "",
       email: "",
       password: "",
       roles: ["STAFF"],
@@ -57,17 +60,23 @@ export default function AdminOverview() {
 
   const editForm = useForm<EditUserFormValues>({
     resolver: zodResolver(EditUserSchema),
-    defaultValues: { roles: ["STAFF"], isActive: true, password: "" },
+    defaultValues: { name: "", roles: ["STAFF"], isActive: true, password: "" },
   });
 
   useEffect(() => {
     if (editingUser) {
-      editForm.reset({ roles: editingUser.roles as typeof ROLE_OPTIONS[number][], isActive: editingUser.isActive, password: "" });
+      editForm.reset({
+        name: editingUser.name ?? "",
+        roles: editingUser.roles as typeof ROLE_OPTIONS[number][],
+        isActive: editingUser.isActive,
+        password: "",
+      });
     }
   }, [editingUser, editForm]);
 
   const onCreate = async (values: CreateUserFormValues) => {
     const payload: CreateAdminUserPayload = {
+      name: values.name,
       email: values.email,
       password: values.password,
       roles: values.roles,
@@ -75,8 +84,8 @@ export default function AdminOverview() {
     };
     try {
       await createUser.mutateAsync(payload);
-      toast({ title: "User created", description: `${values.email} can now access Logistics 1.` });
-      createForm.reset({ email: "", password: "", roles: ["STAFF"], isActive: true });
+      toast({ title: "User created", description: `${values.name} (${values.email}) can now access Logistics 1.` });
+      createForm.reset({ name: "", email: "", password: "", roles: ["STAFF"], isActive: true });
     } catch (err: any) {
       const message = err?.response?.data?.error || err.message || "Failed to create user";
       toast({ title: "Create user failed", description: message, variant: "destructive" });
@@ -88,6 +97,7 @@ export default function AdminOverview() {
     try {
       const payload: UpdateAdminUserPayload = {
         id: editingUser.id,
+        name: values.name,
         roles: values.roles,
         isActive: values.isActive,
       };
@@ -95,7 +105,7 @@ export default function AdminOverview() {
         payload.password = values.password;
       }
       await updateUser.mutateAsync(payload);
-      toast({ title: "User updated", description: `${editingUser.email} has been refreshed.` });
+      toast({ title: "User updated", description: `${editingUser.name ?? editingUser.email} has been refreshed.` });
       setEditingUser(null);
     } catch (err: any) {
       const message = err?.response?.data?.error || err.message || "Failed to update user";
@@ -106,7 +116,7 @@ export default function AdminOverview() {
   const onDisable = async (user: AdminUser) => {
     try {
       await disableUser.mutateAsync(user.id);
-      toast({ title: "Account disabled", description: `${user.email} can no longer log in.` });
+      toast({ title: "Account disabled", description: `${user.name ?? user.email} can no longer log in.` });
     } catch (err: any) {
       const message = err?.response?.data?.error || err.message || "Failed to disable user";
       toast({ title: "Disable failed", description: message, variant: "destructive" });
@@ -134,12 +144,25 @@ export default function AdminOverview() {
         <CardContent>
           <Form {...createForm}>
             <form className="space-y-4" onSubmit={createForm.handleSubmit(onCreate)}>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
+                <FormField
+                  control={createForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-1">
+                      <FormLabel>Full name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Maria Santos" autoComplete="off" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={createForm.control}
                   name="email"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="md:col-span-1">
                       <FormLabel>Hospital email</FormLabel>
                       <FormControl>
                         <Input placeholder="pharmacy@hvh.logistics" autoComplete="off" {...field} />
@@ -152,7 +175,7 @@ export default function AdminOverview() {
                   control={createForm.control}
                   name="password"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="md:col-span-1">
                       <FormLabel>Temporary password</FormLabel>
                       <FormControl>
                         <Input type="password" placeholder="At least 8 characters" {...field} />
@@ -238,7 +261,7 @@ export default function AdminOverview() {
         <CardContent className="space-y-4">
           {usersQuery.isLoading ? (
             <div className="flex items-center gap-3 text-muted-foreground">
-              <Spinner className="h-4 w-4" /> Loading usersÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦
+              <Spinner className="h-4 w-4" /> Loading usersÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦
             </div>
           ) : users.length === 0 ? (
             <p className="text-sm text-muted-foreground">No users found. Invite staff above.</p>
@@ -246,7 +269,7 @@ export default function AdminOverview() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Email</TableHead>
+                  <TableHead>User</TableHead>
                   <TableHead className="w-48">Roles</TableHead>
                   <TableHead className="w-24">Status</TableHead>
                   <TableHead className="w-48 text-right">Actions</TableHead>
@@ -257,8 +280,11 @@ export default function AdminOverview() {
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="font-medium text-foreground">{user.email}</span>
-                        <span className="text-xs text-muted-foreground">Created {new Date(user.createdAt).toLocaleDateString()}</span>
+                        <span className="font-medium text-foreground">{user.name ?? "Unnamed"}</span>
+                        <span className="text-xs text-muted-foreground">{user.email}</span>
+                        <span className="text-xs text-muted-foreground">
+                          Created {new Date(user.createdAt).toLocaleDateString()}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -290,7 +316,7 @@ export default function AdminOverview() {
                               onSelect={async () => {
                                 try {
                                   await updateUser.mutateAsync({ id: user.id, isActive: true });
-                                  toast({ title: "Account reactivated", description: `${user.email} can log in again.` });
+                                  toast({ title: "Account reactivated", description: `${user.name ?? user.email} can log in again.` });
                                 } catch (err: any) {
                                   const message = err?.response?.data?.error || err.message || "Failed to reactivate";
                                   toast({ title: "Update failed", description: message, variant: "destructive" });
@@ -321,9 +347,24 @@ export default function AdminOverview() {
             <Form {...editForm}>
               <form className="space-y-4" onSubmit={editForm.handleSubmit(onEdit)}>
                 <div>
-                  <span className="text-sm font-medium text-foreground">{editingUser.email}</span>
+                  <span className="text-sm font-medium text-foreground">{editingUser.name ?? "Unnamed"}</span>
+                  <p className="text-xs text-muted-foreground">{editingUser.email}</p>
                   <p className="text-xs text-muted-foreground">User ID: {editingUser.id}</p>
                 </div>
+
+                <FormField
+                  control={editForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Maria Santos" autoComplete="off" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={editForm.control}
@@ -408,6 +449,12 @@ export default function AdminOverview() {
     </section>
   );
 }
+
+
+
+
+
+
 
 
 
