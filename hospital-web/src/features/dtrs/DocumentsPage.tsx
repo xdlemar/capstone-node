@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -92,6 +93,7 @@ type StatusFilterButtonsProps = {
 type DocumentRowProps = {
   doc: DocumentRecord;
   onCopyKey: (key?: string | null) => void;
+  onViewDetails: (id: string) => void;
 };
 
 function computeStatus(storageKey?: string | null): typeof DOCUMENT_STATUS[keyof typeof DOCUMENT_STATUS] {
@@ -118,15 +120,19 @@ export default function DocumentsPage() {
   const roles = user?.roles ?? [];
   const highestRole = getHighestRole(roles);
   const isManager = roles.includes("MANAGER") || roles.includes("ADMIN");
+  const navigate = useNavigate();
 
-  const [moduleFilter, setModuleFilter] = useState("");
+  const [moduleFilter, setModuleFilter] = useState<string>("ALL");
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortOption>("created-desc");
   const [visibleCount, setVisibleCount] = useState(DEFAULT_PAGE_SIZE);
 
   const summaryQuery = useDocumentSummary({ enabled: isManager });
-  const documentsQuery = useDocumentsList({ module: moduleFilter || undefined, q: searchValue || undefined });
+  const documentsQuery = useDocumentsList({
+    module: moduleFilter === "ALL" ? undefined : moduleFilter,
+    q: searchValue || undefined,
+  });
 
   const summary = summaryQuery.data;
   const documents = documentsQuery.data ?? [];
@@ -193,7 +199,7 @@ export default function DocumentsPage() {
 
   const visibleDocuments = filteredDocuments.slice(0, visibleCount);
   const hasMore = filteredDocuments.length > visibleCount;
-  const filtersActive = moduleFilter !== "" || searchValue.trim().length > 0 || statusFilter !== "all";
+  const filtersActive = moduleFilter !== "ALL" || searchValue.trim().length > 0 || statusFilter !== "all";
 
   const { toast } = useToast();
 
@@ -201,7 +207,7 @@ export default function DocumentsPage() {
 
 
   const handleResetFilters = () => {
-    setModuleFilter("");
+    setModuleFilter("ALL");
     setSearchValue("");
     setStatusFilter("all");
   };
@@ -267,7 +273,7 @@ export default function DocumentsPage() {
                   <SelectValue placeholder="All modules" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All modules</SelectItem>
+                  <SelectItem value="ALL">All modules</SelectItem>
                   {MODULE_OPTIONS.map((module) => (
                     <SelectItem key={module} value={module}>
                       {module}
@@ -348,7 +354,12 @@ export default function DocumentsPage() {
                   </TableHeader>
                   <TableBody>
                     {visibleDocuments.map((doc) => (
-                      <DocumentRow key={doc.id} doc={doc} onCopyKey={handleCopyKey} />
+                      <DocumentRow
+                        key={doc.id}
+                        doc={doc}
+                        onCopyKey={handleCopyKey}
+                        onViewDetails={(id) => navigate(`/dtrs/documents/${id}`)}
+                      />
                     ))}
                   </TableBody>
                 </Table>
@@ -614,7 +625,7 @@ function StatusFilterButtons({ active, counts, onChange }: StatusFilterButtonsPr
   );
 }
 
-function DocumentRow({ doc, onCopyKey }: DocumentRowProps) {
+function DocumentRow({ doc, onCopyKey, onViewDetails }: DocumentRowProps) {
   const status = computeStatus(doc.storageKey);
   const references = useMemo(() => {
     const refs: Array<{ label: string; value: string }> = [];
@@ -684,6 +695,9 @@ function DocumentRow({ doc, onCopyKey }: DocumentRowProps) {
         <Button type="button" variant="outline" size="sm" onClick={() => onCopyKey(doc.storageKey)}>
           Copy key
         </Button>
+        <Button type="button" variant="ghost" size="sm" className="ml-2" onClick={() => onViewDetails(doc.id)}>
+          View details
+        </Button>
       </TableCell>
     </TableRow>
   );
@@ -730,3 +744,4 @@ function ScopeFields({ form }: { form: ReturnType<typeof useForm<UploadFormValue
     </div>
   );
 }
+

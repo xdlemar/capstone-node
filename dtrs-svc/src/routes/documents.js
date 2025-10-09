@@ -399,6 +399,55 @@ router.get("/", async (req, res) => {
   }
 });
 
+
+
+router.get("/pending-signatures", managerOnly, async (_req, res) => {
+  try {
+    const docs = await prisma.document.findMany({
+      where: { signatures: { some: { storageKey: null } } },
+      include: {
+        tags: true,
+        signatures: {
+          where: { storageKey: null },
+          orderBy: { signedAt: "asc" },
+        },
+      },
+      orderBy: { createdAt: "asc" },
+      take: 200,
+    });
+
+    res.json(
+      docs.map((doc) => ({
+        id: doc.id.toString(),
+        title: doc.title,
+        module: doc.module,
+        notes: doc.notes,
+        storageKey: doc.storageKey,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+        projectId: doc.projectId ? doc.projectId.toString() : null,
+        poId: doc.poId ? doc.poId.toString() : null,
+        receiptId: doc.receiptId ? doc.receiptId.toString() : null,
+        deliveryId: doc.deliveryId ? doc.deliveryId.toString() : null,
+        assetId: doc.assetId ? doc.assetId.toString() : null,
+        woId: doc.woId ? doc.woId.toString() : null,
+        tags: doc.tags.map((tag) => tag.name),
+        pendingSignatures: doc.signatures.map((sig) => ({
+          id: sig.id.toString(),
+          signerId: sig.signerId ? sig.signerId.toString() : null,
+          method: sig.method,
+          signedAt: sig.signedAt,
+          storageKey: sig.storageKey,
+          ip: sig.ip,
+        })),
+      }))
+    );
+  } catch (e) {
+    console.error("[GET /documents/pending-signatures]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 router.get("/:id/versions", async (req, res) => {
   try {
     const id = toBigInt(req.params.id, "id");
@@ -621,6 +670,85 @@ router.get("/:id/audit", managerOnly, async (req, res) => {
   } catch (e) {
     if (e?.status === 400) return res.status(400).json({ error: e.message });
     console.error("[GET /documents/:id/audit]", e);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+
+
+router.get("/:id/detail", async (req, res) => {
+  try {
+    const id = toBigInt(req.params.id, "id");
+    const doc = await loadDocumentForRequest(req, res, id);
+    if (!doc) return;
+
+    const [tags, versions, signatures, audits] = await Promise.all([
+      prisma.docTag.findMany({ where: { documentId: id }, orderBy: { name: "asc" } }),
+      prisma.docVersion.findMany({ where: { documentId: id }, orderBy: { versionNo: "desc" } }),
+      prisma.docSignature.findMany({
+        where: { documentId: id },
+        orderBy: [{ storageKey: "asc" }, { signedAt: "desc" }],
+      }),
+      prisma.docAccessAudit.findMany({
+        where: { documentId: id },
+        orderBy: { occurredAt: "desc" },
+        take: 200,
+      }),
+    ]);
+
+    res.json({
+      document: {
+        id: doc.id.toString(),
+        title: doc.title,
+        module: doc.module,
+        notes: doc.notes,
+        storageKey: doc.storageKey,
+        mimeType: doc.mimeType,
+        size: doc.size,
+        checksum: doc.checksum,
+        uploaderId: doc.uploaderId ? doc.uploaderId.toString() : null,
+        projectId: doc.projectId ? doc.projectId.toString() : null,
+        poId: doc.poId ? doc.poId.toString() : null,
+        receiptId: doc.receiptId ? doc.receiptId.toString() : null,
+        deliveryId: doc.deliveryId ? doc.deliveryId.toString() : null,
+        assetId: doc.assetId ? doc.assetId.toString() : null,
+        woId: doc.woId ? doc.woId.toString() : null,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
+      },
+      tags: tags.map((tag) => ({
+        id: tag.id.toString(),
+        name: tag.name,
+      })),
+      versions: versions.map((version) => ({
+        id: version.id.toString(),
+        versionNo: version.versionNo,
+        storageKey: version.storageKey,
+        size: version.size,
+        checksum: version.checksum,
+        createdAt: version.createdAt,
+        createdById: version.createdById ? version.createdById.toString() : null,
+      })),
+      signatures: signatures.map((sig) => ({
+        id: sig.id.toString(),
+        signerId: sig.signerId ? sig.signerId.toString() : null,
+        method: sig.method,
+        signedAt: sig.signedAt,
+        storageKey: sig.storageKey,
+        ip: sig.ip,
+      })),
+      audits: audits.map((entry) => ({
+        id: entry.id.toString(),
+        action: entry.action,
+        occurredAt: entry.occurredAt,
+        userId: entry.userId ? entry.userId.toString() : null,
+        ip: entry.ip,
+        userAgent: entry.userAgent,
+      })),
+    });
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[GET /documents/:id/detail]", e);
     res.status(500).json({ error: "Internal error" });
   }
 });

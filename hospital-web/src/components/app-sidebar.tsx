@@ -83,6 +83,7 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
       { title: "Library & uploads", url: "/dtrs/documents", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Pending signatures", url: "/dtrs/pending", roles: ["MANAGER", "ADMIN"] },
       { title: "Missing docs ", url: "/dtrs/missing", roles: ["MANAGER", "ADMIN"] }
     ],
   },

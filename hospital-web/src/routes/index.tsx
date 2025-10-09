@@ -27,7 +27,9 @@ import ProjectsPage from "@/features/plt/ProjectsPage";
 import LogisticsAlertsPage from "@/features/plt/AlertsPage";
 import RoutesPage from "@/features/plt/RoutesPage";
 import DocumentsPage from "@/features/dtrs/DocumentsPage";
+import DocumentDetailPage from "@/features/dtrs/DocumentDetailPage";
 import MissingDocumentsPage from "@/features/dtrs/MissingDocumentsPage";
+import PendingSignaturesPage from "@/features/dtrs/PendingSignaturesPage";
 import AdminOverview from "@/features/admin/AdminOverview";
 import ProtectedRoute from "@/routes/protected";
 import { RoleGate } from "@/routes/role-gate";
@@ -215,6 +217,15 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to="documents" replace /> },
               { path: "documents", element: <DocumentsPage /> },
+              { path: "documents/:id", element: <DocumentDetailPage /> },
+              {
+                path: "pending",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <PendingSignaturesPage />
+                  </RoleGate>
+                ),
+              },
               {
                 path: "missing",
                 element: (

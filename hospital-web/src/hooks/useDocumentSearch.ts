@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+﻿import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 
@@ -161,3 +161,103 @@ export function useMissingDocumentsReport(
     staleTime: 60_000,
   });
 }
+
+export type PendingSignatureRecord = {
+  id: string;
+  title: string;
+  module: string;
+  notes: string | null;
+  storageKey: string | null;
+  createdAt: string;
+  updatedAt: string;
+  projectId: string | null;
+  poId: string | null;
+  receiptId: string | null;
+  deliveryId: string | null;
+  assetId: string | null;
+  woId: string | null;
+  tags: string[];
+  pendingSignatures: Array<{
+    id: string;
+    signerId: string | null;
+    method: string;
+    signedAt: string;
+    storageKey: string | null;
+    ip: string | null;
+  }>;
+};
+
+export type DocumentDetailResponse = {
+  document: {
+    id: string;
+    title: string;
+    module: string;
+    notes: string | null;
+    storageKey: string | null;
+    mimeType: string | null;
+    size: number | null;
+    checksum: string | null;
+    uploaderId: string | null;
+    projectId: string | null;
+    poId: string | null;
+    receiptId: string | null;
+    deliveryId: string | null;
+    assetId: string | null;
+    woId: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+  tags: Array<{ id: string; name: string }>;
+  versions: Array<{
+    id: string;
+    versionNo: number;
+    storageKey: string;
+    size: number | null;
+    checksum: string | null;
+    createdAt: string;
+    createdById: string | null;
+  }>;
+  signatures: Array<{
+    id: string;
+    signerId: string | null;
+    method: string;
+    signedAt: string;
+    storageKey: string | null;
+    ip: string | null;
+  }>;
+  audits: Array<{
+    id: string;
+    action: string;
+    occurredAt: string;
+    userId: string | null;
+    ip: string | null;
+    userAgent: string | null;
+  }>;
+};
+
+export function usePendingSignatures(options: { enabled?: boolean } = {}) {
+  return useQuery<PendingSignatureRecord[]>({
+    queryKey: ["dtrs", "pending-signatures"],
+    queryFn: async () => {
+      const { data } = await api.get<PendingSignatureRecord[]>("/dtrs/documents/pending-signatures");
+      return Array.isArray(data) ? data : [];
+    },
+    staleTime: 30_000,
+    enabled: options.enabled ?? true,
+  });
+}
+
+export function useDocumentDetail(id?: string, options: { enabled?: boolean } = {}) {
+  return useQuery<DocumentDetailResponse | null>({
+    queryKey: ["dtrs", "document-detail", id],
+    enabled: options.enabled ?? Boolean(id),
+    queryFn: async () => {
+      if (!id) return null;
+      const { data } = await api.get<DocumentDetailResponse>(`/dtrs/documents/${id}/detail`);
+      return data;
+    },
+    staleTime: 15_000,
+  });
+}
+
+
