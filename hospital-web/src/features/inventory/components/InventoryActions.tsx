@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import { useInventoryLookups, type InventoryLookupResponse } from "@/hooks/useInventoryLookups";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -693,7 +692,7 @@ export function CountFormCard({ className }: { className?: string }) {
                     <Plus className="mr-2 h-4 w-4" /> Add line
                   </Button>
                 </div>
-                {fields.length === 0 && <p className="text-sm text-muted-foreground">Add items you’ve counted to capture variances.</p>}
+                {fields.length === 0 && <p className="text-sm text-muted-foreground">Add items youï¿½ve counted to capture variances.</p>}
                 <div className="space-y-3">
                   {fields.map((field, index) => (
                     <LineRow
