@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -17,6 +17,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -227,6 +228,21 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
 
+  const assetCodePrefix = import.meta.env.VITE_ASSET_CODE_PREFIX || "EQ-";
+
+  const buildSuggestedCode = useCallback(() => {
+    if (typeof window !== "undefined" && window.crypto?.getRandomValues) {
+      const bytes = new Uint8Array(4);
+      window.crypto.getRandomValues(bytes);
+      const hex = Array.from(bytes)
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("")
+        .toUpperCase();
+      return `${assetCodePrefix}${hex}`;
+    }
+    return `${assetCodePrefix}${Math.random().toString(16).slice(2, 10).toUpperCase()}`;
+  }, [assetCodePrefix]);
+
   const form = useForm<AssetFormValues>({
     resolver: zodResolver(assetSchema),
     defaultValues: {
@@ -243,6 +259,24 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
     },
   });
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      form.reset({
+        name: "",
+        assetCode: buildSuggestedCode(),
+        category: "",
+        status: "ACTIVE",
+        locationId: locations[0]?.id ?? "",
+        purchaseDate: "",
+        acquisitionCost: "",
+        warrantyUntil: "",
+        serialNo: "",
+        notes: "",
+      });
+    }
+    setOpen(nextOpen);
+  };
+
   const mutation = useMutation({
     mutationFn: async (values: AssetFormValues) => {
       const payload: Record<string, any> = {
@@ -256,17 +290,21 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
       };
       if (values.purchaseDate) payload.purchaseDate = new Date(values.purchaseDate).toISOString();
       if (values.warrantyUntil) payload.warrantyUntil = new Date(values.warrantyUntil).toISOString();
-      if (values.acquisitionCost) payload.acquisitionCost = Number(values.acquisitionCost);
-      await api.post("/alms/assets", payload);
+      if (values.acquisitionCost) payload.acquisitionCost = values.acquisitionCost.trim();
+      const { data } = await api.post("/alms/assets", payload);
+      return data;
     },
-    onSuccess: () => {
-      toast({ title: "Asset registered" });
+    onSuccess: (data) => {
+      toast({
+        title: "Asset registered",
+        description: data?.assetCode ? `Generated code: ${data.assetCode}` : undefined,
+      });
       qc.invalidateQueries({ queryKey: ["alms", "assets"] });
       setOpen(false);
       onCreated?.();
       form.reset({
         name: "",
-        assetCode: "",
+        assetCode: buildSuggestedCode(),
         category: "",
         status: "ACTIVE",
         locationId: locations[0]?.id ?? "",
@@ -283,14 +321,14 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button disabled={disabled}>Register asset</Button>
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Register new asset</DialogTitle>
-          <DialogDescription>Provide asset details. Asset codes must be unique.</DialogDescription>
+          <DialogDescription>Provide asset details. A unique asset code will be generated automatically.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
@@ -314,8 +352,14 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
                 <FormItem>
                   <FormLabel>Asset code</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., MRI-01" {...field} />
+                    <>
+                      <input type="hidden" {...field} />
+                      <div className="rounded-md border border-dashed bg-muted/60 px-3 py-2 font-mono text-sm text-muted-foreground">
+                        {field.value}
+                      </div>
+                    </>
                   </FormControl>
+                  <FormDescription>This code is generated automatically and cannot be edited.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

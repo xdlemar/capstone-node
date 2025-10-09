@@ -4,6 +4,9 @@ const jwt = require("jsonwebtoken");
 
 const GATEWAY_URL = process.env.GATEWAY_URL || "http://localhost:8080";
 const JWT_SECRET  = process.env.JWT_SECRET  || "super_secret_dev";
+const ASSET_CODE_PREFIX = process.env.ASSET_CODE_PREFIX || "EQ-";
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const makeAuthz = (...roles) => ({
   Authorization: `Bearer ${jwt.sign({ sub: "student1", name: "ALMS Runner", roles }, JWT_SECRET)}`,
@@ -34,7 +37,6 @@ describe("E2E: ALMS CRUD via Gateway", () => {
   // ---------- ASSETS ----------
   test("assets: create", async () => {
     const body = {
-      assetCode: `EQ-${Math.floor(Math.random() * 1e9)}`,
       itemId: 1, // scalar link only
       serialNo: "SN-ALMS-001",
       category: "VENTILATOR",
@@ -44,7 +46,8 @@ describe("E2E: ALMS CRUD via Gateway", () => {
       notes: "ICU ventilator"
     };
     const res = await agent.post("/api/alms/assets").set(authz).send(body).expect(201);
-    expect(res.body.assetCode).toBe(body.assetCode);
+    const prefixPattern = new RegExp(`^${escapeRegex(ASSET_CODE_PREFIX)}`);
+    expect(res.body.assetCode).toEqual(expect.stringMatching(prefixPattern));
     S.asset = res.body; // bigint fields are strings via gateway replacer
   });
 

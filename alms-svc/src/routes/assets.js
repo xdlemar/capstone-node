@@ -1,4 +1,5 @@
 const router = require("express").Router();
+const crypto = require("crypto");
 const { prisma } = require("../prisma");
 
 function hasManagerRights(user) {
@@ -11,6 +12,14 @@ function ensureManager(req, res, next) {
     return res.status(403).json({ error: "Forbidden" });
   }
   return next();
+}
+
+const ASSET_CODE_PREFIX = process.env.ASSET_CODE_PREFIX || "EQ-";
+const MAX_CODE_ATTEMPTS = Number(process.env.ASSET_CODE_ATTEMPTS || 5);
+
+function generateAssetCodeCandidate() {
+  const random = crypto.randomBytes(4).toString("hex").toUpperCase();
+  return `${ASSET_CODE_PREFIX}${random}`;
 }
 // CREATE
 router.post("/", ensureManager, async (req, res, next) => {
@@ -30,29 +39,48 @@ router.post("/", ensureManager, async (req, res, next) => {
       notes,
     } = req.body || {};
 
-    if (!assetCode) {
-      return res.status(400).json({ error: "assetCode is required" });
+    const trimmedName = typeof name === "string" ? name.trim() : "";
+    let candidateCode = typeof assetCode === "string" ? assetCode.trim() : "";
+
+    const commonData = {
+      itemId: itemId ? BigInt(itemId) : null,
+      serialNo: serialNo || null,
+      category: category || null,
+      purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
+      acquisitionCost: acquisitionCost ?? null,
+      vendorId: vendorId ? BigInt(vendorId) : null,
+      warrantyUntil: warrantyUntil ? new Date(warrantyUntil) : null,
+      status: status || "ACTIVE",
+      locationId: locationId ? BigInt(locationId) : null,
+      notes: notes || null
+    };
+
+    for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt += 1) {
+      const code = candidateCode || generateAssetCodeCandidate();
+      try {
+        const row = await prisma.asset.create({
+          data: {
+            ...commonData,
+            assetCode: code,
+            name: trimmedName || code
+          }
+        });
+        return res.status(201).json(row);
+      } catch (err) {
+        if (err?.code === "P2002" && err?.meta?.target?.includes("assetCode")) {
+          if (candidateCode) {
+            return res.status(409).json({ error: "Asset code already exists" });
+          }
+          candidateCode = "";
+          continue;
+        }
+        console.error("[POST /assets]", err);
+        return next(err);
+      }
     }
 
-    const finalName = (name || assetCode).trim();
-
-    const row = await prisma.asset.create({
-      data: {
-        assetCode,
-        name: finalName || null,
-        itemId: itemId ? BigInt(itemId) : null,
-        serialNo: serialNo || null,
-        category: category || null,
-        purchaseDate: purchaseDate ? new Date(purchaseDate) : null,
-        acquisitionCost: acquisitionCost ?? null,
-        vendorId: vendorId ? BigInt(vendorId) : null,
-        warrantyUntil: warrantyUntil ? new Date(warrantyUntil) : null,
-        status: status || "ACTIVE",
-        locationId: locationId ? BigInt(locationId) : null,
-        notes: notes || null
-      }
-    });
-    res.status(201).json(row);
+    console.error("[POST /assets] exhausted asset code attempts");
+    return res.status(500).json({ error: "Failed to generate a unique asset code" });
   } catch (e) {
     console.error("[POST /assets]", e);
     next(e);
