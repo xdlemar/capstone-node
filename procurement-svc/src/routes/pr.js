@@ -75,4 +75,21 @@ router.post("/pr/:no/approve", managerAccess, async (req, res) => {
   }
 });
 
+// POST /pr/:no/reject
+router.post("/pr/:no/reject", managerAccess, async (req, res) => {
+  try {
+    const { no } = req.params;
+    const pr = await prisma.pR.update({
+      where: { prNo: no },
+      data: { status: "REJECTED" },
+      include: { lines: true },
+    });
+    res.json(pr);
+  } catch (err) {
+    if (err?.code === "P2025") return res.status(404).json({ error: "PR not found" });
+    console.error("[/pr/:no/reject] error", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
 module.exports = router;

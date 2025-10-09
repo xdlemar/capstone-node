@@ -107,6 +107,26 @@ describe("E2E: Procurement + Inventory via Gateway", () => {
       .expect(403);
   });
 
+  test("manager can reject PR", async () => {
+    const prNo = `PR-REJECT-${Math.floor(Math.random() * 1e9)}`;
+    await agent
+      .post("/api/procurement/pr")
+      .set(authz)
+      .send({
+        prNo,
+        notes: "Test rejecting requisition",
+        lines: [{ itemId: ITEM_ID, qty: 1, unit: "box" }],
+      })
+      .expect(200);
+
+    const res = await agent
+      .post(`/api/procurement/pr/${encodeURIComponent(prNo)}/reject`)
+      .set(authz)
+      .expect(200);
+
+    expect(res.body.status).toBe("REJECTED");
+  });
+
   test("upsert vendor (MedSupply Co.)", async () => {
     const body = { name: "MedSupply Co.", email: "sales@medsupply.local" };
     const res = await agent.post("/api/procurement/vendors").set(authz).send(body).expect(200);

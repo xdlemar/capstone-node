@@ -44,6 +44,7 @@ type ReceiptValues = z.infer<typeof receiptSchema>;
 
 const approveSchema = z.object({
   prNo: z.string().min(1, "Select a PR"),
+  action: z.enum(["approve", "reject"], { required_error: "Choose a decision" }),
 });
 
 type ApproveValues = z.infer<typeof approveSchema>;
@@ -439,22 +440,35 @@ export function ReceiptCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const lookups = useProcurementLookups();
   const { map: itemMap, query: inventoryQuery } = useItemFormatter();
-  const form = useForm<ApproveValues>({ resolver: zodResolver(approveSchema), defaultValues: { prNo: "" } });
+  const form = useForm<ApproveValues>({
+    resolver: zodResolver(approveSchema),
+    defaultValues: { prNo: "", action: "approve" },
+  });
 
   const submittedPrs = lookups.data?.submittedPrs ?? [];
   const selectedPrNo = form.watch("prNo");
+  const selectedAction = form.watch("action") ?? "approve";
   const selectedPr = submittedPrs.find((pr) => pr.prNo === selectedPrNo);
   const safeLines = (lines?: Array<{ itemId: string; qty: number; unit: string; notes?: string | null }>) => lines ?? [];
 
   const onSubmit = async (values: ApproveValues) => {
+    const isApprove = values.action === "approve";
+    const endpoint = isApprove ? "approve" : "reject";
+    const successTitle = isApprove ? "Requisition approved" : "Requisition rejected";
+    const successDescription = isApprove
+      ? `Requisition ${values.prNo} is now APPROVED.`
+      : `Requisition ${values.prNo} is now REJECTED.`;
+    const failureTitle = isApprove ? "Approval failed" : "Rejection failed";
+    const defaultFailureMessage = isApprove ? "Approval failed" : "Rejection failed";
+
     try {
-      await api.post(`/procurement/pr/${encodeURIComponent(values.prNo)}/approve`);
-      toast({ title: "Requisition approved", description: `Requisition ${values.prNo} is now APPROVED.` });
-      form.reset({ prNo: "" });
+      await api.post(`/procurement/pr/${encodeURIComponent(values.prNo)}/${endpoint}`);
+      toast({ title: successTitle, description: successDescription });
+      form.reset({ prNo: "", action: "approve" });
       lookups.refetch();
     } catch (err: any) {
-      const message = err?.response?.data?.error || err.message || "Approval failed";
-      toast({ title: "Approval failed", description: message, variant: "destructive" });
+      const message = err?.response?.data?.error || err.message || defaultFailureMessage;
+      toast({ title: failureTitle, description: message, variant: "destructive" });
     }
   };
 
@@ -520,7 +534,6 @@ export function ReceiptCard({ className }: { className?: string }) {
                   </FormItem>
                 )}
               />
-
               {selectedPr ? (
                 <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
                   <h3 className="text-sm font-semibold">Line details</h3>
@@ -545,10 +558,33 @@ export function ReceiptCard({ className }: { className?: string }) {
                 </div>
               ) : null}
 
-              <CardFooter className="px-0 pt-4">
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <CardFooter className="px-0 pt-4 flex flex-col gap-2 sm:flex-row">
+                <Button
+                  type="button"
+                  disabled={form.formState.isSubmitting}
+                  onClick={() => {
+                    form.setValue("action", "approve");
+                    form.handleSubmit(onSubmit)();
+                  }}
+                >
+                  {form.formState.isSubmitting && selectedAction === "approve" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
                   Approve requisition
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={form.formState.isSubmitting}
+                  onClick={() => {
+                    form.setValue("action", "reject");
+                    form.handleSubmit(onSubmit)();
+                  }}
+                >
+                  {form.formState.isSubmitting && selectedAction === "reject" ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : null}
+                  Reject requisition
                 </Button>
               </CardFooter>
             </form>
