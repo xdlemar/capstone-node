@@ -6,7 +6,9 @@ import { IssueFormCard, TransferFormCard } from "./components/InventoryActions";
 export default function StockControlPage() {
   const { user } = useAuth();
   const roles = user?.roles ?? [];
-  const canIssue = roles.includes("STAFF") || roles.includes("MANAGER") || roles.includes("ADMIN");
+  const canIssue = roles.includes("MANAGER") || roles.includes("ADMIN");
+  const canTransfer = roles.includes("STAFF") || canIssue;
+  const defaultTab = canIssue ? "issue" : "transfer";
 
   return (
     <section className="space-y-6">
@@ -18,18 +20,22 @@ export default function StockControlPage() {
         </p>
       </header>
 
-      <Tabs defaultValue="issue" className="space-y-4">
+      <Tabs defaultValue={defaultTab} className="space-y-4">
         <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="issue">Issue</TabsTrigger>
-          <TabsTrigger value="transfer">Transfer</TabsTrigger>
+          {canIssue ? <TabsTrigger value="issue">Issue</TabsTrigger> : null}
+          {canTransfer ? <TabsTrigger value="transfer">Transfer</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="issue" className="space-y-4">
-          {canIssue ? <IssueFormCard /> : null}
+          {canIssue ? (
+            <IssueFormCard />
+          ) : (
+            <p className="text-sm text-muted-foreground">Issuing stock requires manager or admin access.</p>
+          )}
         </TabsContent>
 
         <TabsContent value="transfer" className="space-y-4">
-          {canIssue ? <TransferFormCard /> : null}
+          {canTransfer ? <TransferFormCard /> : null}
         </TabsContent>
       </Tabs>
     </section>

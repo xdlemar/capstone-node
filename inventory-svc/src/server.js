@@ -42,7 +42,7 @@ app.use(staffAccess);
 
 // mount routes at ROOT
 app.use("/stock-moves", moves);
-app.use("/issues", issues);
+app.use("/issues", managerAccess, issues);
 app.use("/transfers", transfers);
 app.use("/counts", counts);
 app.use("/inspection", inspection);
