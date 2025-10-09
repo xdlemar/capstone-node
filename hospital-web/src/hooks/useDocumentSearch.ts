@@ -15,6 +15,7 @@ export type DocumentSearchResult = {
   uploaderId: string | null;
   storageKey: string | null;
   tags: string[];
+  notes: string | null;
 };
 
 export type DocumentRecord = DocumentSearchResult & {
@@ -69,6 +70,7 @@ function mapDocument(doc: any): DocumentRecord {
     uploaderId: doc.uploaderId ? doc.uploaderId.toString() : null,
     storageKey: doc.storageKey ?? null,
     tags: Array.isArray(doc.tags) ? doc.tags.map((t: any) => t.name || t) : [],
+    notes: doc.notes ?? null,
     poId: doc.poId ? doc.poId.toString() : null,
     projectId: doc.projectId ? doc.projectId.toString() : null,
     receiptId: doc.receiptId ? doc.receiptId.toString() : null,

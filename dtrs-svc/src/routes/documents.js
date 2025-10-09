@@ -274,6 +274,7 @@ router.post("/", async (req, res) => {
       mimeType,
       size,
       checksum,
+      notes,
       uploaderId,
       projectId,
       poId,
@@ -292,6 +293,8 @@ router.post("/", async (req, res) => {
 
     const inferredUploader = inferUserId(req, uploaderId);
     const uploader = toBigInt(inferredUploader, "uploaderId", { optional: true });
+    const normalizedNotes =
+      typeof notes === "string" ? notes.trim().slice(0, 2000) : null;
     const doc = await prisma.document.create({
       data: {
         module: documentModule,
@@ -300,6 +303,7 @@ router.post("/", async (req, res) => {
         mimeType,
         size,
         checksum,
+        notes: normalizedNotes || null,
         uploaderId: uploader,
         projectId: toBigInt(projectId, "projectId", { optional: true }),
         poId: toBigInt(poId, "poId", { optional: true }),

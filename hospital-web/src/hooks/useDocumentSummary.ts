@@ -25,7 +25,7 @@ export type DocumentSummary = {
   }>;
 };
 
-export function useDocumentSummary() {
+export function useDocumentSummary(options: { enabled?: boolean } = {}) {
   return useQuery<DocumentSummary>({
     queryKey: ["dtrs", "summary"],
     queryFn: async () => {
@@ -33,6 +33,7 @@ export function useDocumentSummary() {
       return data;
     },
     staleTime: 60_000,
+    enabled: options.enabled ?? true,
   });
 }
 

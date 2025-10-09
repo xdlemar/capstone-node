@@ -125,7 +125,7 @@ export default function DocumentsPage() {
   const [sortBy, setSortBy] = useState<SortOption>("created-desc");
   const [visibleCount, setVisibleCount] = useState(DEFAULT_PAGE_SIZE);
 
-  const summaryQuery = useDocumentSummary();
+  const summaryQuery = useDocumentSummary({ enabled: isManager });
   const documentsQuery = useDocumentsList({ module: moduleFilter || undefined, q: searchValue || undefined });
 
   const summary = summaryQuery.data;
@@ -197,7 +197,7 @@ export default function DocumentsPage() {
 
   const { toast } = useToast();
 
-  const awaitingSignatures = summary?.awaitingSignatures ?? 0;
+  const awaitingSignatures = isManager ? summary?.awaitingSignatures ?? 0 : 0;
 
 
   const handleResetFilters = () => {
@@ -250,7 +250,7 @@ export default function DocumentsPage() {
         </AlertDescription>
       </Alert>
 
-      <StatsRow summary={summary} loading={summaryQuery.isLoading} />
+      {isManager ? <StatsRow summary={summary} loading={summaryQuery.isLoading} /> : null}
 
       <Card className="border bg-card shadow-sm">
         <CardHeader className="space-y-4">
@@ -632,7 +632,10 @@ function DocumentRow({ doc, onCopyKey }: DocumentRowProps) {
       <TableCell className="align-top">
         <div className="flex flex-col gap-1">
           <span className="font-medium text-foreground">{doc.title}</span>
-          <span className="text-xs text-muted-foreground">Uploader: {doc.uploaderId ?? "—"}</span>
+          <span className="text-xs text-muted-foreground">Uploader: {doc.uploaderId ?? "-"}</span>
+          {doc.notes ? (
+            <span className="text-xs italic text-muted-foreground">Note: {doc.notes}</span>
+          ) : null}
         </div>
       </TableCell>
       <TableCell className="align-top">
@@ -648,7 +651,7 @@ function DocumentRow({ doc, onCopyKey }: DocumentRowProps) {
             ))}
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-xs text-muted-foreground">-</span>
         )}
       </TableCell>
       <TableCell className="align-top">
@@ -661,7 +664,7 @@ function DocumentRow({ doc, onCopyKey }: DocumentRowProps) {
             ))}
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground">—</span>
+          <span className="text-xs text-muted-foreground">-</span>
         )}
       </TableCell>
       <TableCell className="align-top">
@@ -674,7 +677,7 @@ function DocumentRow({ doc, onCopyKey }: DocumentRowProps) {
             {doc.storageKey}
           </span>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-muted-foreground">-</span>
         )}
       </TableCell>
       <TableCell className="align-top text-right">

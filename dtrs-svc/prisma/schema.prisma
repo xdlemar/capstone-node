@@ -49,6 +49,7 @@ model Document {
   mimeType   String?
   size       Int?
   checksum   String?
+  notes      String?
   uploaderId BigInt?
 
   // cross-service references as scalar IDs (no relations across services)

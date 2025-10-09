@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-const MODULE_OPTIONS = ["PROCUREMENT", "PROJECT", "DELIVERY", "ASSET", "MAINTENANCE"] as const;
+const MODULE_OPTIONS = ["PROCUREMENT", "PROJECT", "DELIVERY"] as const;
 
 const reportSchema = z.object({
   module: z.enum(MODULE_OPTIONS, { required_error: "Select a module" }),
@@ -187,7 +187,7 @@ export default function MissingDocumentsPage() {
                       <li key={doc.id} className="rounded-md border border-border/60 p-3">
                         <div className="font-medium">{doc.title}</div>
                         <div className="text-xs text-muted-foreground">
-                          Tags: {doc.tags.length ? doc.tags.join(", ") : "none"} · Uploaded {new Date(doc.createdAt).toLocaleString()}
+                          Tags: {doc.tags.length ? doc.tags.join(", ") : "none"} - Uploaded {new Date(doc.createdAt).toLocaleString()}
                         </div>
                       </li>
                     ))}

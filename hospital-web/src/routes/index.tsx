@@ -26,7 +26,6 @@ import DeliveriesPage from "@/features/plt/DeliveriesPage";
 import ProjectsPage from "@/features/plt/ProjectsPage";
 import LogisticsAlertsPage from "@/features/plt/AlertsPage";
 import RoutesPage from "@/features/plt/RoutesPage";
-import DtrsOverview from "@/features/dtrs/DtrsOverview";
 import DocumentsPage from "@/features/dtrs/DocumentsPage";
 import MissingDocumentsPage from "@/features/dtrs/MissingDocumentsPage";
 import AdminOverview from "@/features/admin/AdminOverview";
@@ -214,7 +213,7 @@ export const router = createBrowserRouter([
               </RoleGate>
             ),
             children: [
-              { index: true, element: <DtrsOverview /> },
+              { index: true, element: <Navigate to="documents" replace /> },
               { path: "documents", element: <DocumentsPage /> },
               {
                 path: "missing",
