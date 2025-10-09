@@ -277,9 +277,10 @@ describe("E2E: Procurement + Inventory via Gateway", () => {
     const toOnHand = await fetchOnHand(agent, authz, TO_LOC_ID);
 
     const transferNo = `TR-${Math.floor(Math.random() * 1e9)}`;
-    await agent
+    const staffAuth = makeAuthz("STAFF");
+    const createRes = await agent
       .post("/api/inventory/transfers")
-      .set(authz)
+      .set(staffAuth)
       .send({
         transferNo,
         fromLocId: FROM_LOC_ID,
@@ -287,6 +288,16 @@ describe("E2E: Procurement + Inventory via Gateway", () => {
         lines: [{ itemId: ITEM_ID, qty: TRANSFER_QTY }],
       })
       .expect(201);
+
+    expect(createRes.body.status).toBe("PENDING");
+
+    // Stock levels remain unchanged until approval
+    const fromAfterPending = await fetchOnHand(agent, authz, FROM_LOC_ID);
+    const toAfterPending = await fetchOnHand(agent, authz, TO_LOC_ID);
+    expect(fromAfterPending).toBe(fromOnHand);
+    expect(toAfterPending).toBe(toOnHand);
+
+    await agent.post(`/api/inventory/transfers/${createRes.body.id}/approve`).set(authz).expect(200);
 
     const fromAfter = await fetchOnHand(agent, authz, FROM_LOC_ID);
     const toAfter = await fetchOnHand(agent, authz, TO_LOC_ID);

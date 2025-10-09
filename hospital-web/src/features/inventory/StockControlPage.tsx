@@ -7,7 +7,8 @@ export default function StockControlPage() {
   const { user } = useAuth();
   const roles = user?.roles ?? [];
   const canIssue = roles.includes("MANAGER") || roles.includes("ADMIN");
-  const canTransfer = roles.includes("STAFF") || canIssue;
+  const isApprover = canIssue;
+  const canTransfer = roles.includes("STAFF") && !isApprover;
   const defaultTab = canIssue ? "issue" : "transfer";
 
   return (

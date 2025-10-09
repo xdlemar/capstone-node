@@ -13,7 +13,8 @@ async function recordStockMove({
   lotNo = null,
   expiryDate = null,
   batchId = null,
-}) {
+}, options = {}) {
+  const client = options.client || prisma;
   const qtyNumber = typeof qty === "number" ? qty : Number(qty);
   if (!Number.isFinite(qtyNumber) || qtyNumber <= 0) {
     const err = new Error("qty must be a positive number");
@@ -44,7 +45,7 @@ async function recordStockMove({
     occurredAt: new Date(),
   };
 
-  return prisma.$transaction(async (p) => {
+  const exec = async (p) => {
     let resolvedOutboundBatch = null;
     let inboundBatch = null;
 
@@ -123,7 +124,13 @@ async function recordStockMove({
     }
 
     return p.stockMove.create({ data: dataMove });
-  });
+  };
+
+  if (options.client) {
+    return exec(client);
+  }
+
+  return prisma.$transaction(exec);
 }
 
 module.exports = { recordStockMove };

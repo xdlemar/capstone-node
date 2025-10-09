@@ -1,4 +1,4 @@
-锘縤mport { useMemo } from "react";
+import { useMemo } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { useInventoryLookups, type InventoryLookupResponse } from "@/hooks/useInventoryLookups";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -112,7 +113,7 @@ function LineRow({
               <SelectContent>
                 {itemOptions.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
-                    {item.name} 路 {item.sku}
+                    {item.name} - {item.sku}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -185,7 +186,7 @@ function useLineHelpers(data: ReturnType<typeof useInventoryData>) {
     return (
       <span className="text-muted-foreground">
         {meta.unit ? `Unit: ${meta.unit}` : ""}
-        {meta.minQty ? ` 路 Min: ${meta.minQty}` : ""}
+        {meta.minQty ? ` - Min: ${meta.minQty}` : ""}
       </span>
     );
   };
@@ -303,7 +304,7 @@ export function IssueFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} 路 {loc.kind}
+                              {loc.name} - {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -327,7 +328,7 @@ export function IssueFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} 路 {loc.kind}
+                              {loc.name} - {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -380,6 +381,7 @@ export function IssueFormCard({ className }: { className?: string }) {
 
 export function TransferFormCard({ className }: { className?: string }) {
   const { toast } = useToast();
+  const requiresApproval = true;
   const data = useInventoryData();
   const { formatItem } = useLineHelpers(data);
 
@@ -406,7 +408,12 @@ export function TransferFormCard({ className }: { className?: string }) {
         lines: values.lines.map((ln) => ({ itemId: ln.itemId, qty: ln.qty, notes: ln.notes || undefined })),
       };
       await api.post("/inventory/transfers", payload);
-      toast({ title: "Transfer queued", description: `${values.lines.length} line(s) in transfer ${values.transferNo}` });
+      toast({
+        title: requiresApproval ? "Transfer submitted" : "Transfer posted",
+        description: requiresApproval
+          ? `Transfer ${values.transferNo} is awaiting manager approval.`
+          : `${values.lines.length} line(s) moved immediately.`,
+      });
       form.reset({
         transferNo: `XFER-${Date.now()}`,
         fromLocId: "",
@@ -486,7 +493,7 @@ export function TransferFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} 路 {loc.kind}
+                              {loc.name} - {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -510,7 +517,7 @@ export function TransferFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} 路 {loc.kind}
+                              {loc.name} - {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -552,6 +559,11 @@ export function TransferFormCard({ className }: { className?: string }) {
                   {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Schedule transfer
                 </Button>
+                {requiresApproval ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Moves post only after a manager or admin approves the transfer.
+                  </p>
+                ) : null}
               </CardFooter>
             </form>
           </Form>
@@ -650,7 +662,7 @@ export function CountFormCard({ className }: { className?: string }) {
                         <SelectContent>
                           {data.data?.locations.map((loc) => (
                             <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} 路 {loc.kind}
+                              {loc.name} - {loc.kind}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -681,7 +693,7 @@ export function CountFormCard({ className }: { className?: string }) {
                     <Plus className="mr-2 h-4 w-4" /> Add line
                   </Button>
                 </div>
-                {fields.length === 0 && <p className="text-sm text-muted-foreground">Add items you鈥檝e counted to capture variances.</p>}
+                {fields.length === 0 && <p className="text-sm text-muted-foreground">Add items you抳e counted to capture variances.</p>}
                 <div className="space-y-3">
                   {fields.map((field, index) => (
                     <LineRow

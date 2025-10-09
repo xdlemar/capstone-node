@@ -200,12 +200,17 @@ model IssueAlloc {
  */
 
 model Transfer {
-  id         BigInt   @id @default(autoincrement())
-  transferNo String   @unique
-  fromLocId  BigInt
-  toLocId    BigInt
-  notes      String?
-  createdAt  DateTime @default(now())
+  id              BigInt         @id @default(autoincrement())
+  transferNo      String         @unique
+  fromLocId       BigInt
+  toLocId         BigInt
+  notes           String?
+  createdAt       DateTime       @default(now())
+  status          TransferStatus @default(PENDING)
+  requestedBy     String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  rejectionReason String?
 
   fromLoc Location       @relation("XferFromLoc", fields: [fromLocId], references: [id], onDelete: Restrict)
   toLoc   Location       @relation("XferToLoc", fields: [toLocId], references: [id], onDelete: Restrict)
@@ -221,6 +226,12 @@ model TransferLine {
 
   transfer Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   item     Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+}
+
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 /**
