@@ -327,11 +327,7 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <p className="text-sm text-muted-foreground">Cycle counts open</p>
-                <p className="text-lg font-semibold">{formatCount(inventory?.openCounts)}</p>
-              </div>
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-sm text-muted-foreground">Deliveries in transit</p>
                 <p className="text-lg font-semibold text-emerald-600">{formatCount(logistics?.deliveriesInTransit)}</p>

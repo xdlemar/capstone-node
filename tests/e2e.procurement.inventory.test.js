@@ -227,36 +227,6 @@ describe("E2E: Procurement + Inventory via Gateway", () => {
     expect(res.body.lines?.[0]?.qtyIssued).toBe(3);
   });
 
-  test("inventory: create COUNT, then POST it (requires Location to exist)", async () => {
-    const sessionNo = `CNT-${Math.floor(Math.random() * 1e9)}`;
-    const body = {
-      sessionNo,
-      locationId: FROM_LOC_ID,
-      lines: [{ itemId: ITEM_ID, countedQty: 10, systemQty: 9, variance: 1 }],
-    };
-
-    const create = await agent.post("/api/inventory/counts").set(authz).send(body);
-
-    if (create.status === 400) {
-      throw new Error(
-        `COUNT create failed with 400. Ensure Location(${FROM_LOC_ID}) exists. Body: ${JSON.stringify(
-          create.body,
-        )}`,
-      );
-    }
-    expect(create.status).toBe(201);
-    expect(create.body.sessionNo).toBe(sessionNo);
-
-    const post = await agent
-      .post(`/api/inventory/counts/${encodeURIComponent(sessionNo)}/post`)
-      .set(authz);
-
-    if (post.status !== 200) {
-      throw new Error(`COUNT post expected 200, got ${post.status}. Body: ${JSON.stringify(post.body)}`);
-    }
-    expect(post.body.status).toBe("POSTED");
-  });
-
   test("inventory: transfer shifts stock between locations", async () => {
     let fromOnHand = await fetchOnHand(agent, authz, FROM_LOC_ID);
     if (fromOnHand < TRANSFER_QTY) {

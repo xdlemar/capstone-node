@@ -15,7 +15,6 @@ import StockControlPage from "@/features/inventory/StockControlPage";
 import TransferApprovalsPage from "@/features/inventory/TransferApprovalsPage";
 import StorageAreasPage from "@/features/inventory/StorageAreasPage";
 import ItemCatalogPage from "@/features/inventory/ItemCatalogPage";
-import CycleCountPage from "@/features/inventory/CycleCountPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
 import AssetsPage from "@/features/alms/AssetsPage";
 import WorkOrdersPage from "@/features/alms/WorkOrdersPage";
@@ -120,14 +119,6 @@ export const router = createBrowserRouter([
                 element: (
                   <RoleGate allowed={ADMIN_SET}>
                     <StorageAreasPage />
-                  </RoleGate>
-                ),
-              },
-              {
-                path: "cycle-counts",
-                element: (
-                  <RoleGate allowed={MANAGER_SET}>
-                    <CycleCountPage />
                   </RoleGate>
                 ),
               },

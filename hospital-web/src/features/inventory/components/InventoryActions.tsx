@@ -39,23 +39,8 @@ const transferSchema = z.object({
   lines: z.array(lineSchema).min(1, "Add at least one line"),
 });
 
-const countSchema = z.object({
-  sessionNo: z.string().min(3, "Session number is required"),
-  locationId: z.string().min(1, "Select a location"),
-  notes: z.string().optional(),
-  lines: z.array(
-    z.object({
-      itemId: z.string().min(1, "Select an item"),
-      countedQty: z.coerce.number({ invalid_type_error: "Enter a counted qty" }).nonnegative(),
-      systemQty: z.coerce.number({ invalid_type_error: "Enter the system qty" }).nonnegative(),
-      notes: z.string().optional(),
-    })
-  ),
-});
-
 type IssueValues = z.infer<typeof issueSchema>;
 type TransferValues = z.infer<typeof transferSchema>;
-type CountValues = z.infer<typeof countSchema>;
 
 function useInventoryData() {
   const query = useInventoryLookups();
@@ -86,14 +71,12 @@ function LineRow({
   remove,
   itemOptions,
   itemHint,
-  formType,
 }: {
   index: number;
   control: any;
   remove: (index: number) => void;
   itemOptions: InventoryLookupResponse["items"];
   itemHint: (id: string) => React.ReactNode;
-  formType: "issue" | "transfer" | "count";
 }) {
   return (
     <div className="rounded-md border p-3 space-y-3">
@@ -126,10 +109,10 @@ function LineRow({
       <div className="grid gap-3 md:grid-cols-3">
         <FormField
           control={control}
-          name={`lines.${index}.${formType === "count" ? "countedQty" : "qty"}` as const}
+          name={`lines.${index}.qty`}
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{formType === "count" ? "Counted qty" : "Quantity"}</FormLabel>
+              <FormLabel>Quantity</FormLabel>
               <FormControl>
                 <Input type="number" min="0" step="1" {...field} />
               </FormControl>
@@ -137,23 +120,6 @@ function LineRow({
             </FormItem>
           )}
         />
-        {formType === "count" ? (
-          <FormField
-            control={control}
-            name={`lines.${index}.systemQty`}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>System qty</FormLabel>
-                <FormControl>
-                  <Input type="number" min="0" step="1" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        ) : (
-          <div className="hidden md:block" />
-        )}
         <FormField
           control={control}
           name={`lines.${index}.notes`}
@@ -571,169 +537,4 @@ export function TransferFormCard({ className }: { className?: string }) {
     </Card>
   );
 }
-
-export function CountFormCard({ className }: { className?: string }) {
-  const { toast } = useToast();
-  const data = useInventoryData();
-  const { formatItem } = useLineHelpers(data);
-
-  const form = useForm<CountValues>({
-    resolver: zodResolver(countSchema),
-    defaultValues: {
-      sessionNo: `CNT-${Date.now()}`,
-      locationId: "",
-      notes: "",
-      lines: [],
-    },
-  });
-
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
-
-  const onSubmit = async (values: CountValues) => {
-    try {
-      const payload = {
-        sessionNo: values.sessionNo,
-        locationId: values.locationId,
-        notes: values.notes || undefined,
-        lines: values.lines.map((ln) => ({
-          itemId: ln.itemId,
-          countedQty: ln.countedQty,
-          systemQty: ln.systemQty,
-          variance: Number(ln.countedQty) - Number(ln.systemQty),
-          notes: ln.notes || undefined,
-        })),
-      };
-      await api.post("/inventory/counts", payload);
-      toast({ title: "Count session created", description: `${values.lines.length} lines captured for reconciliation.` });
-      form.reset({ sessionNo: `CNT-${Date.now()}`, locationId: "", notes: "", lines: [] });
-    } catch (err: any) {
-      const message = err?.response?.data?.error || err.message || "Failed to create cycle count";
-      toast({ title: "Count failed", description: message, variant: "destructive" });
-    }
-  };
-
-  return (
-    <Card className={cn("border-border/60", className)}>
-      <CardHeader>
-        <CardTitle>Start a cycle count</CardTitle>
-        <CardDescription>Use this when reconciling physical counts against system balances.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {data.isLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading items and locations...
-          </div>
-        ) : data.error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Lookup failed</AlertTitle>
-            <AlertDescription>Unable to load inventory lookups. Check your permissions or try again.</AlertDescription>
-          </Alert>
-        ) : (
-          <Form {...form}>
-            <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="sessionNo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Session number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="CNT-001" {...field} />
-                      </FormControl>
-                      <FormDescription>Used for posting adjustments later.</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="locationId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Location</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-background">
-                            <SelectValue placeholder="Select a location" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {data.data?.locations.map((loc) => (
-                            <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} - {loc.kind}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Cycle count for ICU shelves" {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base">Lines</Label>
-                  <Button type="button" variant="outline" onClick={() => append({ itemId: "", countedQty: 0, systemQty: 0, notes: "" } as any)}>
-                    <Plus className="mr-2 h-4 w-4" /> Add line
-                  </Button>
-                </div>
-                {fields.length === 0 && <p className="text-sm text-muted-foreground">Add items you�ve counted to capture variances.</p>}
-                <div className="space-y-3">
-                  {fields.map((field, index) => (
-                    <LineRow
-                      key={(field as any).id ?? index}
-                      index={index}
-                      control={form.control}
-                      remove={remove}
-                      itemOptions={data.data?.items ?? []}
-                      itemHint={formatItem}
-                      formType="count"
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <CardFooter className="px-0 pt-4">
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Create session
-                </Button>
-              </CardFooter>
-            </form>
-          </Form>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

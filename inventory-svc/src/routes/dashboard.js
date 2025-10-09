@@ -16,7 +16,7 @@ router.get("/dashboard/summary", staffAccess, async (_req, res) => {
     const thirtyDaysAhead = new Date(now);
     thirtyDaysAhead.setDate(now.getDate() + 30);
 
-    const [lowStock, expiringSoon, openCounts, notifications] = await Promise.all([
+    const [lowStock, expiringSoon, notifications] = await Promise.all([
       prisma.notification.count({
         where: { type: "LOW_STOCK", resolvedAt: null },
       }),
@@ -27,7 +27,6 @@ router.get("/dashboard/summary", staffAccess, async (_req, res) => {
           createdAt: { gte: sevenDaysAgo },
         },
       }),
-      prisma.countSession.count({ where: { status: "OPEN" } }),
       prisma.notification.findMany({
         where: { resolvedAt: null },
         orderBy: { createdAt: "desc" },
@@ -81,7 +80,7 @@ router.get("/dashboard/summary", staffAccess, async (_req, res) => {
       lowStock,
       expiringSoon,
       expiringBatches,
-      openCounts,
+      openCounts: 0,
       movementsSeries: buckets,
       alerts,
     });

@@ -13,7 +13,6 @@ export type InventorySummary = {
   lowStock: number;
   expiringSoon: number;
   expiringBatches: number;
-  openCounts: number;
   movementsSeries: number[];
   alerts: Array<{
     id: string;

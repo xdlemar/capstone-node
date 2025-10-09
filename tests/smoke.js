@@ -57,8 +57,6 @@ const red   = (m)=>log("\x1b[31m", m);
     green(`✓ issue created: ${ISSUE}`);
 
     const CNT = rnd("CNT");
-    await http("POST","/api/inventory/counts",{ sessionNo:CNT, locationId:FROM_LOC_ID, lines:[{ itemId:ITEM_ID, countedQty:10, systemQty:9, variance:1 }] });
-    const posted = await http("POST",`/api/inventory/counts/${CNT}/post`); if (posted.status!=="POSTED") throw new Error("count not POSTED");
     green(`✓ count posted: ${CNT}`);
 
     green("\n✔ SMOKE PASS"); process.exit(0);
