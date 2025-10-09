@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ShieldCheck, UserCog } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -26,7 +26,7 @@ import {
 
 function formatRoles(roles: string[]) {
   if (!roles.length) return "No role assigned";
-  return roles.map((r) => r.toLowerCase()).join(" � ");
+  return roles.map((r) => r.toLowerCase()).join(" · ");
 }
 
 export function NavUser({ roles }: { roles: string[] }) {
@@ -89,7 +89,12 @@ export function NavUser({ roles }: { roles: string[] }) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                navigate("/profile");
+              }}
+            >
               <UserCog className="mr-2 h-4 w-4" />
               Profile settings
             </DropdownMenuItem>

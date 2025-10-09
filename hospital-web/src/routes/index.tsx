@@ -31,6 +31,7 @@ import DocumentDetailPage from "@/features/dtrs/DocumentDetailPage";
 import MissingDocumentsPage from "@/features/dtrs/MissingDocumentsPage";
 import PendingSignaturesPage from "@/features/dtrs/PendingSignaturesPage";
 import AdminOverview from "@/features/admin/AdminOverview";
+import ProfilePage from "@/features/profile/ProfilePage";
 import ProtectedRoute from "@/routes/protected";
 import { RoleGate } from "@/routes/role-gate";
 
@@ -236,6 +237,7 @@ export const router = createBrowserRouter([
               },
             ],
           },
+          { path: "profile", element: <ProfilePage /> },
           {
             path: "admin",
             element: (
