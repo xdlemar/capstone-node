@@ -102,6 +102,12 @@ jobs:
             JWT_SECRET=$JWT_SECRET
             JWT_EXPIRES=$JWT_EXPIRES
             CORS_ORIGIN="${AUTH_CORS_ORIGIN:-*}"
+            SMTP_HOST=smtp.gmail.com
+            SMTP_PORT=465
+            SMTP_SECURE=true
+            SMTP_USER=cjunerdy@gmail.com
+            SMTP_PASS=rgzi whbc ciix whvr
+            MAIL_FROM="HVH Logistics <cjunerdy@gmail.com>"
             EOF
 
             cat > inventory-svc/.env <<EOF
