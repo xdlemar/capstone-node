@@ -1,11 +1,10 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { FullScreenPreloader } from "@/components/layout/Preloader";
 import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
@@ -31,7 +30,7 @@ type LoginStep = "credentials" | "otp";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<LoginErrorMessage | null>(null);
   const [redirecting, setRedirecting] = useState(false);
@@ -153,6 +152,12 @@ export default function LoginPage() {
     }
   };
 
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
+
   const resetToLogin = () => {
     setStep("credentials");
     setOtpInfo(null);
@@ -177,63 +182,64 @@ export default function LoginPage() {
 
   if (step === "otp" && otpInfo) {
     return (
-      <div className="hvh-bg flex min-h-[100svh] items-center justify-center px-4 py-6">
+      <div className=" flex min-h-[100svh] items-center justify-center px-4 py-6">
         <div className="flex w-full max-w-md flex-col gap-6">
-          <Card className="rounded-2xl shadow-xl ring-1 ring-black/5">
-            <CardContent className="space-y-6 p-6">
-              <div className="space-y-2 text-center">
-                <h1 className="text-2xl font-semibold">Check your email</h1>
-                <p className="text-sm text-muted-foreground">
-                  Enter the 6-digit code we sent to <span className="font-medium text-foreground">{otpInfo.email}</span>.
-                </p>
-                {otpError ? (
-                  <Alert variant="destructive">
-                    <AlertDescription>{otpError}</AlertDescription>
-                  </Alert>
-                ) : null}
+          <div
+            className="rounded-2xl border border-border/60 bg-white p-6 shadow-xl ring-1 ring-black/5 dark:border-border/40 dark:bg-slate-900"
+            style={{ backgroundColor: "#ffffff", opacity: 1 }}
+          >
+            <div className="space-y-2 text-center">
+              <h1 className="text-2xl font-semibold">Check your email</h1>
+              <p className="text-sm text-muted-foreground">
+                Enter the 6-digit code we sent to <span className="font-medium text-foreground">{otpInfo.email}</span>.
+              </p>
+              {otpError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{otpError}</AlertDescription>
+                </Alert>
+              ) : null}
+            </div>
+
+            <form className="mt-6 space-y-4" onSubmit={handleVerifyOtp}>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground" htmlFor="otp-code">
+                  Verification code
+                </label>
+                <Input
+                  id="otp-code"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="123456"
+                  value={otpValue}
+                  onChange={(event) => setOtpValue(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                  disabled={otpLoading}
+                />
               </div>
 
-              <form className="space-y-4" onSubmit={handleVerifyOtp}>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-foreground" htmlFor="otp-code">
-                    Verification code
-                  </label>
-                  <Input
-                    id="otp-code"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={6}
-                    placeholder="123456"
-                    value={otpValue}
-                    onChange={(event) => setOtpValue(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                    disabled={otpLoading}
-                  />
-                </div>
+              <Button type="submit" className="w-full" disabled={otpLoading || otpValue.length < 4}>
+                {otpLoading ? "Verifying..." : "Verify code"}
+              </Button>
+            </form>
 
-                <Button type="submit" className="w-full" disabled={otpLoading || otpValue.length < 4}>
-                  {otpLoading ? "Verifying..." : "Verify code"}
-                </Button>
-              </form>
-
-              <div className="flex flex-col gap-2 text-xs text-muted-foreground">
-                <button
-                  type="button"
-                  className="text-left text-sm font-medium text-primary hover:underline disabled:text-muted-foreground"
-                  onClick={handleResendOtp}
-                  disabled={otpLoading || resendCountdown > 0}
-                >
-                  Resend code {resendCountdown > 0 ? `(${resendCountdown})` : ""}
-                </button>
-                <button type="button" className="text-left text-sm underline underline-offset-4" onClick={resetToLogin}>
-                  Back to login
-                </button>
-                <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  <span>Codes expire after {Math.floor(otpInfo.expiresIn / 60)} minute(s).</span>
-                </div>
+            <div className="mt-4 flex flex-col gap-2 text-xs text-muted-foreground">
+              <button
+                type="button"
+                className="text-left text-sm font-medium text-primary hover:underline disabled:text-muted-foreground"
+                onClick={handleResendOtp}
+                disabled={otpLoading || resendCountdown > 0}
+              >
+                Resend code {resendCountdown > 0 ? `(${resendCountdown})` : ""}
+              </button>
+              <button type="button" className="text-left text-sm underline underline-offset-4" onClick={resetToLogin}>
+                Back to login
+              </button>
+              <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span>Codes expire after {Math.floor(otpInfo.expiresIn / 60)} minute(s).</span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     );

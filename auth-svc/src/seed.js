@@ -4,7 +4,7 @@ const { sanitizeDocScopesInput } = require("./lib/docScopes");
 
 const USERS = [
   {
-    email: process.env.SEED_ADMIN_EMAIL || "admin@hospital.local",
+    email: process.env.SEED_ADMIN_EMAIL || "xdlemar15@gmail.com",
     name: "Logistics Administrator",
     password: process.env.SEED_ADMIN_PASSWORD || "ChangeMe123!",
     roles: ["ADMIN", "MANAGER", "STAFF"],
