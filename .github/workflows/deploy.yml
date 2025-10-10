@@ -170,10 +170,13 @@ jobs:
             cp -a frontend-build/index.html ./
             cp -a frontend-build/assets ./
 
-            cat > .htaccess <<EOF
+            cat > .htaccess <<'EOF'
             RewriteEngine On
             RewriteBase /
-           
+
+            # Allow static assets (including hashed Vite files) to bypass the SPA fallback
+            RewriteRule ^(assets/.*|.*\.(?:css|js|mjs|png|jpe?g|webp|avif|gif|svg|ico|txt|json|map|woff2?))$ - [L,NC]
+
             RewriteCond %{REQUEST_FILENAME} !-f
             RewriteCond %{REQUEST_FILENAME} !-d 
             RewriteRule . index.html [L]
