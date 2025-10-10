@@ -51,6 +51,12 @@ jobs:
           PLT_PORT: 4005
           DTRS_PORT: 4006
           ALMS_PORT: 4007
+          SMTP_HOST: ${{ secrets.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT || '587' }}
+          SMTP_SECURE: ${{ secrets.SMTP_SECURE || 'false' }}
+          SMTP_USER: ${{ secrets.SMTP_USER || '' }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS || '' }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM || 'HVH Logistics <no-reply@log1.health-ease-hospital.com>' }}
           SSH_PORT: ${{ secrets.SERVER_PORT || '2298' }}
         with:
           host: ${{ secrets.SERVER_IP || '23.94.230.146' }}
@@ -103,10 +109,10 @@ jobs:
             JWT_EXPIRES=$JWT_EXPIRES
             CORS_ORIGIN="${AUTH_CORS_ORIGIN:-*}"
             SMTP_HOST=smtp.gmail.com
-            SMTP_PORT=465
-            SMTP_SECURE=true
+            SMTP_PORT=587
+            SMTP_SECURE=false
             SMTP_USER=cjunerdy@gmail.com
-            SMTP_PASS=rgzi whbc ciix whvr
+            SMTP_PASS=rgziwhbcciixwhvr
             MAIL_FROM="HVH Logistics <cjunerdy@gmail.com>"
             EOF
 

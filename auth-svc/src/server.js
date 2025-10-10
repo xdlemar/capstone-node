@@ -1,15 +1,36 @@
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const rateLimit = require("express-rate-limit");
 const dotenv = require("dotenv");
-dotenv.config();
+
+const envPath = path.join(__dirname, "..", ".env");
+const result = dotenv.config({ path: envPath });
+if (result.error) {
+  console.warn(`[auth-svc] Unable to load ${envPath}: ${result.error.message}`);
+  dotenv.config();
+}
 
 const auth = require("./routes/auth");
 const adminUsers = require("./routes/adminUsers");
 const dashboard = require("./routes/dashboard");
 
 const app = express();
+const trustProxySetting = process.env.TRUST_PROXY;
+if (trustProxySetting !== undefined) {
+  if (trustProxySetting === "false") {
+    app.set("trust proxy", false);
+  } else if (trustProxySetting === "true") {
+    app.set("trust proxy", true);
+  } else if (!Number.isNaN(Number(trustProxySetting))) {
+    app.set("trust proxy", Number(trustProxySetting));
+  } else {
+    app.set("trust proxy", trustProxySetting);
+  }
+} else {
+  app.set("trust proxy", 1);
+}
 app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
 app.use(express.json());
 app.use(morgan("dev"));
