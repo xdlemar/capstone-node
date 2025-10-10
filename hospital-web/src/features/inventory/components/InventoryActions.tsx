@@ -519,11 +519,11 @@ export function TransferFormCard({ className }: { className?: string }) {
               <CardFooter className="px-0 pt-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Schedule transfer
+                  Request Transfer
                 </Button>
                 {requiresApproval ? (
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Moves post only after a manager or admin approves the transfer.
+                    
                   </p>
                 ) : null}
               </CardFooter>

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useInventoryLookups, type InventoryLookupResponse } from "@/hooks/useInventoryLookups";
 import { useProcurementLookups } from "@/hooks/useProcurementLookups";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -283,7 +284,9 @@ export function PurchaseRequestCard({ className }: { className?: string }) {
 export function ReceiptCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const lookups = useProcurementLookups();
+  const queryClient = useQueryClient();
   const { map: itemMap, query: inventoryQuery } = useItemFormatter();
+  const [hiddenPoNos, setHiddenPoNos] = useState<Set<string>>(() => new Set());
   const form = useForm<ReceiptValues>({
     resolver: zodResolver(receiptSchema),
     defaultValues: { poNo: "", drNo: "", invoiceNo: "" },
@@ -298,7 +301,12 @@ export function ReceiptCard({ className }: { className?: string }) {
       });
       toast({ title: "Delivery receipt logged", description: `Receipt recorded for purchase order ${values.poNo}.` });
       form.reset({ poNo: "", drNo: "", invoiceNo: "" });
-      lookups.refetch();
+      setHiddenPoNos((prev) => {
+        const next = new Set(prev);
+        next.add(values.poNo);
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["procurement", "lookups"] });
     } catch (err: any) {
       const message = err?.response?.data?.error || err.message || "Failed to record receipt";
       toast({ title: "Delivery receipt failed", description: message, variant: "destructive" });
@@ -306,7 +314,11 @@ export function ReceiptCard({ className }: { className?: string }) {
   };
 
   const safeLines = (lines?: Array<{ itemId: string; qty: number; unit: string; notes?: string | null }>) => lines ?? [];
-  const openPos = lookups.data?.openPos ?? [];
+  const rawOpenPos = lookups.data?.openPos ?? [];
+  const openPos = useMemo(() => {
+    if (!hiddenPoNos.size) return rawOpenPos;
+    return rawOpenPos.filter((po) => !hiddenPoNos.has(po.poNo));
+  }, [rawOpenPos, hiddenPoNos]);
   const selectedPoNo = form.watch("poNo");
   const selectedPo = openPos.find((po) => po.poNo === selectedPoNo);
 
@@ -598,16 +610,24 @@ export function ReceiptCard({ className }: { className?: string }) {
       </CardContent>
     </Card>
   );
-}export function CreatePoCard({ className }: { className?: string }) {
+}
+
+export function CreatePoCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const lookups = useProcurementLookups();
+  const queryClient = useQueryClient();
   const { map: itemMap, query: inventoryQuery } = useItemFormatter();
+  const [hiddenPrNos, setHiddenPrNos] = useState<Set<string>>(() => new Set());
   const form = useForm<PoValues>({
     resolver: zodResolver(poSchema),
     defaultValues: { prNo: "", poNo: `PO-${Date.now()}` },
   });
 
-  const approved = lookups.data?.approvedPrs ?? [];
+  const rawApproved = lookups.data?.approvedPrs ?? [];
+  const approved = useMemo(() => {
+    if (!hiddenPrNos.size) return rawApproved;
+    return rawApproved.filter((pr) => !hiddenPrNos.has(pr.prNo));
+  }, [rawApproved, hiddenPrNos]);
   const selectedPrNo = form.watch("prNo");
   const selectedPr = approved.find((pr) => pr.prNo === selectedPrNo);
   const safeLines = (lines?: Array<{ itemId: string; qty: number; unit: string; notes?: string | null }>) => lines ?? [];
@@ -617,7 +637,12 @@ export function ReceiptCard({ className }: { className?: string }) {
       await api.post("/procurement/po", { prNo: values.prNo, poNo: values.poNo });
       toast({ title: "Purchase order created", description: `Purchase order ${values.poNo} linked to requisition ${values.prNo}.` });
       form.reset({ prNo: "", poNo: `PO-${Date.now()}` });
-      lookups.refetch();
+      setHiddenPrNos((prev) => {
+        const next = new Set(prev);
+        next.add(values.prNo);
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["procurement", "lookups"] });
     } catch (err: any) {
       const message = err?.response?.data?.error || err.message || "Failed to create purchase order";
       toast({ title: "Purchase order failed", description: message, variant: "destructive" });
