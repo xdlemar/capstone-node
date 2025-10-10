@@ -1,10 +1,80 @@
 const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const nodemailer = require("nodemailer");
+
 const { prisma } = require("../prisma");
 const { buildDocScopes, sanitizeDocScopesInput } = require("../lib/docScopes");
 
 const router = Router();
+
+const OTP_PURPOSE_LOGIN = "LOGIN";
+const OTP_TTL_SECONDS = Number(process.env.AUTH_LOGIN_OTP_TTL_SEC || 300);
+const MAIL_FROM = process.env.MAIL_FROM || process.env.SMTP_USER || "no-reply@localhost";
+
+function createTransporter() {
+  if (!process.env.SMTP_HOST) {
+    console.warn("[auth] SMTP_HOST not set. OTP emails will be logged to console.");
+    return null;
+  }
+
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465;
+
+  const allowSelfSigned = process.env.SMTP_TLS_REJECT_UNAUTHORIZED === "false";
+  const localAddress = process.env.SMTP_LOCAL_ADDRESS || undefined;
+
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port,
+    secure,
+    auth: process.env.SMTP_USER
+      ? {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        }
+      : undefined,
+    tls: allowSelfSigned ? { rejectUnauthorized: false } : undefined,
+    localAddress,
+  });
+}
+
+const mailer = createTransporter();
+
+async function sendLoginOtp(to, code) {
+  if (!mailer) {
+    console.warn(`[auth] OTP for ${to}: ${code}`);
+    return;
+  }
+
+  const subject = "Your Logistics 1 login code";
+  const text = `Your verification code is ${code}. It will expire in ${Math.floor(OTP_TTL_SECONDS / 60)} minutes.`;
+  const html = `<p>Use the code below to finish signing in.</p><h2 style="font-size:24px;margin:16px 0;">${code}</h2><p>This code expires in ${Math.floor(
+    OTP_TTL_SECONDS / 60
+  )} minutes.</p>`;
+
+  await mailer.sendMail({
+    from: MAIL_FROM,
+    to,
+    subject,
+    text,
+    html,
+  });
+}
+
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (!token) return res.status(401).json({ error: "Missing token" });
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = payload;
+    next();
+  } catch (err) {
+    console.error("[auth me] invalid token", err.message);
+    return res.status(401).json({ error: "Invalid token" });
+  }
+}
 
 router.post("/register", async (req, res) => {
   const { email, password, docScopes } = req.body || {};
@@ -24,20 +94,6 @@ router.post("/register", async (req, res) => {
 
   res.status(201).json({ id: u.id, email: u.email, docScopes: initialScopes });
 });
-
-function requireAuth(req, res, next) {
-  const header = req.headers.authorization || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (!token) return res.status(401).json({ error: "Missing token" });
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = payload;
-    next();
-  } catch (err) {
-    console.error("[auth me] invalid token", err.message);
-    return res.status(401).json({ error: "Invalid token" });
-  }
-}
 
 router.post("/login", async (req, res) => {
   const { email, password } = req.body || {};
@@ -65,6 +121,92 @@ router.post("/login", async (req, res) => {
     return res.status(403).json({ error: "Account disabled" });
   }
 
+  await prisma.oTP.deleteMany({
+    where: { userId: user.id, purpose: OTP_PURPOSE_LOGIN },
+  });
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
+
+  const otp = await prisma.oTP.create({
+    data: {
+      userId: user.id,
+      purpose: OTP_PURPOSE_LOGIN,
+      codeHash,
+      expiresAt,
+    },
+  });
+
+  try {
+    await sendLoginOtp(user.email, code);
+  } catch (err) {
+    console.error("[auth login] failed to send OTP", err);
+    try {
+      await prisma.oTP.delete({ where: { id: otp.id } });
+    } catch (deleteErr) {
+      if (deleteErr?.code !== "P2025") {
+        throw deleteErr;
+      }
+    }
+    return res.status(500).json({ error: "Failed to send OTP email" });
+  }
+
+  res.json({
+    otpId: otp.id.toString(),
+    expiresIn: OTP_TTL_SECONDS,
+  });
+});
+
+router.post("/login/otp", async (req, res) => {
+  const { otpId, code } = req.body || {};
+  if (!otpId || !code) {
+    return res.status(400).json({ error: "otpId and code are required" });
+  }
+
+  let idBigInt;
+  try {
+    idBigInt = BigInt(otpId);
+  } catch {
+    return res.status(400).json({ error: "Invalid otpId" });
+  }
+
+  const otp = await prisma.oTP.findUnique({
+    where: { id: idBigInt },
+    include: {
+      user: {
+        include: { roles: { include: { role: true } } },
+      },
+    },
+  });
+
+  if (!otp || otp.purpose !== OTP_PURPOSE_LOGIN) {
+    return res.status(400).json({ error: "OTP not found" });
+  }
+
+  if (otp.usedAt) {
+    return res.status(400).json({ error: "OTP already used" });
+  }
+
+  if (otp.expiresAt.getTime() < Date.now()) {
+    return res.status(400).json({ error: "OTP expired" });
+  }
+
+  const codeValid = await bcrypt.compare(String(code), otp.codeHash);
+  if (!codeValid) {
+    return res.status(401).json({ error: "Invalid code" });
+  }
+
+  await prisma.oTP.update({
+    where: { id: otp.id },
+    data: { usedAt: new Date() },
+  });
+
+  const user = otp.user;
+  if (!user || !user.isActive) {
+    return res.status(403).json({ error: "Account disabled" });
+  }
+
   const roles = user.roles.map((r) => r.role.name);
   const docScopes = buildDocScopes(user, roles);
   const payload = {
@@ -76,6 +218,7 @@ router.post("/login", async (req, res) => {
   const token = jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES || "8h",
   });
+
   res.json({ access_token: token, roles, docScopes, name: user.name || null });
 });
 
@@ -115,7 +258,6 @@ router.patch("/me", requireAuth, async (req, res) => {
       updates.name = trimmed;
     }
 
-    let passwordHash;
     if (newPassword !== undefined) {
       if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
         return res.status(400).json({ error: "New password must be at least 8 characters" });
@@ -128,8 +270,7 @@ router.patch("/me", requireAuth, async (req, res) => {
       if (!user) return res.status(404).json({ error: "User not found" });
       const ok = await bcrypt.compare(currentPassword, user.passwordHash);
       if (!ok) return res.status(401).json({ error: "Current password is incorrect" });
-      passwordHash = await bcrypt.hash(newPassword, 10);
-      updates.passwordHash = passwordHash;
+      updates.passwordHash = await bcrypt.hash(newPassword, 10);
     }
 
     if (!Object.keys(updates).length) {
@@ -175,4 +316,3 @@ router.patch("/me", requireAuth, async (req, res) => {
 });
 
 module.exports = router;
-
