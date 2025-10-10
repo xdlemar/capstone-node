@@ -173,7 +173,6 @@ jobs:
             RewriteRule . index.html [L]
             EOF
 
-
             services=(inventory-svc procurement-svc auth-svc plt-svc dtrs-svc alms-svc)
             for svc in "${services[@]}"; do
               db_url=""
