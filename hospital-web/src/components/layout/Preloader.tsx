@@ -1,3 +1,4 @@
+import { hvhLogoUrl } from "@/lib/branding";
 import { cn } from "@/lib/utils";
 
 type PreloaderProps = {
@@ -20,7 +21,7 @@ export function FullScreenPreloader({ label, className }: PreloaderProps) {
           <div className="absolute inset-0 rounded-full border border-white/25" />
           <div className="absolute -inset-3 rounded-full border border-white/10 animate-[ping_2.8s_ease-out_infinite]" />
           <img
-            src="/hvh-logo.png"
+            src={hvhLogoUrl}
             alt="HVH Hospital"
             className="relative h-28 w-28 object-contain drop-shadow-[0_12px_25px_rgba(0,0,0,0.35)]"
           />

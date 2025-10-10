@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { FullScreenPreloader } from "@/components/layout/Preloader";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle } from "lucide-react";
+import { hvhLogoUrl } from "@/lib/branding";
 
 type LoginPayload = { email: string; password: string };
 
@@ -245,8 +246,10 @@ export default function LoginPage() {
     );
   }
 
+  const backgroundStyle = { "--hvh-logo-url": `url(${hvhLogoUrl})` } as CSSProperties;
+
   return (
-    <div className="hvh-bg flex min-h-[100svh] items-center justify-center px-4 py-6">
+    <div className="hvh-bg flex min-h-[100svh] items-center justify-center px-4 py-6" style={backgroundStyle}>
       <Suspense fallback={<FullScreenPreloader label="Loading login..." />}>
         <LoginForm
           className="w-full max-w-md md:max-w-4xl"

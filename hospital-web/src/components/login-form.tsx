@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { hvhLogoUrl } from "@/lib/branding"
 
 type LoginFormProps = Omit<ComponentProps<"div">, "onSubmit"> & {
   onSubmit?: (payload: { email: string; password: string }) => void
@@ -43,7 +44,7 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
       <Card className="relative p-0 overflow-visible md:overflow-hidden rounded-2xl shadow-xl ring-1 ring-black/5">
         <div className="md:hidden absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 z-10">
           <div className="h-20 w-20 rounded-full bg-white/95 ring-2 ring-white shadow-[0_10px_25px_rgba(0,0,0,.35)] grid place-items-center">
-            <img src="/hvh-logo.png" alt="HVH Hospital" className="h-16 w-16 object-contain" />
+            <img src={hvhLogoUrl} alt="HVH Hospital" className="h-16 w-16 object-contain" />
           </div>
         </div>
 
@@ -136,7 +137,7 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
             <div className="absolute inset-0 bg-gradient-to-b from-[#0E214A] to-[#0A1836] md:border-l md:border-white/10" />
             <div className="relative z-10 grid min-h-[480px] place-items-center p-8">
               <img
-                src="/hvh-logo.png"
+                src={hvhLogoUrl}
                 alt="HVH Hospital"
                 className="h-[220px] w-[220px] object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,.35)]"
               />

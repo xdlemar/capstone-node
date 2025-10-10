@@ -1,11 +1,11 @@
-
+import { hvhLogoUrl } from "@/lib/branding";
 
 export function Brand() {
   return (
     <div className="flex items-center gap-3 px-2 py-2">
       {/* Logo */}
       <img
-        src="/hvh-logo.png" // you already placed this in /public
+        src={hvhLogoUrl}
         alt="HVH Hospital"
         width={36}
         height={36}
