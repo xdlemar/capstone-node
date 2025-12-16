@@ -28,9 +28,10 @@ const LOGIN_ERROR = {
   ResetExpired: "That code expired. Request a new code.",
   ResetPassword: "Password must be at least 8 characters.",
   ResetMismatch: "Passwords do not match.",
+  ResetNotFound: "That account is not registered.",
 } as const;
 
-type LoginErrorMessage = (typeof LOGIN_ERROR)[keyof typeof LOGIN_ERROR];
+type LoginErrorMessage = string;
 
 type LoginStep = "credentials" | "otp" | "forgot" | "reset";
 
@@ -83,12 +84,20 @@ export default function LoginPage() {
       return;
     } catch (err: any) {
       const status = err?.response?.status;
+      const retryAfter = err?.response?.data?.retryAfterSeconds;
       let message: LoginErrorMessage;
 
-      if (status === 401) {
+      if (status === 404) {
+        message = LOGIN_ERROR.ResetNotFound;
+      } else if (status === 401) {
         message = LOGIN_ERROR.InvalidCredentials;
       } else if (status === 429) {
-        message = LOGIN_ERROR.RateLimited;
+        if (retryAfter) {
+          const mins = Math.ceil(Number(retryAfter) / 60);
+          message = `Too many attempts. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`;
+        } else {
+          message = LOGIN_ERROR.RateLimited;
+        }
       } else if (status) {
         message = LOGIN_ERROR.Generic;
       } else {
@@ -223,7 +232,8 @@ export default function LoginPage() {
       setResetPasswordConfirm("");
     } catch (err: any) {
       const status = err?.response?.status;
-      if (status === 429) setResetError(LOGIN_ERROR.RateLimited);
+      if (status === 404) setResetError(LOGIN_ERROR.ResetNotFound);
+      else if (status === 429) setResetError(LOGIN_ERROR.RateLimited);
       else setResetError(LOGIN_ERROR.ResetGeneric);
     } finally {
       setResetLoading(false);

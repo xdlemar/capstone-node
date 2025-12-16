@@ -15,6 +15,7 @@ const OTP_RESET_TTL_SECONDS = Number(
   process.env.AUTH_RESET_OTP_TTL_SEC || process.env.AUTH_LOGIN_OTP_TTL_SEC || 600
 );
 const MAIL_FROM = process.env.MAIL_FROM || process.env.SMTP_USER || "no-reply@localhost";
+const loginAttempts = new Map();
 
 function createTransporter() {
   if (!process.env.SMTP_HOST) {
@@ -121,12 +122,41 @@ router.post("/register", async (req, res) => {
 
 router.post("/login", async (req, res) => {
   const { email, password } = req.body || {};
+  const key = typeof email === "string" ? email.trim().toLowerCase() : "";
+  const now = Date.now();
+  const attempt = loginAttempts.get(key) || { count: 0, blockedUntil: 0, stage: 0 };
+
+  if (attempt.blockedUntil && attempt.blockedUntil > now) {
+    const retryAfterMs = attempt.blockedUntil - now;
+    return res
+      .status(429)
+      .json({ error: "Too many attempts, try again later", retryAfterSeconds: Math.ceil(retryAfterMs / 1000) });
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     include: { roles: { include: { role: true } } },
   });
 
-  const passwordOk = user ? await bcrypt.compare(password, user.passwordHash) : false;
+  if (!user) {
+    attempt.count += 1;
+    const limit = 5;
+    if (attempt.count >= limit) {
+      const durationMs = attempt.stage === 0 ? 3 * 60 * 1000 : 10 * 60 * 1000;
+      attempt.blockedUntil = now + durationMs;
+      attempt.count = 0;
+      attempt.stage = Math.min(attempt.stage + 1, 1);
+      loginAttempts.set(key, attempt);
+      return res.status(429).json({
+        error: "Too many attempts, try again later",
+        retryAfterSeconds: Math.ceil(durationMs / 1000),
+      });
+    }
+    loginAttempts.set(key, attempt);
+    return res.status(404).json({ error: "Account not found" });
+  }
+
+  const passwordOk = await bcrypt.compare(password, user.passwordHash);
   const active = !!user?.isActive;
 
   await prisma.loginAudit.create({
@@ -138,12 +168,29 @@ router.post("/login", async (req, res) => {
   });
 
   if (!passwordOk) {
+    attempt.count += 1;
+    const limit = 5;
+    if (attempt.count >= limit) {
+      const durationMs = attempt.stage === 0 ? 3 * 60 * 1000 : 10 * 60 * 1000;
+      attempt.blockedUntil = now + durationMs;
+      attempt.count = 0;
+      attempt.stage = Math.min(attempt.stage + 1, 1);
+      loginAttempts.set(key, attempt);
+      return res.status(429).json({
+        error: "Too many attempts, try again later",
+        retryAfterSeconds: Math.ceil(durationMs / 1000),
+      });
+    }
+    loginAttempts.set(key, attempt);
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
   if (!active) {
     return res.status(403).json({ error: "Account disabled" });
   }
+
+  // Successful login resets tracking
+  loginAttempts.delete(key);
 
   await prisma.oTP.deleteMany({
     where: { userId: user.id, purpose: OTP_PURPOSE_LOGIN },
@@ -254,9 +301,8 @@ router.post("/forgot-password", async (req, res) => {
 
   const user = await prisma.user.findUnique({ where: { email } });
 
-  // Always respond 200 to avoid leaking which emails exist.
   if (!user || !user.isActive) {
-    return res.json({ ok: true, expiresIn: OTP_RESET_TTL_SECONDS });
+    return res.status(404).json({ error: "Account not found" });
   }
 
   await prisma.oTP.deleteMany({
