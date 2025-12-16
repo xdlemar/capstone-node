@@ -9,7 +9,11 @@ const { buildDocScopes, sanitizeDocScopesInput } = require("../lib/docScopes");
 const router = Router();
 
 const OTP_PURPOSE_LOGIN = "LOGIN";
+const OTP_PURPOSE_RESET = "PASSWORD_RESET";
 const OTP_TTL_SECONDS = Number(process.env.AUTH_LOGIN_OTP_TTL_SEC || 300);
+const OTP_RESET_TTL_SECONDS = Number(
+  process.env.AUTH_RESET_OTP_TTL_SEC || process.env.AUTH_LOGIN_OTP_TTL_SEC || 600
+);
 const MAIL_FROM = process.env.MAIL_FROM || process.env.SMTP_USER || "no-reply@localhost";
 
 function createTransporter() {
@@ -52,6 +56,26 @@ async function sendLoginOtp(to, code) {
   const html = `<p>Use the code below to finish signing in.</p><h2 style="font-size:24px;margin:16px 0;">${code}</h2><p>This code expires in ${Math.floor(
     OTP_TTL_SECONDS / 60
   )} minutes.</p>`;
+
+  await mailer.sendMail({
+    from: MAIL_FROM,
+    to,
+    subject,
+    text,
+    html,
+  });
+}
+
+async function sendResetOtp(to, code) {
+  if (!mailer) {
+    console.warn(`[auth] Reset OTP for ${to}: ${code}`);
+    return;
+  }
+
+  const minutes = Math.max(1, Math.floor(OTP_RESET_TTL_SECONDS / 60));
+  const subject = "Reset your password";
+  const text = `Your password reset code is ${code}. It will expire in ${minutes} minutes.`;
+  const html = `<p>Use the code below to reset your password.</p><h2 style="font-size:24px;margin:16px 0;">${code}</h2><p>This code expires in ${minutes} minutes.</p>`;
 
   await mailer.sendMail({
     from: MAIL_FROM,
@@ -220,6 +244,100 @@ router.post("/login/otp", async (req, res) => {
   });
 
   res.json({ access_token: token, roles, docScopes, name: user.name || null });
+});
+
+router.post("/forgot-password", async (req, res) => {
+  const { email } = req.body || {};
+  if (!email || typeof email !== "string") {
+    return res.status(400).json({ error: "Email is required" });
+  }
+
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  // Always respond 200 to avoid leaking which emails exist.
+  if (!user || !user.isActive) {
+    return res.json({ ok: true, expiresIn: OTP_RESET_TTL_SECONDS });
+  }
+
+  await prisma.oTP.deleteMany({
+    where: { userId: user.id, purpose: OTP_PURPOSE_RESET },
+  });
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + OTP_RESET_TTL_SECONDS * 1000);
+
+  const otp = await prisma.oTP.create({
+    data: {
+      userId: user.id,
+      purpose: OTP_PURPOSE_RESET,
+      codeHash,
+      expiresAt,
+    },
+  });
+
+  try {
+    await sendResetOtp(user.email, code);
+  } catch (err) {
+    console.error("[auth forgot-password] failed to send OTP", err);
+    try {
+      await prisma.oTP.delete({ where: { id: otp.id } });
+    } catch (deleteErr) {
+      if (deleteErr?.code !== "P2025") {
+        throw deleteErr;
+      }
+    }
+  }
+
+  res.json({ ok: true, expiresIn: OTP_RESET_TTL_SECONDS });
+});
+
+router.post("/forgot-password/verify", async (req, res) => {
+  const { email, code, newPassword } = req.body || {};
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({ error: "email, code, and newPassword are required" });
+  }
+
+  if (typeof newPassword !== "string" || newPassword.length < 8) {
+    return res.status(400).json({ error: "New password must be at least 8 characters" });
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (!user || !user.isActive) {
+    return res.status(400).json({ error: "Invalid code or email" });
+  }
+
+  const otp = await prisma.oTP.findFirst({
+    where: {
+      userId: user.id,
+      purpose: OTP_PURPOSE_RESET,
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { expiresAt: "desc" },
+  });
+
+  if (!otp) {
+    return res.status(400).json({ error: "Invalid or expired code" });
+  }
+
+  const codeValid = await bcrypt.compare(String(code), otp.codeHash);
+  if (!codeValid) {
+    return res.status(401).json({ error: "Invalid code" });
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  await prisma.$transaction([
+    prisma.oTP.update({ where: { id: otp.id }, data: { usedAt: new Date() } }),
+    prisma.user.update({ where: { id: user.id }, data: { passwordHash } }),
+    prisma.session.deleteMany({ where: { userId: user.id } }),
+  ]);
+
+  res.json({ ok: true, message: "Password updated" });
 });
 
 router.get("/me", requireAuth, async (req, res) => {

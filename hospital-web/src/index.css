@@ -148,7 +148,7 @@ body::-webkit-scrollbar-thumb {
   background-image: var(--hvh-logo-url);
   background-repeat: repeat;
   background-size: 200px 200px;
-  opacity: .18;
+  opacity: .1;
   filter: blur(1px) brightness(1.08);
   animation: hvh-logos 40s linear infinite alternate;
 }

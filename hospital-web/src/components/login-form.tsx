@@ -12,9 +12,19 @@ type LoginFormProps = Omit<ComponentProps<"div">, "onSubmit"> & {
   onSubmit?: (payload: { email: string; password: string }) => void
   loading?: boolean
   error?: string | null
+  notice?: string | null
+  onForgotPassword?: () => void
 }
 
-export function LoginForm({ className, onSubmit, loading = false, error, ...props }: LoginFormProps) {
+export function LoginForm({
+  className,
+  onSubmit,
+  loading = false,
+  error,
+  notice,
+  onForgotPassword,
+  ...props
+}: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [capsLockOn, setCapsLockOn] = useState(false)
 
@@ -51,14 +61,19 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
         <CardContent className="grid p-0 pt-16 md:pt-0 md:grid-cols-2">
           <form className="p-6 md:p-8" onSubmit={handleSubmit}>
             <div className="flex flex-col gap-6">
-              <div className="flex flex-col items-center text-center gap-2">
-                <h1 className="text-2xl font-bold">Welcome back</h1>
-                <p className="text-muted-foreground text-balance">Login to your Hospital account</p>
-                {error ? (
-                  <Alert variant="destructive" className="w-full text-left">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                ) : null}
+            <div className="flex flex-col items-center text-center gap-2">
+              <h1 className="text-2xl font-bold">Welcome back</h1>
+              <p className="text-muted-foreground text-balance">Login to your Hospital account</p>
+              {notice ? (
+                <Alert className="w-full text-left">
+                  <AlertDescription>{notice}</AlertDescription>
+                </Alert>
+              ) : null}
+              {error ? (
+                <Alert variant="destructive" className="w-full text-left">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              ) : null}
               </div>
 
               <div className="grid gap-3">
@@ -69,9 +84,13 @@ export function LoginForm({ className, onSubmit, loading = false, error, ...prop
               <div className="grid gap-3">
                 <div className="flex items-center">
                   <Label htmlFor="password">Password</Label>
-                  <a href="#" className="ml-auto text-sm underline-offset-2 hover:underline">
+                  <button
+                    type="button"
+                    onClick={onForgotPassword}
+                    className="ml-auto text-sm font-medium text-primary underline-offset-2 hover:underline"
+                  >
                     Forgot your password?
-                  </a>
+                  </button>
                 </div>
                 <div className="relative">
                   <Input
