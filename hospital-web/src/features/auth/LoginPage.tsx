@@ -414,7 +414,7 @@ export default function LoginPage() {
 
   if (step === "otp" && otpInfo) {
     return (
-      <div className=" flex min-h-[100svh] items-center justify-center px-4 py-6">
+      <div className="hvh-bg flex min-h-[100svh] items-center justify-center px-4 py-6" style={backgroundStyle}>
         <div className="flex w-full max-w-md flex-col gap-6">
           <div
             className="rounded-2xl border border-border/60 bg-white/95 p-6 shadow-xl ring-1 ring-black/5 backdrop-blur-sm dark:border-border/40 dark:bg-slate-900/90"
