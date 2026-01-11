@@ -2,7 +2,6 @@ const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
-const crypto = require("crypto");
 const { OAuth2Client } = require("google-auth-library");
 
 const { prisma } = require("../prisma");
@@ -339,28 +338,10 @@ router.post("/login/google", async (req, res) => {
   });
 
   if (!user) {
-    const randomPassword = crypto.randomBytes(32).toString("hex");
-    const passwordHash = await bcrypt.hash(randomPassword, 10);
-    const initialScopes = sanitizeDocScopesInput();
-    const created = await prisma.user.create({
-      data: {
-        email: email.toLowerCase(),
-        name: payload?.name || null,
-        passwordHash,
-        docScopes: initialScopes,
-      },
+    await prisma.loginAudit.create({
+      data: { userId: null, emailTried: email, success: false },
     });
-    const staff = await prisma.role.upsert({
-      where: { name: "STAFF" },
-      update: {},
-      create: { name: "STAFF" },
-    });
-    await prisma.userRole.create({ data: { userId: created.id, roleId: staff.id } });
-
-    user = await prisma.user.findUnique({
-      where: { id: created.id },
-      include: { roles: { include: { role: true } } },
-    });
+    return res.status(403).json({ error: "Account not registered" });
   }
 
   if (!user) {

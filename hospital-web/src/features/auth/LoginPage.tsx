@@ -132,7 +132,9 @@ export default function LoginPage() {
         navigate("/dashboard", { replace: true });
       } catch (err: any) {
         const status = err?.response?.status;
+        const backendError = err?.response?.data?.error;
         if (status === 401) setError(LOGIN_ERROR.GoogleFailed);
+        else if (status === 403 && backendError === "Account not registered") setError(LOGIN_ERROR.ResetNotFound);
         else if (status === 403) setError("Account disabled");
         else if (status === 429) setError(LOGIN_ERROR.RateLimited);
         else setError(LOGIN_ERROR.Generic);
