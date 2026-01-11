@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState, type CSSProperties } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { FullScreenPreloader } from "@/components/layout/Preloader";
@@ -23,6 +23,7 @@ const LOGIN_ERROR = {
   InvalidOtp: "The code you entered is incorrect. Try again.",
   OtpExpired: "This code has expired. Request a new one.",
   OtpSendFailed: "We couldn't send the verification code. Please try again.",
+  GoogleFailed: "Google sign-in failed. Please try again.",
   ResetGeneric: "We couldn't process that request. Please try again.",
   ResetInvalid: "Invalid code or email. Please request a new one.",
   ResetExpired: "That code expired. Request a new code.",
@@ -49,6 +50,7 @@ export default function LoginPage() {
   const [resendCountdown, setResendCountdown] = useState<number>(0);
   const [otpValue, setOtpValue] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const [forgotEmail, setForgotEmail] = useState("");
   const [resetInfo, setResetInfo] = useState<{ email: string; expiresIn: number } | null>(null);
@@ -57,6 +59,8 @@ export default function LoginPage() {
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetError, setResetError] = useState<LoginErrorMessage | null>(null);
+
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
   const handleSubmit = async ({ email, password }: LoginPayload) => {
     setLoading(true);
@@ -109,6 +113,35 @@ export default function LoginPage() {
     }
     setLoading(false);
   };
+
+  const handleGoogleCredential = useCallback(
+    async (credential: string) => {
+      if (!credential) {
+        setError(LOGIN_ERROR.GoogleFailed);
+        return;
+      }
+      setGoogleLoading(true);
+      setError(null);
+      setNotice(null);
+      try {
+        const { data } = await api.post("/auth/login/google", { credential });
+        const token = data?.access_token;
+        if (!token) throw new Error("Missing access token");
+        login(token);
+        setRedirecting(true);
+        navigate("/dashboard", { replace: true });
+      } catch (err: any) {
+        const status = err?.response?.status;
+        if (status === 401) setError(LOGIN_ERROR.GoogleFailed);
+        else if (status === 403) setError("Account disabled");
+        else if (status === 429) setError(LOGIN_ERROR.RateLimited);
+        else setError(LOGIN_ERROR.Generic);
+      } finally {
+        setGoogleLoading(false);
+      }
+    },
+    [login, navigate]
+  );
 
   const handleVerifyOtp = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -497,6 +530,9 @@ export default function LoginPage() {
           error={error}
           notice={notice}
           onForgotPassword={startForgotFlow}
+          onGoogleCredential={googleClientId ? handleGoogleCredential : undefined}
+          googleClientId={googleClientId}
+          googleLoading={googleLoading}
         />
       </Suspense>
     </div>

@@ -1,5 +1,5 @@
 import { AlertTriangle, Eye, EyeOff } from "lucide-react"
-import { useCallback, useState, type ComponentProps, type FormEvent, type KeyboardEvent } from "react"
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type FormEvent, type KeyboardEvent } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { hvhLogoUrl } from "@/lib/branding"
+import { loadGoogleIdentityScript } from "@/lib/googleIdentity"
 
 type LoginFormProps = Omit<ComponentProps<"div">, "onSubmit"> & {
   onSubmit?: (payload: { email: string; password: string }) => void
@@ -14,6 +15,9 @@ type LoginFormProps = Omit<ComponentProps<"div">, "onSubmit"> & {
   error?: string | null
   notice?: string | null
   onForgotPassword?: () => void
+  onGoogleCredential?: (credential: string) => void
+  googleClientId?: string
+  googleLoading?: boolean
 }
 
 export function LoginForm({
@@ -23,10 +27,16 @@ export function LoginForm({
   error,
   notice,
   onForgotPassword,
+  onGoogleCredential,
+  googleClientId,
+  googleLoading = false,
   ...props
 }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [capsLockOn, setCapsLockOn] = useState(false)
+  const [googleError, setGoogleError] = useState<string | null>(null)
+  const googleButtonRef = useRef<HTMLDivElement | null>(null)
+  const googleInitializedRef = useRef(false)
 
   const togglePasswordVisibility = useCallback(() => {
     setShowPassword((prev) => !prev)
@@ -48,6 +58,46 @@ export function LoginForm({
     if (!email || !password) return
     onSubmit?.({ email, password })
   }
+
+  useEffect(() => {
+    const enabled = Boolean(googleClientId && onGoogleCredential)
+    if (!enabled) return
+    let cancelled = false
+
+    loadGoogleIdentityScript()
+      .then(() => {
+        if (cancelled) return
+        const google = window.google?.accounts?.id
+        if (!google || !googleButtonRef.current) {
+          setGoogleError("Google sign-in is unavailable right now.")
+          return
+        }
+        if (!googleInitializedRef.current) {
+          google.initialize({
+            client_id: googleClientId!,
+            callback: (response) => onGoogleCredential?.(response.credential),
+          })
+          googleInitializedRef.current = true
+        }
+        googleButtonRef.current.innerHTML = ""
+        google.renderButton(googleButtonRef.current, {
+          theme: "outline",
+          size: "large",
+          text: "continue_with",
+          shape: "pill",
+          width: "100%",
+        })
+        setGoogleError(null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setGoogleError("Google sign-in is unavailable right now.")
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [googleClientId, onGoogleCredential])
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -134,20 +184,34 @@ export function LoginForm({
               </div>
 
               <div>
-                <Button
-                  variant="outline"
-                  type="button"
-                  className="flex w-full items-center justify-center gap-2 border-muted-foreground/30 bg-card/80 text-sm font-medium text-muted-foreground transition hover:bg-card"
-                  disabled={loading}
-                >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path
-                      d="M21.35 11.1H12v2.9h5.35c-.23 1.37-1.5 4.02-5.35 4.02-3.22 0-5.85-2.67-5.85-5.97s2.63-5.97 5.85-5.97c1.83 0 3.07.77 3.77 1.43l2.58-2.5C16.59 3.82 14.53 3 12 3 6.98 3 3 6.92 3 12s3.98 9 9 9c5.2 0 8.63-3.67 8.63-8.84 0-.59-.06-1.04-.16-1.46Z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                  Continue with Google
-                </Button>
+                {googleClientId ? (
+                  <div
+                    className={cn(
+                      "flex w-full items-center justify-center",
+                      (loading || googleLoading) && "pointer-events-none opacity-60"
+                    )}
+                  >
+                    <div ref={googleButtonRef} className="w-full" />
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="flex w-full items-center justify-center gap-2 border-muted-foreground/30 bg-card/80 text-sm font-medium text-muted-foreground transition hover:bg-card"
+                    disabled
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path
+                        d="M21.35 11.1H12v2.9h5.35c-.23 1.37-1.5 4.02-5.35 4.02-3.22 0-5.85-2.67-5.85-5.97s2.63-5.97 5.85-5.97c1.83 0 3.07.77 3.77 1.43l2.58-2.5C16.59 3.82 14.53 3 12 3 6.98 3 3 6.92 3 12s3.98 9 9 9c5.2 0 8.63-3.67 8.63-8.84 0-.59-.06-1.04-.16-1.46Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    Google sign-in not configured
+                  </Button>
+                )}
+                {googleError ? (
+                  <p className="mt-2 text-xs text-muted-foreground">{googleError}</p>
+                ) : null}
               </div>
             </div>
           </form>

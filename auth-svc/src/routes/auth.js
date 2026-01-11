@@ -2,6 +2,8 @@ const { Router } = require("express");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const nodemailer = require("nodemailer");
+const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 
 const { prisma } = require("../prisma");
 const { buildDocScopes, sanitizeDocScopesInput } = require("../lib/docScopes");
@@ -16,6 +18,8 @@ const OTP_RESET_TTL_SECONDS = Number(
 );
 const MAIL_FROM = process.env.MAIL_FROM || process.env.SMTP_USER || "no-reply@localhost";
 const loginAttempts = new Map();
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 function createTransporter() {
   if (!process.env.SMTP_HOST) {
@@ -85,6 +89,17 @@ async function sendResetOtp(to, code) {
     text,
     html,
   });
+}
+
+async function verifyGoogleIdToken(idToken) {
+  if (!googleClient) {
+    throw new Error("Google OAuth client not configured");
+  }
+  const ticket = await googleClient.verifyIdToken({
+    idToken,
+    audience: GOOGLE_CLIENT_ID,
+  });
+  return ticket.getPayload();
 }
 
 function requireAuth(req, res, next) {
@@ -289,6 +304,100 @@ router.post("/login/otp", async (req, res) => {
   const token = jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES || "8h",
   });
+
+  res.json({ access_token: token, roles, docScopes, name: user.name || null });
+});
+
+router.post("/login/google", async (req, res) => {
+  const idToken = req.body?.credential || req.body?.idToken || req.body?.token;
+  if (!idToken) {
+    return res.status(400).json({ error: "Missing Google credential" });
+  }
+  if (!googleClient) {
+    return res.status(500).json({ error: "Google login not configured" });
+  }
+
+  let payload;
+  try {
+    payload = await verifyGoogleIdToken(String(idToken));
+  } catch (err) {
+    console.error("[auth google] invalid token", err?.message || err);
+    return res.status(401).json({ error: "Invalid Google token" });
+  }
+
+  const email = String(payload?.email || "").trim();
+  if (!email) {
+    return res.status(400).json({ error: "Google account missing email" });
+  }
+  if (!payload?.email_verified) {
+    return res.status(401).json({ error: "Google email not verified" });
+  }
+
+  let user = await prisma.user.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+    include: { roles: { include: { role: true } } },
+  });
+
+  if (!user) {
+    const randomPassword = crypto.randomBytes(32).toString("hex");
+    const passwordHash = await bcrypt.hash(randomPassword, 10);
+    const initialScopes = sanitizeDocScopesInput();
+    const created = await prisma.user.create({
+      data: {
+        email: email.toLowerCase(),
+        name: payload?.name || null,
+        passwordHash,
+        docScopes: initialScopes,
+      },
+    });
+    const staff = await prisma.role.upsert({
+      where: { name: "STAFF" },
+      update: {},
+      create: { name: "STAFF" },
+    });
+    await prisma.userRole.create({ data: { userId: created.id, roleId: staff.id } });
+
+    user = await prisma.user.findUnique({
+      where: { id: created.id },
+      include: { roles: { include: { role: true } } },
+    });
+  }
+
+  if (!user) {
+    return res.status(500).json({ error: "Failed to create user" });
+  }
+
+  if (!user.isActive) {
+    await prisma.loginAudit.create({
+      data: { userId: user.id, emailTried: email, success: false },
+    });
+    return res.status(403).json({ error: "Account disabled" });
+  }
+
+  if (!user.name && payload?.name) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { name: payload.name },
+      include: { roles: { include: { role: true } } },
+    });
+  }
+
+  await prisma.loginAudit.create({
+    data: { userId: user.id, emailTried: email, success: true },
+  });
+
+  const roles = user.roles.map((r) => r.role.name);
+  const docScopes = buildDocScopes(user, roles);
+  const token = jwt.sign(
+    {
+      sub: String(user.id),
+      roles,
+      docScopes,
+      name: user.name || null,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES || "8h" }
+  );
 
   res.json({ access_token: token, roles, docScopes, name: user.name || null });
 });
