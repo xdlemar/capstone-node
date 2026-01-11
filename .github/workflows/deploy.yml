@@ -44,6 +44,8 @@ jobs:
           ALMS_DB_URL: ${{ secrets.ALMS_DB_URL }}
           AUTH_CORS_ORIGIN: ${{ secrets.AUTH_CORS_ORIGIN }}
           WEB_API_BASE_URL: ${{ secrets.WEB_API_BASE_URL }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          WEB_GOOGLE_CLIENT_ID: ${{ secrets.WEB_GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
           GATEWAY_PORT: 55559
           AUTH_PORT: 4000
           INVENTORY_PORT: 4001
@@ -64,7 +66,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           port: ${{ env.SSH_PORT }}
           script_stop: true
-          envs: APP_DIR,REPO_URL,GIT_REF,GIT_SHA,JWT_SECRET,JWT_EXPIRES,AUTH_DB_URL,INVENTORY_DB_URL,PROCUREMENT_DB_URL,PLT_DB_URL,DTRS_DB_URL,ALMS_DB_URL,AUTH_CORS_ORIGIN,WEB_API_BASE_URL,GATEWAY_PORT,AUTH_PORT,INVENTORY_PORT,PROCUREMENT_PORT,PLT_PORT,DTRS_PORT,ALMS_PORT
+          envs: APP_DIR,REPO_URL,GIT_REF,GIT_SHA,JWT_SECRET,JWT_EXPIRES,AUTH_DB_URL,INVENTORY_DB_URL,PROCUREMENT_DB_URL,PLT_DB_URL,DTRS_DB_URL,ALMS_DB_URL,AUTH_CORS_ORIGIN,WEB_API_BASE_URL,GOOGLE_CLIENT_ID,WEB_GOOGLE_CLIENT_ID,GATEWAY_PORT,AUTH_PORT,INVENTORY_PORT,PROCUREMENT_PORT,PLT_PORT,DTRS_PORT,ALMS_PORT
           script: |
             set -euo pipefail
 
@@ -108,6 +110,7 @@ jobs:
             JWT_SECRET=$JWT_SECRET
             JWT_EXPIRES=$JWT_EXPIRES
             CORS_ORIGIN="${AUTH_CORS_ORIGIN:-*}"
+            GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
             SMTP_HOST=smtp.gmail.com
             SMTP_PORT=587
             SMTP_SECURE=false
@@ -157,6 +160,7 @@ jobs:
               cat > hospital-web/.env.production <<EOF
             VITE_API_BASE_URL=$WEB_API_BASE_URL
             VITE_JWT_SECRET=$JWT_SECRET
+            VITE_GOOGLE_CLIENT_ID=${WEB_GOOGLE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}
             EOF
             fi
 
