@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { ShieldCheck, UserCog } from "lucide-react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,11 +19,20 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 
 function formatRoles(roles: string[]) {
   if (!roles.length) return "No role assigned";
@@ -33,6 +43,7 @@ export function NavUser({ roles }: { roles: string[] }) {
   const { isMobile } = useSidebar();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const name = user?.name?.trim();
   const initials = name
@@ -104,15 +115,30 @@ export function NavUser({ roles }: { roles: string[] }) {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onSelect={(event) => {
-                event.preventDefault();
-                handleLogout();
+              onSelect={() => {
+                setConfirmOpen(true);
               }}
             >
               Sign out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Sign out</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to sign out? You can sign back in anytime.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleLogout}>Sign out</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SidebarMenuItem>
     </SidebarMenu>
   );
