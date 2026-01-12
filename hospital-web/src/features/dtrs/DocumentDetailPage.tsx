@@ -68,7 +68,7 @@ export default function DocumentDetailPage() {
     );
   }
 
-  const { document, tags, versions, audits } = query.data;
+  const { document, tags, versions } = query.data;
   const canViewFile = Boolean(document.storageKey && !document.storageKey.startsWith("placeholder:"));
 
   const handleViewFile = async () => {
