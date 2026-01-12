@@ -166,7 +166,7 @@ describe("E2E: Procurement + Inventory via Gateway", () => {
 
   test("create PO from PR -> status OPEN", async () => {
     const poNo = `PO-${Math.floor(Math.random() * 1e9)}`;
-    const body = { poNo, prNo: state.pr.prNo };
+    const body = { poNo, prNo: state.pr.prNo, vendorId: state.vendor.id };
     const res = await agent.post("/api/procurement/po").set(authz).send(body).expect(200);
 
     expect(res.body).toMatchObject({ poNo, status: "OPEN" });

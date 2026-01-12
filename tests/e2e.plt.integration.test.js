@@ -64,7 +64,7 @@ describe("E2E: Procurement + PLT (shipment tied to PO) via Gateway", () => {
     const po = await agent
       .post("/api/procurement/po")
       .set(authz)
-      .send({ poNo, prNo })
+      .send({ poNo, prNo, vendorId: S.vendor.id })
       .expect(200);
     expect(po.body.status).toBe("OPEN");
     S.po = po.body;

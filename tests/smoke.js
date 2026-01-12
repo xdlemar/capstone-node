@@ -40,7 +40,7 @@ const red   = (m)=>log("\x1b[31m", m);
     await http("POST",`/api/procurement/pr/${PR}/approve`); green("✓ PR approved");
 
     const PO = rnd("PO");
-    const po = await http("POST","/api/procurement/po",{ poNo:PO, prNo:PR }); if (po.status!=="OPEN") throw new Error(`PO ${po.status}`);
+    const po = await http("POST","/api/procurement/po",{ poNo:PO, prNo:PR, vendorId: vendor.id }); if (po.status!=="OPEN") throw new Error(`PO ${po.status}`);
     green(`✓ PO created: ${po.poNo}`);
 
     const DR = rnd("DR");

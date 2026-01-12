@@ -35,6 +35,15 @@ describe("E2E: DTRS linked to PO & Delivery via Gateway", () => {
       .expect(403);
   });
 
+  test("upsert vendor", async () => {
+    const res = await agent
+      .post("/api/procurement/vendors")
+      .set(authz)
+      .send({ name: "MedSupply Co.", email: "sales@medsupply.local" })
+      .expect(200);
+    S.vendor = res.body;
+  });
+
   test("create PR -> approve -> PO", async () => {
     const prNo = `PR-${Math.floor(Math.random()*1e9)}`;
     const pr = await agent.post("/api/procurement/pr").set(authz).send({
@@ -43,7 +52,7 @@ describe("E2E: DTRS linked to PO & Delivery via Gateway", () => {
     await agent.post(`/api/procurement/pr/${prNo}/approve`).set(authz).expect(200);
 
     const poNo = `PO-${Math.floor(Math.random()*1e9)}`;
-    const po = await agent.post("/api/procurement/po").set(authz).send({ poNo, prNo }).expect(200);
+    const po = await agent.post("/api/procurement/po").set(authz).send({ poNo, prNo, vendorId: S.vendor.id }).expect(200);
     S.po = po.body;
   });
 
