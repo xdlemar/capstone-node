@@ -7,9 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/toaster";
+import { useAuth } from "@/contexts/AuthContext";
+import { hasStaffRole } from "@/lib/roles";
 
 export default function AppLayout() {
   const [isReady, setIsReady] = useState(false);
+  const { user } = useAuth();
+  const isVendorOnly = !!user && user.roles.includes("VENDOR") && !hasStaffRole(user.roles);
+  const portalLabel = isVendorOnly ? "Vendor portal" : "Dashboard";
 
   useEffect(() => {
     const id = window.setTimeout(() => setIsReady(true), 150);
@@ -32,7 +37,7 @@ export default function AppLayout() {
             <Separator orientation="vertical" className="mx-2 h-6" />
             <div className="flex items-center gap-2">
               <span className="font-semibold">Logistics 1</span>
-              <Badge variant="secondary">Dashboard</Badge>
+              <Badge variant="secondary">{portalLabel}</Badge>
             </div>
           </div>
           <Separator />

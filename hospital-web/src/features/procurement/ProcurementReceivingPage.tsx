@@ -10,7 +10,7 @@ export default function ProcurementReceivingPage() {
           inventory moves.
         </p>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-          <li>Pick the PO from the dropdown; only open orders appear so you cannot post to the wrong document.</li>
+          <li>Pick the PO from the dropdown; only delivered orders appear so you cannot post to the wrong document.</li>
           <li>Enter the DR and invoice reference numbers exactly as printed to simplify reconciliation.</li>
           <li>After posting, the PO will disappear from the list once it is fully received.</li>
         </ul>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,18 +11,21 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import type { AdminUser, CreateAdminUserPayload, UpdateAdminUserPayload } from "@/hooks/useAdminUsers";
 import { useAdminUsers, useCreateAdminUser, useDisableAdminUser, useUpdateAdminUser } from "@/hooks/useAdminUsers";
+import { useProcurementVendors, useVendorLinks, type VendorSummary } from "@/hooks/useVendorAdmin";
+import { api } from "@/lib/api";
 
-const ROLE_OPTIONS = ["STAFF", "MANAGER", "ADMIN"] as const;
+const ROLE_OPTIONS = ["STAFF", "MANAGER", "ADMIN", "VENDOR"] as const;
 const RoleEnum = z.enum(ROLE_OPTIONS);
 
 const CreateUserSchema = z.object({
   name: z.string().min(2, "Name required"),
-  email: z.string().email({ message: "Enter a valid hospital email" }),
+  email: z.string().email({ message: "Enter a valid email" }),
   password: z.string().min(8, "Password must be at least 8 characters"),
   roles: z.array(RoleEnum).min(1, "Assign at least one role"),
   isActive: z.boolean().default(true),
@@ -44,8 +48,69 @@ export default function AdminOverview() {
   const createUser = useCreateAdminUser();
   const updateUser = useUpdateAdminUser();
   const disableUser = useDisableAdminUser();
+  const vendorsQuery = useProcurementVendors();
 
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [selectedVendorUserId, setSelectedVendorUserId] = useState("");
+  const [cleanupInput, setCleanupInput] = useState("");
+
+  const vendorLinksQuery = useVendorLinks(selectedVendorId);
+  const qc = useQueryClient();
+
+  const linkVendorUser = useMutation({
+    mutationFn: async ({ vendorId, userId }: { vendorId: string; userId: string }) => {
+      await api.post(`/procurement/vendors/${vendorId}/users`, { userId });
+      await api.post("/plt/vendor-users", { vendorId, userId });
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["vendor", "links", variables.vendorId] });
+      toast({ title: "Vendor linked", description: "User access granted for orders and shipments." });
+    },
+    onError: (err: any) => {
+      const message = err?.response?.data?.error || err.message || "Failed to link vendor user";
+      toast({ title: "Link failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const unlinkVendorUser = useMutation({
+    mutationFn: async ({ vendorId, userId }: { vendorId: string; userId: string }) => {
+      await api.delete(`/procurement/vendors/${vendorId}/users/${userId}`);
+      await api.delete(`/plt/vendor-users/${vendorId}/${userId}`);
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["vendor", "links", variables.vendorId] });
+      toast({ title: "Vendor unlinked", description: "User access removed." });
+    },
+    onError: (err: any) => {
+      const message = err?.response?.data?.error || err.message || "Failed to unlink vendor user";
+      toast({ title: "Unlink failed", description: message, variant: "destructive" });
+    },
+  });
+
+  const cleanupShipments = useMutation({
+    mutationFn: async () => {
+      const value = cleanupInput.trim();
+      if (!value) {
+        throw new Error("Enter a PO number or ID");
+      }
+      const params = /^\d+$/.test(value) ? { poId: value } : { poNo: value };
+      const { data } = await api.delete("/plt/deliveries/by-po", { params });
+      return data as { deleted?: number; poId?: string; poNo?: string };
+    },
+    onSuccess: (data) => {
+      const label = data?.poNo || data?.poId || "PO";
+      toast({
+        title: "Shipments cleared",
+        description: `Deleted ${data?.deleted ?? 0} shipment(s) for ${label}.`,
+      });
+      setCleanupInput("");
+    },
+    onError: (err: any) => {
+      const message = err?.response?.data?.error || err.message || "Failed to delete shipments";
+      toast({ title: "Cleanup failed", description: message, variant: "destructive" });
+    },
+  });
 
   const createForm = useForm<CreateUserFormValues>({
     resolver: zodResolver(CreateUserSchema),
@@ -125,21 +190,43 @@ export default function AdminOverview() {
 
   const users = usersQuery.data ?? [];
   const activeUsers = useMemo(() => users.filter((u) => u.isActive).length, [users]);
+  const vendorUsers = users.filter((user) => user.isActive && user.roles.includes("VENDOR"));
+  const vendors = vendorsQuery.data ?? [];
+  const selectedVendor = vendors.find((vendor) => vendor.id === selectedVendorId) ?? null;
+  const vendorLinks = vendorLinksQuery.data ?? [];
+  const linkedUserIds = useMemo(() => new Set(vendorLinks.map((link) => link.userId)), [vendorLinks]);
+  const canLink =
+    selectedVendorId.length > 0 &&
+    selectedVendorUserId.length > 0 &&
+    !linkedUserIds.has(selectedVendorUserId) &&
+    !linkVendorUser.isPending;
+
+  const getVendorLabel = (vendor: VendorSummary) =>
+    vendor.email ? `${vendor.name} (${vendor.email})` : vendor.name;
+
+  const getUserLabel = (user: AdminUser) =>
+    user.name ? `${user.name} (${user.email})` : user.email;
+
+  useEffect(() => {
+    if (!selectedVendorId && vendors.length > 0) {
+      setSelectedVendorId(vendors[0].id);
+    }
+  }, [selectedVendorId, vendors]);
 
   return (
     <section className="space-y-8">
       <header className="space-y-3">
         <h1 className="text-3xl font-semibold tracking-tight">Administration</h1>
         <p className="text-muted-foreground max-w-2xl">
-          Logistics 1 administrators onboard staff, assign roles, and keep hospital storage operations compliant. Use the
-          panel below to invite new users or adjust permissions when teams change.
+          Logistics 1 administrators onboard users, assign roles, and keep hospital storage operations compliant. Use the
+          panel below to create accounts or adjust permissions when teams change.
         </p>
       </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>Invite hospital staff</CardTitle>
-          <CardDescription>Provision an account for Logistics 1. Passwords can be rotated later.</CardDescription>
+          <CardTitle>Create user account</CardTitle>
+          <CardDescription>Provision an account for staff or vendors. Passwords can be rotated later.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...createForm}>
@@ -163,9 +250,9 @@ export default function AdminOverview() {
                   name="email"
                   render={({ field }) => (
                     <FormItem className="md:col-span-1">
-                      <FormLabel>Hospital email</FormLabel>
+                      <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="pharmacy@hvh.logistics" autoComplete="off" {...field} />
+                        <Input placeholder="vendor@example.com" autoComplete="off" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -215,6 +302,7 @@ export default function AdminOverview() {
                         );
                       })}
                     </div>
+                    <p className="text-xs text-muted-foreground">Use VENDOR for supplier accounts.</p>
                   </FormItem>
                 )}
               />
@@ -243,11 +331,144 @@ export default function AdminOverview() {
 
               <CardFooter className="px-0">
                 <Button type="submit" disabled={createUser.isPending}>
-                  {createUser.isPending && <Spinner className="mr-2 h-4 w-4" />}Invite user
+                  {createUser.isPending && <Spinner className="mr-2 h-4 w-4" />}Create user
                 </Button>
               </CardFooter>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Vendor access mapping</CardTitle>
+          <CardDescription>Link vendor users to supplier records so they can see orders and shipment updates.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-3 md:items-end">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Vendor</label>
+              <Select value={selectedVendorId} onValueChange={setSelectedVendorId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={vendorsQuery.isLoading ? "Loading vendors..." : "Select vendor"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {vendors.map((vendor) => (
+                    <SelectItem key={vendor.id} value={vendor.id}>
+                      {getVendorLabel(vendor)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Vendor user</label>
+              <Select value={selectedVendorUserId} onValueChange={setSelectedVendorUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={usersQuery.isLoading ? "Loading users..." : "Select vendor user"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {vendorUsers.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {getUserLabel(user)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex">
+              <Button
+                type="button"
+                disabled={!canLink}
+                onClick={() => linkVendorUser.mutate({ vendorId: selectedVendorId, userId: selectedVendorUserId })}
+              >
+                {linkVendorUser.isPending ? "Linking..." : "Link vendor access"}
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Only users with the VENDOR role are shown.</p>
+
+          {selectedVendorId ? (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Linked users</h3>
+              {vendorLinksQuery.isLoading ? (
+                <div className="text-sm text-muted-foreground">Loading linked users...</div>
+              ) : vendorLinks.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No vendor users linked yet.</div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vendor</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>User ID</TableHead>
+                      <TableHead>Linked</TableHead>
+                      <TableHead className="text-right">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {vendorLinks.map((link) => {
+                      const user = users.find((u) => u.id === link.userId);
+                      return (
+                        <TableRow key={link.id}>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {selectedVendor ? getVendorLabel(selectedVendor) : "-"}
+                          </TableCell>
+                          <TableCell className="font-medium">{user ? getUserLabel(user) : "Unknown user"}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{link.userId}</TableCell>
+                          <TableCell>{new Date(link.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={unlinkVendorUser.isPending}
+                              onClick={() => unlinkVendorUser.mutate({ vendorId: selectedVendorId, userId: link.userId })}
+                            >
+                              Remove
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              {vendorsQuery.isLoading ? "Loading vendors..." : "Select a vendor to view linked users."}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Shipment cleanup</CardTitle>
+          <CardDescription>Remove accidental shipments for POs that are still awaiting vendor approval.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">PO number or ID</label>
+              <Input
+                placeholder="PO-123456 or 25"
+                value={cleanupInput}
+                onChange={(event) => setCleanupInput(event.target.value)}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={cleanupShipments.isPending || cleanupInput.trim().length === 0}
+              onClick={() => cleanupShipments.mutate()}
+            >
+              {cleanupShipments.isPending ? "Cleaning..." : "Remove shipments"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            This only deletes shipments when the vendor approval is still pending.
+          </p>
         </CardContent>
       </Card>
 
@@ -261,10 +482,10 @@ export default function AdminOverview() {
         <CardContent className="space-y-4">
           {usersQuery.isLoading ? (
             <div className="flex items-center gap-3 text-muted-foreground">
-              <Spinner className="h-4 w-4" /> Loading usersÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦
+              <Spinner className="h-4 w-4" /> Loading users...
             </div>
           ) : users.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No users found. Invite staff above.</p>
+            <p className="text-sm text-muted-foreground">No users found. Create accounts above.</p>
           ) : (
             <Table>
               <TableHeader>

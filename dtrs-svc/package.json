@@ -8,12 +8,15 @@
     "prisma:migrate": "prisma migrate dev --name init_dtrs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.966.0",
+    "@aws-sdk/s3-request-presigner": "^3.966.0",
     "@prisma/client": "^6.15.0",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
+    "multer": "^1.4.5-lts.1",
     "prisma": "^6.15.0"
   },
   "devDependencies": {

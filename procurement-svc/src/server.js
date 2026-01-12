@@ -11,6 +11,8 @@ const lookups = require("./routes/lookups");
 const dashboard = require("./routes/dashboard");
 const insights = require("./routes/insights");
 const ven = require("./routes/vendors");
+const vendorPortal = require("./routes/vendorPortal");
+const internal = require("./routes/internal");
 const { authRequired, requireRole } = require("./auth");
 
 const app = express();
@@ -24,7 +26,13 @@ app.use(express.json({ limit: "1mb" }));
 app.get("/health", (_req, res) => res.json({ ok: true, svc: "procurement" }));
 
 app.use(authRequired);
-app.use(requireRole("STAFF", "MANAGER", "ADMIN"));
+const staffAccess = requireRole("STAFF", "MANAGER", "ADMIN");
+const vendorAccess = requireRole("VENDOR");
+const serviceAccess = requireRole("MANAGER", "ADMIN");
+
+app.use("/vendor", vendorAccess, vendorPortal);
+app.use("/internal", serviceAccess, internal);
+app.use(staffAccess);
 
 // Mount routes at ROOT to match gateway path rewrite
 app.use(pr);

@@ -46,6 +46,7 @@ export type ProcurementLookups = {
     vendorName: string | null;
     status: string;
     orderedAt: string;
+    deliveryStatus?: string | null;
     lines: ProcurementLookupLine[];
   }>;
 };

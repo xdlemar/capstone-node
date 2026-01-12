@@ -4,6 +4,10 @@ import AppLayout from "@/components/layout/AppLayout";
 import Dashboard from "@/features/dashboard/Dashboard";
 import LoginPage from "@/features/auth/LoginPage";
 import UnauthorizedPage from "@/features/auth/UnauthorizedPage";
+import VendorOverviewPage from "@/features/vendor/VendorOverviewPage";
+import VendorOrdersPage from "@/features/vendor/VendorOrdersPage";
+import VendorOrderDetailPage from "@/features/vendor/VendorOrderDetailPage";
+import VendorShipmentsPage from "@/features/vendor/VendorShipmentsPage";
 import ProcurementRequisitionsPage from "@/features/procurement/ProcurementRequisitionsPage";
 import ProcurementPurchaseOrdersPage from "@/features/procurement/ProcurementPurchaseOrdersPage";
 import ProcurementReceivingPage from "@/features/procurement/ProcurementReceivingPage";
@@ -29,15 +33,16 @@ import RoutesPage from "@/features/plt/RoutesPage";
 import DocumentsPage from "@/features/dtrs/DocumentsPage";
 import DocumentDetailPage from "@/features/dtrs/DocumentDetailPage";
 import MissingDocumentsPage from "@/features/dtrs/MissingDocumentsPage";
-import PendingSignaturesPage from "@/features/dtrs/PendingSignaturesPage";
 import AdminOverview from "@/features/admin/AdminOverview";
 import ProfilePage from "@/features/profile/ProfilePage";
 import ProtectedRoute from "@/routes/protected";
 import { RoleGate } from "@/routes/role-gate";
+import HomeRedirect from "@/routes/home-redirect";
 
 const STAFF_SET = ["STAFF", "MANAGER", "ADMIN"];
 const MANAGER_SET = ["MANAGER", "ADMIN"];
 const ADMIN_SET = ["ADMIN"];
+const VENDOR_SET = ["VENDOR"];
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -49,8 +54,30 @@ export const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { index: true, element: <Dashboard /> },
-          { path: "dashboard", element: <Dashboard /> },
+          { index: true, element: <HomeRedirect /> },
+          {
+            path: "dashboard",
+            element: (
+              <RoleGate allowed={STAFF_SET}>
+                <Dashboard />
+              </RoleGate>
+            ),
+          },
+          {
+            path: "vendor",
+            element: (
+              <RoleGate allowed={VENDOR_SET}>
+                <Outlet />
+              </RoleGate>
+            ),
+            children: [
+              { index: true, element: <Navigate to="overview" replace /> },
+              { path: "overview", element: <VendorOverviewPage /> },
+              { path: "orders", element: <VendorOrdersPage /> },
+              { path: "orders/:id", element: <VendorOrderDetailPage /> },
+              { path: "shipments", element: <VendorShipmentsPage /> },
+            ],
+          },
           {
             path: "procurement",
             element: (
@@ -219,14 +246,6 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to="documents" replace /> },
               { path: "documents", element: <DocumentsPage /> },
               { path: "documents/:id", element: <DocumentDetailPage /> },
-              {
-                path: "pending",
-                element: (
-                  <RoleGate allowed={MANAGER_SET}>
-                    <PendingSignaturesPage />
-                  </RoleGate>
-                ),
-              },
               {
                 path: "missing",
                 element: (

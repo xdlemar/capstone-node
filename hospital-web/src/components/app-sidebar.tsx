@@ -5,6 +5,7 @@ import {
   Boxes,
   FileText,
   LayoutDashboard,
+  Package,
   ShoppingCart,
   Stethoscope,
   Truck,
@@ -83,7 +84,6 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
       { title: "Library & uploads", url: "/dtrs/documents", roles: ["STAFF", "MANAGER", "ADMIN"] },
-      { title: "Pending signatures", url: "/dtrs/pending", roles: ["MANAGER", "ADMIN"] },
       { title: "Missing docs ", url: "/dtrs/missing", roles: ["MANAGER", "ADMIN"] }
     ],
   },
@@ -93,6 +93,17 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     icon: Users,
     roles: ["ADMIN"],
     items: [{ title: "User access", url: "/admin", roles: ["ADMIN"] }],
+  },
+  {
+    title: "Vendor portal",
+    url: "/vendor",
+    icon: Package,
+    roles: ["VENDOR"],
+    items: [
+      { title: "Overview", url: "/vendor/overview", roles: ["VENDOR"] },
+      { title: "Orders", url: "/vendor/orders", roles: ["VENDOR"] },
+      { title: "Shipments", url: "/vendor/shipments", roles: ["VENDOR"] },
+    ],
   },
 ];
 

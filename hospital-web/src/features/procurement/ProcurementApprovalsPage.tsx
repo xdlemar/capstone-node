@@ -2,7 +2,7 @@ import { ShieldCheck } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-import { ApprovePrCard, VendorPerformanceTable } from "./components/ProcurementForms";
+import { ApprovePrCard } from "./components/ProcurementForms";
 
 export default function ProcurementApprovalsPage() {
   return (
@@ -10,12 +10,12 @@ export default function ProcurementApprovalsPage() {
       <header className="space-y-3">
         <h1 className="text-3xl font-semibold tracking-tight">Procurement approvals</h1>
         <p className="text-muted-foreground max-w-3xl">
-          Review submitted purchase requisitions, manage sourcing decisions, and monitor vendor performance signals before
-          signing off. This view is limited to managers and admins to respect segregation of duties.
+          Review submitted purchase requisitions, manage sourcing decisions, and sign off before purchase orders move
+          forward. This view is limited to managers and admins to respect segregation of duties.
         </p>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           <li>Validate that the request aligns with approved projects or ward consumption patterns.</li>
-          <li>Confirm budget availability and ensure the vendor meets quality and regulatory expectations.</li>
+          <li>Confirm budget availability and ensure sourcing meets quality and regulatory expectations.</li>
           <li>Approve to unlock the purchase order step; reject with notes if additional clarification is needed.</li>
         </ul>
       </header>
@@ -41,7 +41,6 @@ export default function ProcurementApprovalsPage() {
             </CardContent>
           </Card>
 
-          <VendorPerformanceTable />
         </aside>
       </div>
     </section>

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import { FullScreenPreloader } from "@/components/layout/Preloader";
 import { api } from "@/lib/api";
+import { auth } from "@/lib/auth";
+import { getDefaultRoute } from "@/lib/roles";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,7 +86,7 @@ export default function LoginPage() {
       }
       login(token);
       setRedirecting(true);
-      navigate("/dashboard", { replace: true });
+      navigate(getDefaultRoute(auth.getUser()?.roles ?? []), { replace: true });
       return;
     } catch (err: any) {
       const status = err?.response?.status;
@@ -129,7 +131,7 @@ export default function LoginPage() {
         if (!token) throw new Error("Missing access token");
         login(token);
         setRedirecting(true);
-        navigate("/dashboard", { replace: true });
+        navigate(getDefaultRoute(auth.getUser()?.roles ?? []), { replace: true });
       } catch (err: any) {
         const status = err?.response?.status;
         const backendError = err?.response?.data?.error;
@@ -163,7 +165,7 @@ export default function LoginPage() {
       }
       login(token);
       setRedirecting(true);
-      navigate("/dashboard", { replace: true });
+      navigate(getDefaultRoute(auth.getUser()?.roles ?? []), { replace: true });
     } catch (err: any) {
       const status = err?.response?.status;
       const backendError = err?.response?.data?.error;
@@ -197,7 +199,7 @@ export default function LoginPage() {
       if (token) {
         login(token);
         setRedirecting(true);
-        navigate("/dashboard", { replace: true });
+        navigate(getDefaultRoute(auth.getUser()?.roles ?? []), { replace: true });
       }
     } catch (err: any) {
       const status = err?.response?.status;
@@ -214,7 +216,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      navigate("/dashboard", { replace: true });
+      navigate(getDefaultRoute(user.roles), { replace: true });
     }
   }, [user, navigate]);
 

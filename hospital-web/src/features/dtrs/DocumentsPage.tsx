@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,11 +18,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentSummary, type DocumentSummary } from "@/hooks/useDocumentSummary";
 import { useDocumentsList, type DocumentRecord } from "@/hooks/useDocumentSearch";
+import { useProcurementPoOptions } from "@/hooks/useProcurementPoOptions";
+import { usePltDeliveries, usePltProjects } from "@/hooks/usePltData";
+import { useAlmsAssets, useAlmsWorkOrders } from "@/hooks/useAlmsData";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const MODULE_OPTIONS = ["PROCUREMENT", "PROJECT", "DELIVERY", "ASSET", "MAINTENANCE"] as const;
+const MODULE_OPTIONS = ["PROCUREMENT", "PROJECT", "DELIVERY", "ASSET", "MAINTENANCE", "OTHER"] as const;
+const MODULE_DOC_TYPES: Record<
+  (typeof MODULE_OPTIONS)[number],
+  Array<{ label: string; tag: string }>
+> = {
+  PROCUREMENT: [
+    { label: "Signed Purchase Order", tag: "PO" },
+    { label: "Delivery Receipt", tag: "DR" },
+    { label: "Supplier Invoice", tag: "INVOICE" },
+  ],
+  DELIVERY: [
+    { label: "Delivery Receipt", tag: "DR" },
+    { label: "Delivery Photos", tag: "PHOTO" },
+  ],
+  PROJECT: [
+    { label: "Project Implementation Plan", tag: "PROJECT_PLAN" },
+    { label: "Project Acceptance Form", tag: "ACCEPTANCE" },
+  ],
+  ASSET: [],
+  MAINTENANCE: [],
+  OTHER: [],
+};
 const SORT_OPTIONS = [
   { value: "created-desc", label: "Newest first" },
   { value: "created-asc", label: "Oldest first" },
@@ -38,7 +62,7 @@ const STATUS_FILTERS = [
   { value: "pending", label: "Pending upload" },
 ] as const;
 
-const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 type SortOption = (typeof SORT_OPTIONS)[number]["value"];
 type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
@@ -57,17 +81,29 @@ const DOCUMENT_STATUS = {
 const uploadSchema = z.object({
   module: z.enum(MODULE_OPTIONS, { required_error: "Select a module" }),
   title: z.string().min(3, "Title required"),
-  storageKey: z.string().optional(),
-  mimeType: z.string().optional(),
-  size: z.string().optional(),
-  checksum: z.string().optional(),
   projectId: z.string().optional(),
   poId: z.string().optional(),
-  receiptId: z.string().optional(),
   deliveryId: z.string().optional(),
   assetId: z.string().optional(),
   woId: z.string().optional(),
+  docTag: z.string().optional(),
   notes: z.string().optional(),
+}).superRefine((values, ctx) => {
+  if (values.module === "PROCUREMENT" && !values.poId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["poId"], message: "Select a purchase order" });
+  }
+  if (values.module === "DELIVERY" && !values.deliveryId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deliveryId"], message: "Select a delivery" });
+  }
+  if (values.module === "PROJECT" && !values.projectId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["projectId"], message: "Select a project" });
+  }
+  if (values.module === "ASSET" && !values.assetId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["assetId"], message: "Select an asset" });
+  }
+  if (values.module === "MAINTENANCE" && !values.woId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["woId"], message: "Select a work order" });
+  }
 });
 
 type UploadFormValues = z.infer<typeof uploadSchema>;
@@ -94,11 +130,16 @@ type DocumentRowProps = {
   doc: DocumentRecord;
   onCopyKey: (key?: string | null) => void;
   onViewDetails: (id: string) => void;
+  onViewFile: (key?: string | null) => void;
 };
 
 function computeStatus(storageKey?: string | null): typeof DOCUMENT_STATUS[keyof typeof DOCUMENT_STATUS] {
   if (!storageKey) return DOCUMENT_STATUS.PLACEHOLDER;
   return storageKey.startsWith("placeholder:") ? DOCUMENT_STATUS.PLACEHOLDER : DOCUMENT_STATUS.FILED;
+}
+
+function hasStoredFile(storageKey?: string | null) {
+  return Boolean(storageKey && !storageKey.startsWith("placeholder:"));
 }
 
 function getHighestRole(roles: string[]): HighestRole {
@@ -126,7 +167,7 @@ export default function DocumentsPage() {
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortOption>("created-desc");
-  const [visibleCount, setVisibleCount] = useState(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(1);
 
   const summaryQuery = useDocumentSummary({ enabled: isManager });
   const documentsQuery = useDocumentsList({
@@ -194,12 +235,20 @@ export default function DocumentsPage() {
   }, [documents, sortBy, statusFilter]);
 
   useEffect(() => {
-    setVisibleCount(DEFAULT_PAGE_SIZE);
+    setPage(1);
   }, [moduleFilter, searchValue, statusFilter, sortBy, documents.length]);
 
-  const visibleDocuments = filteredDocuments.slice(0, visibleCount);
-  const hasMore = filteredDocuments.length > visibleCount;
+  const totalPages = Math.max(1, Math.ceil(filteredDocuments.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const visibleDocuments = filteredDocuments.slice(pageStart, pageStart + PAGE_SIZE);
   const filtersActive = moduleFilter !== "ALL" || searchValue.trim().length > 0 || statusFilter !== "all";
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const { toast } = useToast();
 
@@ -210,6 +259,7 @@ export default function DocumentsPage() {
     setModuleFilter("ALL");
     setSearchValue("");
     setStatusFilter("all");
+    setPage(1);
   };
 
   const handleCopyKey = async (key?: string | null) => {
@@ -229,6 +279,25 @@ export default function DocumentsPage() {
         variant: "destructive",
         title: "Copy failed",
         description: err?.message ?? "Unable to access clipboard. Copy manually instead.",
+      });
+    }
+  };
+
+  const handleViewFile = async (key?: string | null) => {
+    if (!key || key.startsWith("placeholder:")) {
+      toast({ variant: "destructive", title: "No file yet", description: "This record is still pending upload." });
+      return;
+    }
+    try {
+      const { data } = await api.get("/dtrs/uploads/s3-url", { params: { storageKey: key } });
+      const url = data?.url;
+      if (!url) throw new Error("Missing download URL");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Unable to open file",
+        description: err?.response?.data?.error ?? err?.message ?? "Unexpected error",
       });
     }
   };
@@ -303,7 +372,9 @@ export default function DocumentsPage() {
                 ? "Loading documents..."
                 : filteredDocuments.length === 0
                 ? "No documents match the selected filters."
-                : `Showing ${visibleDocuments.length} of ${filteredDocuments.length} records (${documents.length} fetched).`}
+                : `Showing ${pageStart + 1}-${Math.min(pageStart + PAGE_SIZE, filteredDocuments.length)} of ${
+                    filteredDocuments.length
+                  } records (${documents.length} fetched).`}
             </p>
             <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
               <SelectTrigger className="w-full max-w-xs">
@@ -358,6 +429,7 @@ export default function DocumentsPage() {
                         key={doc.id}
                         doc={doc}
                         onCopyKey={handleCopyKey}
+                        onViewFile={handleViewFile}
                         onViewDetails={(id) => navigate(`/dtrs/documents/${id}`)}
                       />
                     ))}
@@ -365,15 +437,29 @@ export default function DocumentsPage() {
                 </Table>
               </div>
 
-              {hasMore ? (
-                <div className="flex justify-center pt-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setVisibleCount((value) => value + DEFAULT_PAGE_SIZE)}
-                  >
-                    Show more ({filteredDocuments.length - visibleDocuments.length} remaining)
-                  </Button>
+              {filteredDocuments.length > PAGE_SIZE ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <p className="text-sm text-muted-foreground">
+                    Page {safePage} of {totalPages}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={safePage <= 1}
+                      onClick={() => setPage((value) => Math.max(1, value - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={safePage >= totalPages}
+                      onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -381,7 +467,7 @@ export default function DocumentsPage() {
         </CardContent>
       </Card>
 
-      <UploadCard isManager={isManager} onSuccess={() => setVisibleCount(DEFAULT_PAGE_SIZE)} />
+      <UploadCard isManager={isManager} onSuccess={() => setPage(1)} />
     </section>
   );
 }
@@ -424,40 +510,91 @@ function UploadCard({ isManager, onSuccess }: UploadCardProps) {
     defaultValues: {
       module: "PROCUREMENT",
       title: "",
-      storageKey: "",
-      mimeType: "",
-      size: "",
-      checksum: "",
       projectId: "",
       poId: "",
-      receiptId: "",
       deliveryId: "",
       assetId: "",
       woId: "",
+      docTag: "",
       notes: "",
     },
   });
+
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const moduleValue = form.watch("module");
+  const docTypes = MODULE_DOC_TYPES[moduleValue] ?? [];
+  const poOptionsQuery = useProcurementPoOptions({ enabled: moduleValue === "PROCUREMENT" });
+  const deliveriesQuery = usePltDeliveries({}, { enabled: moduleValue === "DELIVERY" });
+  const projectsQuery = usePltProjects({}, { enabled: moduleValue === "PROJECT" });
+  const assetsQuery = useAlmsAssets({ enabled: moduleValue === "ASSET" });
+  const workOrdersQuery = useAlmsWorkOrders({ enabled: moduleValue === "MAINTENANCE" });
+  const existingDocsQuery = useDocumentsList(
+    { module: moduleValue === "OTHER" ? undefined : moduleValue },
+    { enabled: moduleValue !== "OTHER" }
+  );
+  const existingDocs = existingDocsQuery.data ?? [];
+  const docTagValue = form.watch("docTag");
+
+  useEffect(() => {
+    const keepField =
+      moduleValue === "PROCUREMENT"
+        ? "poId"
+        : moduleValue === "DELIVERY"
+        ? "deliveryId"
+        : moduleValue === "PROJECT"
+        ? "projectId"
+        : moduleValue === "ASSET"
+        ? "assetId"
+        : moduleValue === "MAINTENANCE"
+        ? "woId"
+        : null;
+    const allFields = ["poId", "deliveryId", "projectId", "assetId", "woId"] as const;
+    allFields.forEach((field) => {
+      if (field !== keepField) {
+        form.setValue(field, "");
+      }
+    });
+    form.setValue("docTag", "");
+  }, [form, moduleValue]);
 
   const qc = useQueryClient();
   const { toast } = useToast();
 
   const mutation = useMutation({
     mutationFn: async (values: UploadFormValues) => {
+      let storageKey;
+      let mimeType;
+      let size;
+      let checksum;
+
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        const { data } = await api.post("/dtrs/uploads/s3", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        storageKey = data?.storageKey;
+        mimeType = data?.mimeType;
+        size = data?.size;
+        checksum = data?.checksum;
+
+        if (!storageKey) {
+          throw new Error("Upload failed: missing storage key");
+        }
+      }
+
       const payload: Record<string, unknown> = {
         module: values.module,
         title: values.title,
-        storageKey: values.storageKey || undefined,
-        mimeType: values.mimeType || undefined,
-        checksum: values.checksum || undefined,
-        size: values.size ? Number(values.size) : undefined,
-        projectId: values.projectId || undefined,
-        poId: values.poId || undefined,
-        receiptId: values.receiptId || undefined,
-        deliveryId: values.deliveryId || undefined,
-        assetId: values.assetId || undefined,
-        woId: values.woId || undefined,
         notes: values.notes || undefined,
+        ...(storageKey ? { storageKey, mimeType, size, checksum } : {}),
       };
+      if (values.module === "PROCUREMENT") payload.poId = values.poId || undefined;
+      if (values.module === "DELIVERY") payload.deliveryId = values.deliveryId || undefined;
+      if (values.module === "PROJECT") payload.projectId = values.projectId || undefined;
+      if (values.module === "ASSET") payload.assetId = values.assetId || undefined;
+      if (values.module === "MAINTENANCE") payload.woId = values.woId || undefined;
+      if (values.docTag) payload.tags = [values.docTag];
       await api.post("/dtrs/documents", payload);
     },
     onSuccess: () => {
@@ -467,18 +604,15 @@ function UploadCard({ isManager, onSuccess }: UploadCardProps) {
       form.reset({
         module: "PROCUREMENT",
         title: "",
-        storageKey: "",
-        mimeType: "",
-        size: "",
-        checksum: "",
         projectId: "",
         poId: "",
-        receiptId: "",
         deliveryId: "",
         assetId: "",
         woId: "",
+        docTag: "",
         notes: "",
       });
+      setSelectedFile(null);
       onSuccess();
     },
     onError: (err: any) => {
@@ -539,42 +673,6 @@ function UploadCard({ isManager, onSuccess }: UploadCardProps) {
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <FormField
-                control={form.control}
-                name="storageKey"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Storage key</FormLabel>
-                    <Input placeholder="s3://bucket/key" {...field} />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="mimeType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>MIME type</FormLabel>
-                    <Input placeholder="application/pdf" {...field} />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="size"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Size (bytes)</FormLabel>
-                    <Input placeholder="Optional" {...field} />
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
             <FormField
               control={form.control}
               name="notes"
@@ -587,7 +685,55 @@ function UploadCard({ isManager, onSuccess }: UploadCardProps) {
               )}
             />
 
-            <ScopeFields form={form} />
+            <div className="grid gap-2">
+              <FormLabel>Upload file (optional)</FormLabel>
+              <Input
+                type="file"
+                onChange={(event) => setSelectedFile(event.target.files?.[0] || null)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank to record a pending document and upload the file later.
+              </p>
+            </div>
+
+            <GuidedScopeFields
+              moduleValue={moduleValue}
+              form={form}
+              existingDocs={existingDocs}
+              docTag={docTagValue}
+              poOptionsQuery={poOptionsQuery}
+              deliveriesQuery={deliveriesQuery}
+              projectsQuery={projectsQuery}
+              assetsQuery={assetsQuery}
+              workOrdersQuery={workOrdersQuery}
+            />
+
+            {docTypes.length ? (
+              <FormField
+                control={form.control}
+                name="docTag"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Document type</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select document type (optional)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {docTypes.map((docType) => (
+                          <SelectItem key={docType.tag} value={docType.tag}>
+                            {docType.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
 
             <div className="flex justify-end">
               <Button type="submit" disabled={mutation.isPending}>
@@ -625,7 +771,65 @@ function StatusFilterButtons({ active, counts, onChange }: StatusFilterButtonsPr
   );
 }
 
-function DocumentRow({ doc, onCopyKey, onViewDetails }: DocumentRowProps) {
+type AttachFileActionProps = {
+  documentId: string;
+};
+
+function AttachFileAction({ documentId }: AttachFileActionProps) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const handlePick = () => inputRef.current?.click();
+
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await api.post("/dtrs/uploads/s3", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const storageKey = data?.storageKey;
+      if (!storageKey) throw new Error("Upload failed: missing storage key");
+
+      await api.post(`/dtrs/documents/${documentId}/versions`, {
+        storageKey,
+        mimeType: data?.mimeType,
+        size: data?.size,
+        checksum: data?.checksum,
+      });
+
+      toast({ title: "File attached" });
+      qc.invalidateQueries({ queryKey: ["dtrs", "documents"] });
+      qc.invalidateQueries({ queryKey: ["dtrs", "summary"] });
+      qc.invalidateQueries({ queryKey: ["dtrs", "document-detail", documentId] });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Attach failed",
+        description: err?.response?.data?.error ?? err?.message ?? "Unexpected error",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <>
+      <input ref={inputRef} type="file" className="hidden" onChange={handleFileChange} />
+      <Button type="button" variant="outline" size="sm" onClick={handlePick} disabled={uploading}>
+        {uploading ? "Uploading..." : "Attach file"}
+      </Button>
+    </>
+  );
+}
+
+function DocumentRow({ doc, onCopyKey, onViewDetails, onViewFile }: DocumentRowProps) {
   const status = computeStatus(doc.storageKey);
   const references = useMemo(() => {
     const refs: Array<{ label: string; value: string }> = [];
@@ -692,12 +896,21 @@ function DocumentRow({ doc, onCopyKey, onViewDetails }: DocumentRowProps) {
         )}
       </TableCell>
       <TableCell className="align-top text-right">
-        <Button type="button" variant="outline" size="sm" onClick={() => onCopyKey(doc.storageKey)}>
-          Copy key
-        </Button>
-        <Button type="button" variant="ghost" size="sm" className="ml-2" onClick={() => onViewDetails(doc.id)}>
-          View details
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          {hasStoredFile(doc.storageKey) ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => onViewFile(doc.storageKey)}>
+              View file
+            </Button>
+          ) : (
+            <AttachFileAction documentId={doc.id} />
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={() => onCopyKey(doc.storageKey)}>
+            Copy key
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => onViewDetails(doc.id)}>
+            View details
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -717,31 +930,279 @@ function SummaryTile({ label, value, tone = "neutral" }: { label: string; value:
   );
 }
 
-function ScopeFields({ form }: { form: ReturnType<typeof useForm<UploadFormValues>> }) {
-  return (
-    <div className="grid gap-4 md:grid-cols-3">
-      {[
-        { name: "projectId", label: "Project id" },
-        { name: "poId", label: "PO id" },
-        { name: "receiptId", label: "Receipt id" },
-        { name: "deliveryId", label: "Delivery id" },
-        { name: "assetId", label: "Asset id" },
-        { name: "woId", label: "Work order id" },
-      ].map((field) => (
-        <FormField
-          key={field.name}
-          control={form.control}
-          name={field.name as keyof UploadFormValues}
-          render={({ field: formField }) => (
-            <FormItem>
-              <FormLabel>{field.label}</FormLabel>
-              <Input placeholder="Optional" {...formField} />
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-      ))}
-    </div>
-  );
+function GuidedScopeFields({
+  moduleValue,
+  form,
+  existingDocs,
+  docTag,
+  poOptionsQuery,
+  deliveriesQuery,
+  projectsQuery,
+  assetsQuery,
+  workOrdersQuery,
+}: {
+  moduleValue: (typeof MODULE_OPTIONS)[number];
+  form: ReturnType<typeof useForm<UploadFormValues>>;
+  existingDocs: DocumentRecord[];
+  docTag?: string;
+  poOptionsQuery: ReturnType<typeof useProcurementPoOptions>;
+  deliveriesQuery: ReturnType<typeof usePltDeliveries>;
+  projectsQuery: ReturnType<typeof usePltProjects>;
+  assetsQuery: ReturnType<typeof useAlmsAssets>;
+  workOrdersQuery: ReturnType<typeof useAlmsWorkOrders>;
+}) {
+  if (moduleValue === "OTHER") {
+    return (
+      <Alert>
+        <AlertTitle>No linked record</AlertTitle>
+        <AlertDescription>Upload general documents that are not tied to a specific workflow.</AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (moduleValue === "PROCUREMENT") {
+    const allOptions = poOptionsQuery.data ?? [];
+    const tagValue = docTag?.trim();
+    const recordedIds = new Set(
+      existingDocs
+        .filter((doc) => doc.module === "PROCUREMENT" && doc.poId && (!tagValue || doc.tags.includes(tagValue)))
+        .map((doc) => doc.poId as string)
+    );
+    const options = allOptions.filter((po) => !recordedIds.has(po.id));
+    const hiddenCount = allOptions.length - options.length;
+    const emptyMessage =
+      !poOptionsQuery.isLoading && options.length === 0
+        ? hiddenCount > 0
+          ? "All purchase orders already have a recorded document."
+          : "No purchase orders found."
+        : null;
+    return (
+      <FormField
+        control={form.control}
+        name="poId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Purchase order</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={poOptionsQuery.isLoading ? "Loading purchase orders..." : "Select purchase order"}
+                  />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {options.map((po) => (
+                  <SelectItem key={po.id} value={po.id}>
+                    {po.poNo} {po.vendorName ? `- ${po.vendorName}` : ""} ({po.status})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {emptyMessage ? <FormMessage>{emptyMessage}</FormMessage> : <FormMessage />}
+            {hiddenCount > 0 ? (
+              <p className="text-xs text-muted-foreground">{hiddenCount} recorded entries hidden.</p>
+            ) : null}
+          </FormItem>
+        )}
+      />
+    );
+  }
+
+  if (moduleValue === "DELIVERY") {
+    const allOptions = deliveriesQuery.data ?? [];
+    const tagValue = docTag?.trim();
+    const recordedIds = new Set(
+      existingDocs
+        .filter((doc) => doc.module === "DELIVERY" && doc.deliveryId && (!tagValue || doc.tags.includes(tagValue)))
+        .map((doc) => doc.deliveryId as string)
+    );
+    const options = allOptions.filter((delivery) => !recordedIds.has(delivery.id));
+    const hiddenCount = allOptions.length - options.length;
+    const emptyMessage =
+      !deliveriesQuery.isLoading && options.length === 0
+        ? hiddenCount > 0
+          ? "All deliveries already have a recorded document."
+          : "No deliveries found."
+        : null;
+    return (
+      <FormField
+        control={form.control}
+        name="deliveryId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Delivery</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={deliveriesQuery.isLoading ? "Loading deliveries..." : "Select delivery"}
+                  />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {options.map((delivery) => (
+                  <SelectItem key={delivery.id} value={delivery.id}>
+                    #{delivery.id} {delivery.trackingNo ? `- ${delivery.trackingNo}` : ""} ({delivery.status})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {emptyMessage ? <FormMessage>{emptyMessage}</FormMessage> : <FormMessage />}
+            {hiddenCount > 0 ? (
+              <p className="text-xs text-muted-foreground">{hiddenCount} recorded entries hidden.</p>
+            ) : null}
+          </FormItem>
+        )}
+      />
+    );
+  }
+
+  if (moduleValue === "PROJECT") {
+    const allOptions = projectsQuery.data ?? [];
+    const tagValue = docTag?.trim();
+    const recordedIds = new Set(
+      existingDocs
+        .filter((doc) => doc.module === "PROJECT" && doc.projectId && (!tagValue || doc.tags.includes(tagValue)))
+        .map((doc) => doc.projectId as string)
+    );
+    const options = allOptions.filter((project) => !recordedIds.has(project.id));
+    const hiddenCount = allOptions.length - options.length;
+    const emptyMessage =
+      !projectsQuery.isLoading && options.length === 0
+        ? hiddenCount > 0
+          ? "All projects already have a recorded document."
+          : "No projects found."
+        : null;
+    return (
+      <FormField
+        control={form.control}
+        name="projectId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Project</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={projectsQuery.isLoading ? "Loading projects..." : "Select project"}
+                  />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {options.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.code} - {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {emptyMessage ? <FormMessage>{emptyMessage}</FormMessage> : <FormMessage />}
+            {hiddenCount > 0 ? (
+              <p className="text-xs text-muted-foreground">{hiddenCount} recorded entries hidden.</p>
+            ) : null}
+          </FormItem>
+        )}
+      />
+    );
+  }
+
+  if (moduleValue === "ASSET") {
+    const allOptions = assetsQuery.data?.rows ?? [];
+    const recordedIds = new Set(
+      existingDocs
+        .filter((doc) => doc.module === "ASSET" && doc.assetId)
+        .map((doc) => doc.assetId as string)
+    );
+    const options = allOptions.filter((asset) => !recordedIds.has(asset.id));
+    const hiddenCount = allOptions.length - options.length;
+    const emptyMessage =
+      !assetsQuery.isLoading && options.length === 0
+        ? hiddenCount > 0
+          ? "All assets already have a recorded document."
+          : "No assets found."
+        : null;
+    return (
+      <FormField
+        control={form.control}
+        name="assetId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Asset</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={assetsQuery.isLoading ? "Loading assets..." : "Select asset"}
+                  />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {options.map((asset) => (
+                  <SelectItem key={asset.id} value={asset.id}>
+                    {asset.assetCode} - {asset.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {emptyMessage ? <FormMessage>{emptyMessage}</FormMessage> : <FormMessage />}
+            {hiddenCount > 0 ? (
+              <p className="text-xs text-muted-foreground">{hiddenCount} recorded entries hidden.</p>
+            ) : null}
+          </FormItem>
+        )}
+      />
+    );
+  }
+
+  if (moduleValue === "MAINTENANCE") {
+    const allOptions = workOrdersQuery.data?.rows ?? [];
+    const recordedIds = new Set(
+      existingDocs
+        .filter((doc) => doc.module === "MAINTENANCE" && doc.woId)
+        .map((doc) => doc.woId as string)
+    );
+    const options = allOptions.filter((wo) => !recordedIds.has(wo.id));
+    const hiddenCount = allOptions.length - options.length;
+    const emptyMessage =
+      !workOrdersQuery.isLoading && options.length === 0
+        ? hiddenCount > 0
+          ? "All work orders already have a recorded document."
+          : "No work orders found."
+        : null;
+    return (
+      <FormField
+        control={form.control}
+        name="woId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Work order</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={workOrdersQuery.isLoading ? "Loading work orders..." : "Select work order"}
+                  />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {options.map((wo) => (
+                  <SelectItem key={wo.id} value={wo.id}>
+                    {wo.woNo} ({wo.status})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {emptyMessage ? <FormMessage>{emptyMessage}</FormMessage> : <FormMessage />}
+            {hiddenCount > 0 ? (
+              <p className="text-xs text-muted-foreground">{hiddenCount} recorded entries hidden.</p>
+            ) : null}
+          </FormItem>
+        )}
+      />
+    );
+  }
+
+  return null;
 }
 

@@ -295,11 +295,16 @@ router.post("/", async (req, res) => {
     const uploader = toBigInt(inferredUploader, "uploaderId", { optional: true });
     const normalizedNotes =
       typeof notes === "string" ? notes.trim().slice(0, 2000) : null;
+    const normalizedStorageKey =
+      typeof storageKey === "string" && storageKey.trim().length ? storageKey.trim() : null;
+    const finalStorageKey =
+      normalizedStorageKey || `placeholder:${Date.now()}-${crypto.randomBytes(6).toString("hex")}`;
+
     const doc = await prisma.document.create({
       data: {
         module: documentModule,
         title,
-        storageKey,
+        storageKey: finalStorageKey,
         mimeType,
         size,
         checksum,
@@ -318,12 +323,23 @@ router.post("/", async (req, res) => {
       data: {
         documentId: doc.id,
         versionNo: 1,
-        storageKey: storageKey || `placeholder:${doc.id}`,
+        storageKey: finalStorageKey,
         size: size || 0,
         checksum: checksum || null,
         createdById: uploader,
       },
     });
+
+    const rawTags = Array.isArray(req.body?.tags) ? req.body.tags : [];
+    const tags = rawTags
+      .map((tag) => (typeof tag === "string" ? tag.trim() : String(tag || "").trim()))
+      .filter(Boolean);
+    if (tags.length) {
+      await prisma.docTag.createMany({
+        data: tags.map((tag) => ({ documentId: doc.id, name: tag })),
+        skipDuplicates: true,
+      });
+    }
 
     await prisma.docAccessAudit.create({
       data: {

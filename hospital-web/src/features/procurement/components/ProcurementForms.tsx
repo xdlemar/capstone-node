@@ -39,6 +39,7 @@ const receiptSchema = z.object({
   poNo: z.string().min(3, "PO number is required"),
   drNo: z.string().optional(),
   invoiceNo: z.string().optional(),
+  toLocId: z.string().min(1, "Select a receiving location"),
 });
 
 type ReceiptValues = z.infer<typeof receiptSchema>;
@@ -52,6 +53,7 @@ type ApproveValues = z.infer<typeof approveSchema>;
 
 const poSchema = z.object({
   prNo: z.string().min(1, "Select an approved PR"),
+  vendorId: z.string().min(1, "Select a vendor"),
   poNo: z.string().min(3, "PO number is required"),
 });
 
@@ -289,24 +291,50 @@ export function ReceiptCard({ className }: { className?: string }) {
   const [hiddenPoNos, setHiddenPoNos] = useState<Set<string>>(() => new Set());
   const form = useForm<ReceiptValues>({
     resolver: zodResolver(receiptSchema),
-    defaultValues: { poNo: "", drNo: "", invoiceNo: "" },
+    defaultValues: { poNo: "", drNo: "", invoiceNo: "", toLocId: "" },
   });
 
   const onSubmit = async (values: ReceiptValues) => {
     try {
-      await api.post("/procurement/receipts", {
+      const payload: any = {
         poNo: values.poNo,
         drNo: values.drNo || undefined,
         invoiceNo: values.invoiceNo || undefined,
-      });
+      };
+
+      if (selectedPo) {
+        const linePayload = safeLines(selectedPo.lines).map((line) => ({
+          itemId: line.itemId,
+          qty: line.qty,
+          toLocId: values.toLocId,
+        }));
+        if (linePayload.length) payload.lines = linePayload;
+      }
+
+      const response = await api.post("/procurement/receipts", payload);
+      const dtrsStatus = response?.data?.dtrs?.status;
       toast({ title: "Delivery receipt logged", description: `Receipt recorded for purchase order ${values.poNo}.` });
-      form.reset({ poNo: "", drNo: "", invoiceNo: "" });
+      if (dtrsStatus === "failed") {
+        toast({
+          title: "DTRS sync failed",
+          description: "Receipt saved, but the document record did not sync to DTRS. Check the server logs.",
+          variant: "destructive",
+        });
+      } else if (dtrsStatus === "skipped") {
+        toast({
+          title: "DTRS doc skipped",
+          description: "No DR/Invoice number provided, so no DTRS record was created.",
+        });
+      }
+      form.reset({ poNo: "", drNo: "", invoiceNo: "", toLocId: "" });
       setHiddenPoNos((prev) => {
         const next = new Set(prev);
         next.add(values.poNo);
         return next;
       });
       queryClient.invalidateQueries({ queryKey: ["procurement", "lookups"] });
+      queryClient.invalidateQueries({ queryKey: ["dtrs", "documents"] });
+      queryClient.invalidateQueries({ queryKey: ["dtrs", "summary"] });
     } catch (err: any) {
       const message = err?.response?.data?.error || err.message || "Failed to record receipt";
       toast({ title: "Delivery receipt failed", description: message, variant: "destructive" });
@@ -319,6 +347,7 @@ export function ReceiptCard({ className }: { className?: string }) {
     if (!hiddenPoNos.size) return rawOpenPos;
     return rawOpenPos.filter((po) => !hiddenPoNos.has(po.poNo));
   }, [rawOpenPos, hiddenPoNos]);
+  const locations = inventoryQuery.data?.locations ?? [];
   const selectedPoNo = form.watch("poNo");
   const selectedPo = openPos.find((po) => po.poNo === selectedPoNo);
 
@@ -345,8 +374,8 @@ export function ReceiptCard({ className }: { className?: string }) {
           </Alert>
         ) : openPos.length === 0 ? (
           <Alert>
-            <AlertTitle>No open purchase orders</AlertTitle>
-            <AlertDescription>Create or reopen a purchase order before recording receipts.</AlertDescription>
+            <AlertTitle>No delivered purchase orders</AlertTitle>
+            <AlertDescription>Receipts appear here after a delivery is marked DELIVERED.</AlertDescription>
           </Alert>
         ) : (
           <Form {...form}>
@@ -380,8 +409,45 @@ export function ReceiptCard({ className }: { className?: string }) {
                         })}
                       </SelectContent>
                     </Select>
-                    <FormDescription>Only open purchase orders appear here.</FormDescription>
+                    <FormDescription>Only delivered purchase orders appear here.</FormDescription>
+                    {selectedPo ? (
+                      <p className="text-xs text-muted-foreground">
+                        Vendor: {selectedPo.vendorName ?? "Vendor pending"}
+                      </p>
+                    ) : null}
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="toLocId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Receiving location</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue
+                            placeholder={inventoryQuery.isLoading ? "Loading locations..." : "Select receiving location"}
+                          />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {locations.map((loc) => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name} {loc.kind ? `(${loc.kind})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Stock will be received into this location.</FormDescription>
+                    {!inventoryQuery.isLoading && locations.length === 0 ? (
+                      <FormMessage>No storage locations found.</FormMessage>
+                    ) : (
+                      <FormMessage />
+                    )}
                   </FormItem>
                 )}
               />
@@ -620,10 +686,11 @@ export function CreatePoCard({ className }: { className?: string }) {
   const [hiddenPrNos, setHiddenPrNos] = useState<Set<string>>(() => new Set());
   const form = useForm<PoValues>({
     resolver: zodResolver(poSchema),
-    defaultValues: { prNo: "", poNo: `PO-${Date.now()}` },
+    defaultValues: { prNo: "", vendorId: "", poNo: `PO-${Date.now()}` },
   });
 
   const rawApproved = lookups.data?.approvedPrs ?? [];
+  const vendors = lookups.data?.vendors ?? [];
   const approved = useMemo(() => {
     if (!hiddenPrNos.size) return rawApproved;
     return rawApproved.filter((pr) => !hiddenPrNos.has(pr.prNo));
@@ -634,9 +701,9 @@ export function CreatePoCard({ className }: { className?: string }) {
 
   const onSubmit = async (values: PoValues) => {
     try {
-      await api.post("/procurement/po", { prNo: values.prNo, poNo: values.poNo });
+      await api.post("/procurement/po", { prNo: values.prNo, poNo: values.poNo, vendorId: values.vendorId });
       toast({ title: "Purchase order created", description: `Purchase order ${values.poNo} linked to requisition ${values.prNo}.` });
-      form.reset({ prNo: "", poNo: `PO-${Date.now()}` });
+      form.reset({ prNo: "", vendorId: "", poNo: `PO-${Date.now()}` });
       setHiddenPrNos((prev) => {
         const next = new Set(prev);
         next.add(values.prNo);
@@ -718,6 +785,32 @@ export function CreatePoCard({ className }: { className?: string }) {
                       <Input placeholder="PO-0001" {...field} />
                     </FormControl>
                     <FormDescription>If blank, we generate a timestamp-based number for you.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="vendorId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vendor</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger className="bg-background h-auto min-h-[3rem] items-start py-2 text-left">
+                          <SelectValue placeholder="Select vendor" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {vendors.map((vendor) => (
+                          <SelectItem key={vendor.id} value={vendor.id}>
+                            {vendor.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>Choose the supplier who will fulfill this PO.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

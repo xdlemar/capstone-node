@@ -87,7 +87,7 @@ export const WORK_ORDER_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> 
   CANCELLED: [],
 };
 
-export function useAlmsAssets() {
+export function useAlmsAssets(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ["alms", "assets"],
     queryFn: async () => {
@@ -101,10 +101,11 @@ export function useAlmsAssets() {
       };
     },
     staleTime: 60_000,
+    enabled: options.enabled ?? true,
   });
 }
 
-export function useAlmsWorkOrders() {
+export function useAlmsWorkOrders(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ["alms", "workorders"],
     queryFn: async () => {
@@ -112,6 +113,7 @@ export function useAlmsWorkOrders() {
       return data;
     },
     staleTime: 30_000,
+    enabled: options.enabled ?? true,
   });
 }
 

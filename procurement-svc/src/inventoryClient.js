@@ -10,6 +10,8 @@ const SERVICE_ROLES = (process.env.SERVICE_TOKEN_ROLES || "ADMIN,MANAGER,STAFF")
 
 let cachedToken = null;
 let cachedExpiry = 0;
+let cachedItems = null;
+let cachedItemsExpiry = 0;
 
 function getServiceToken() {
   const now = Date.now();
@@ -43,4 +45,36 @@ async function postStockMove(body) {
   return resp.json();
 }
 
-module.exports = { postStockMove };
+async function fetchInventoryItems() {
+  const now = Date.now();
+  if (cachedItems && cachedItemsExpiry - 30_000 > now) {
+    return cachedItems;
+  }
+
+  const resp = await fetch(`${BASE}/lookups/inventory`, {
+    headers: {
+      Authorization: `Bearer ${getServiceToken()}`,
+    },
+  });
+
+  const text = await resp.text().catch(() => "");
+  let payload = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = null;
+    }
+  }
+
+  if (!resp.ok) {
+    throw new Error(`[inventoryClient] GET /lookups/inventory ${resp.status} ${text}`);
+  }
+
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  cachedItems = items;
+  cachedItemsExpiry = now + 5 * 60 * 1000;
+  return items;
+}
+
+module.exports = { postStockMove, fetchInventoryItems };

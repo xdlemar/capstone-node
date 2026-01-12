@@ -50,8 +50,9 @@ model Vendor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  POs     PO[]
-  metrics VendorMetric?
+  POs         PO[]
+  metrics     VendorMetric?
+  vendorUsers VendorUser[]
 }
 
 model VendorMetric {
@@ -64,6 +65,18 @@ model VendorMetric {
   lastEvaluatedAt  DateTime @default(now())
 
   vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+}
+
+model VendorUser {
+  id        BigInt   @id @default(autoincrement())
+  vendorId  BigInt
+  userId    String
+  createdAt DateTime @default(now())
+
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, userId])
+  @@index([userId])
 }
 
 /**
@@ -108,6 +121,9 @@ model PO {
   vendorId  BigInt
   status    POStatus @default(OPEN)
   orderedAt DateTime @default(now())
+  vendorAcknowledgedAt DateTime?
+  vendorAcknowledgedBy String?
+  vendorNote String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

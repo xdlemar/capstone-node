@@ -1,6 +1,7 @@
 const { Router } = require("express");
 const prisma = require("../prisma.js");
 const { requireRole } = require("../auth");
+const { fetchPoDeliveryStatuses } = require("../pltClient");
 
 const staffAccess = requireRole("STAFF", "MANAGER", "ADMIN");
 
@@ -29,6 +30,7 @@ router.get("/procurement", staffAccess, async (req, res) => {
               notes: true,
             },
           },
+          _count: { select: { PO: true } },
         },
       }),
       prisma.vendor.findMany({
@@ -51,13 +53,16 @@ router.get("/procurement", staffAccess, async (req, res) => {
               notes: true,
             },
           },
+          _count: { select: { receipts: true } },
         },
       }),
     ]);
 
-    const mapPr = (status) =>
+    const mapPr = (status, { excludeWithPo = false } = {}) =>
       prs
-        .filter((pr) => pr.status === status)
+        .filter(
+          (pr) => pr.status === status && (!excludeWithPo || (pr._count?.PO ?? 0) === 0)
+        )
         .map((pr) => ({
           id: pr.id.toString(),
           prNo: pr.prNo,
@@ -73,7 +78,7 @@ router.get("/procurement", staffAccess, async (req, res) => {
         }));
 
     const submittedPrs = mapPr("SUBMITTED");
-    const approvedPrs = mapPr("APPROVED");
+    const approvedPrs = mapPr("APPROVED", { excludeWithPo: true });
 
     const vendorPayload = vendors.map((vendor) => ({
       id: vendor.id.toString(),
@@ -88,29 +93,74 @@ router.get("/procurement", staffAccess, async (req, res) => {
             fulfillmentRate: vendor.metrics.fulfillmentRate,
             totalSpend: Number(vendor.metrics.totalSpend),
             lastEvaluatedAt: vendor.metrics.lastEvaluatedAt,
-          }
+      }
         : null,
     }));
 
-    const openPos = pos.map((po) => ({
-      id: po.id.toString(),
-      poNo: po.poNo,
-      prNo: po.PR?.prNo ?? null,
-      vendorName: po.vendor?.name ?? null,
-      status: po.status,
-      orderedAt: po.orderedAt,
-      lines: po.lines.map((line) => ({
-        id: line.id.toString(),
-        itemId: line.itemId.toString(),
-        qty: line.qty,
-        unit: line.unit,
-        notes: line.notes,
-      })),
-    }));
+    let deliveryStatusMap = new Map();
+    if (pos.length) {
+      try {
+        const statuses = await fetchPoDeliveryStatuses(pos.map((po) => po.id.toString()));
+        deliveryStatusMap = new Map(statuses.map((row) => [String(row.poId), row.status]));
+      } catch (err) {
+        console.error("[GET /lookups/procurement] delivery status lookup failed", err);
+        deliveryStatusMap = new Map();
+      }
+    }
+
+    const openPos = pos
+      .map((po) => {
+        const deliveryStatus = deliveryStatusMap.get(po.id.toString()) ?? null;
+        return {
+          id: po.id.toString(),
+          poNo: po.poNo,
+          prNo: po.PR?.prNo ?? null,
+          vendorName: po.vendor?.name ?? null,
+          status: po.status,
+          orderedAt: po.orderedAt,
+          deliveryStatus,
+          receiptCount: po._count?.receipts ?? 0,
+          lines: po.lines.map((line) => ({
+            id: line.id.toString(),
+            itemId: line.itemId.toString(),
+            qty: line.qty,
+            unit: line.unit,
+            notes: line.notes,
+          })),
+        };
+      })
+      .filter((po) => po.deliveryStatus === "DELIVERED" && po.receiptCount === 0);
 
     res.json({ submittedPrs, approvedPrs, vendors: vendorPayload, openPos });
   } catch (err) {
     console.error("[GET /lookups/procurement]", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.get("/po-options", staffAccess, async (_req, res) => {
+  try {
+    const pos = await prisma.pO.findMany({
+      orderBy: { orderedAt: "desc" },
+      take: 100,
+      include: {
+        vendor: { select: { name: true } },
+        PR: { select: { prNo: true } },
+      },
+    });
+
+    res.json(
+      pos.map((po) => ({
+        id: po.id.toString(),
+        poNo: po.poNo,
+        prNo: po.PR?.prNo ?? null,
+        vendorName: po.vendor?.name ?? null,
+        status: po.status,
+        orderedAt: po.orderedAt,
+      }))
+    );
+  } catch (err) {
+    console.error("[GET /lookups/po-options]", err);
     res.status(500).json({ error: "Internal error" });
   }
 });

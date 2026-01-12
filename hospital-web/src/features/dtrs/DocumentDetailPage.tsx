@@ -6,14 +6,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
 import { useDocumentDetail } from "@/hooks/useDocumentSearch";
+import { useProcurementReceiptDetail } from "@/hooks/useProcurementReceiptDetail";
+import { api } from "@/lib/api";
 
 export default function DocumentDetailPage() {
   const params = useParams();
   const documentId = params.id ?? "";
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const query = useDocumentDetail(documentId, { enabled: Boolean(documentId) });
+  const receiptId = query.data?.document?.receiptId ?? undefined;
+  const isProcurementDoc = query.data?.document?.module === "PROCUREMENT";
+  const receiptDetailQuery = useProcurementReceiptDetail(receiptId, {
+    enabled: isProcurementDoc && Boolean(receiptId),
+  });
 
   const references = useMemo(() => {
     const ref = query.data?.document;
@@ -59,7 +68,27 @@ export default function DocumentDetailPage() {
     );
   }
 
-  const { document, tags, versions, signatures, audits } = query.data;
+  const { document, tags, versions, audits } = query.data;
+  const canViewFile = Boolean(document.storageKey && !document.storageKey.startsWith("placeholder:"));
+
+  const handleViewFile = async () => {
+    if (!canViewFile) {
+      toast({ variant: "destructive", title: "No file yet", description: "This record is still pending upload." });
+      return;
+    }
+    try {
+      const { data } = await api.get("/dtrs/uploads/s3-url", { params: { storageKey: document.storageKey } });
+      const url = data?.url;
+      if (!url) throw new Error("Missing download URL");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Unable to open file",
+        description: err?.response?.data?.error ?? err?.message ?? "Unexpected error",
+      });
+    }
+  };
 
   return (
     <section className="space-y-6">
@@ -68,9 +97,14 @@ export default function DocumentDetailPage() {
           <h1 className="text-3xl font-semibold tracking-tight">{document.title}</h1>
           <p className="text-muted-foreground">Detailed timeline and metadata for this document.</p>
         </div>
-        <Button variant="outline" onClick={() => navigate(-1)}>
-          Back
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" disabled={!canViewFile} onClick={handleViewFile}>
+            {canViewFile ? "View file" : "Pending upload"}
+          </Button>
+          <Button variant="outline" onClick={() => navigate(-1)}>
+            Back
+          </Button>
+        </div>
       </div>
 
       <Card className="border bg-card shadow-sm">
@@ -123,6 +157,78 @@ export default function DocumentDetailPage() {
         </CardContent>
       </Card>
 
+      {document.module === "PROCUREMENT" && document.receiptId ? (
+        <Card className="border bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle>Receipt details</CardTitle>
+            <CardDescription>Structured procurement context captured at receiving.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {receiptDetailQuery.isLoading ? (
+              <Skeleton className="h-32" />
+            ) : receiptDetailQuery.data ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2 text-sm text-muted-foreground">
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase text-muted-foreground">Purchase order</p>
+                    <p className="text-foreground font-medium">
+                      {receiptDetailQuery.data.po?.poNo ?? "PO unavailable"}
+                    </p>
+                    <p>Vendor: {receiptDetailQuery.data.po?.vendorName ?? "-"}</p>
+                    <p>
+                      Ordered:{" "}
+                      {receiptDetailQuery.data.po?.orderedAt
+                        ? new Date(receiptDetailQuery.data.po.orderedAt).toLocaleString()
+                        : "-"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase text-muted-foreground">Receipt</p>
+                    <p>DR No: {receiptDetailQuery.data.receipt.drNo ?? "-"}</p>
+                    <p>Invoice No: {receiptDetailQuery.data.receipt.invoiceNo ?? "-"}</p>
+                    <p>
+                      Received: {new Date(receiptDetailQuery.data.receipt.receivedAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase text-muted-foreground">Summary</p>
+                    <p>Line items: {receiptDetailQuery.data.totals.lineCount}</p>
+                    <p>Total qty: {receiptDetailQuery.data.totals.totalQty}</p>
+                  </div>
+                </div>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead>Unit</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {receiptDetailQuery.data.lines.map((line) => (
+                        <TableRow key={line.id}>
+                          <TableCell>{line.itemName ?? `Item #${line.itemId}`}</TableCell>
+                          <TableCell className="text-muted-foreground">{line.itemSku ?? "-"}</TableCell>
+                          <TableCell className="text-right">{line.qty}</TableCell>
+                          <TableCell>{line.unit ?? "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ) : (
+              <Alert variant="destructive">
+                <AlertTitle>Receipt details unavailable</AlertTitle>
+                <AlertDescription>We could not load the receipt summary for this document.</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="border bg-card shadow-sm">
         <CardHeader>
           <CardTitle>Versions</CardTitle>
@@ -162,81 +268,6 @@ export default function DocumentDetailPage() {
         </CardContent>
       </Card>
 
-      <Card className="border bg-card shadow-sm">
-        <CardHeader>
-          <CardTitle>Signatures</CardTitle>
-          <CardDescription>Pending signatures are highlighted in red.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {signatures.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No signatures logged.</p>
-          ) : (
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Signer</TableHead>
-                    <TableHead>Method</TableHead>
-                    <TableHead>Signed at</TableHead>
-                    <TableHead>Storage key</TableHead>
-                    <TableHead>IP</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {signatures.map((sig) => (
-                    <TableRow key={sig.id} className={!sig.storageKey ? "bg-destructive/5" : undefined}>
-                      <TableCell>{sig.signerId ?? "-"}</TableCell>
-                      <TableCell>{sig.method}</TableCell>
-                      <TableCell>{new Date(sig.signedAt).toLocaleString()}</TableCell>
-                      <TableCell className="font-mono text-xs">{sig.storageKey ?? "-"}</TableCell>
-                      <TableCell>{sig.ip ?? "-"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="border bg-card shadow-sm">
-        <CardHeader>
-          <CardTitle>Access audit</CardTitle>
-          <CardDescription>Last 200 events.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {audits.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No audit events recorded yet.</p>
-          ) : (
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Action</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>When</TableHead>
-                    <TableHead>IP</TableHead>
-                    <TableHead>User agent</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {audits.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell>{entry.action}</TableCell>
-                      <TableCell>{entry.userId ?? "-"}</TableCell>
-                      <TableCell>{new Date(entry.occurredAt).toLocaleString()}</TableCell>
-                      <TableCell>{entry.ip ?? "-"}</TableCell>
-                      <TableCell className="max-w-[280px] truncate text-xs text-muted-foreground">
-                        {entry.userAgent ?? "-"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </section>
   );
 }

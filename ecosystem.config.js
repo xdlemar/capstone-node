@@ -29,12 +29,16 @@ module.exports = {
     {
       name: "procurement-svc",
       script: "procurement-svc/src/server.js",
-      env: { NODE_ENV: "production", PORT: 4002 }
+      env: { NODE_ENV: "production", PORT: 4002, PLT_URL: "http://127.0.0.1:4005" }
     },
     {
       name: "plt-svc",
       script: "plt-svc/src/server.js",
-      env: { NODE_ENV: "production", PORT: 4005 }
+      env: {
+        NODE_ENV: "production",
+        PORT: 4005,
+        PROCUREMENT_URL: "http://127.0.0.1:4002"
+      }
     },
     {
       name: "dtrs-svc",

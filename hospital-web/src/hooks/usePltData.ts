@@ -142,7 +142,10 @@ function mapDelivery(raw: any): DeliveryRecord {
   };
 }
 
-export function usePltDeliveries(filters: { status?: DeliveryStatus; projectId?: string } = {}) {
+export function usePltDeliveries(
+  filters: { status?: DeliveryStatus; projectId?: string } = {},
+  options: { enabled?: boolean } = {}
+) {
   return useQuery<DeliveryRecord[]>({
     queryKey: ["plt", "deliveries", filters],
     queryFn: async () => {
@@ -157,6 +160,7 @@ export function usePltDeliveries(filters: { status?: DeliveryStatus; projectId?:
       return Array.isArray(data) ? data.map(mapDelivery) : [];
     },
     staleTime: 30_000,
+    enabled: options.enabled ?? true,
   });
 }
 
@@ -192,7 +196,10 @@ export function usePltAlerts(unresolvedOnly = true) {
   });
 }
 
-export function usePltProjects(params: { status?: string; q?: string } = {}) {
+export function usePltProjects(
+  params: { status?: string; q?: string } = {},
+  options: { enabled?: boolean } = {}
+) {
   return useQuery<ProjectRecord[]>({
     queryKey: ["plt", "projects", params],
     queryFn: async () => {
@@ -230,6 +237,7 @@ export function usePltProjects(params: { status?: string; q?: string } = {}) {
         : [];
     },
     staleTime: 60_000,
+    enabled: options.enabled ?? true,
   });
 }
 

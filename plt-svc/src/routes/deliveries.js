@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const { prisma } = require("../prisma");
+const { getPoApprovalById, getPoApprovalByNo } = require("../procurementClient");
 
 const ALLOWED = {
   DRAFT: ["DISPATCHED", "CANCELLED"],
@@ -99,6 +100,37 @@ router.post("/", async (req, res, next) => {
     });
 
     res.status(201).json(delivery);
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    next(e);
+  }
+});
+
+router.delete("/by-po", async (req, res, next) => {
+  try {
+    const poIdParam = req.query.poId ? toBigInt(req.query.poId, "poId", { optional: true }) : null;
+    const poNoParam = req.query.poNo ? String(req.query.poNo).trim() : "";
+
+    if (!poIdParam && !poNoParam) {
+      return res.status(400).json({ error: "poId or poNo is required" });
+    }
+
+    const approval = poNoParam
+      ? await getPoApprovalByNo(poNoParam)
+      : await getPoApprovalById(poIdParam);
+
+    if (!approval) {
+      return res.status(404).json({ error: "PO not found" });
+    }
+
+    if (approval.vendorAcknowledgedAt) {
+      return res.status(409).json({ error: "Order already approved" });
+    }
+
+    const poId = BigInt(approval.id);
+    const result = await prisma.delivery.deleteMany({ where: { poId } });
+
+    res.json({ deleted: result.count, poId: approval.id, poNo: approval.poNo });
   } catch (e) {
     if (e?.status === 400) return res.status(400).json({ error: e.message });
     next(e);
