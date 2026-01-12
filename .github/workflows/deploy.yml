@@ -63,7 +63,7 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER || '' }}
           SMTP_PASS: ${{ secrets.SMTP_PASS || '' }}
           MAIL_FROM: ${{ secrets.MAIL_FROM || 'HVH Logistics <no-reply@log1.health-ease-hospital.com>' }}
-          SSH_PORT: ${{ secrets.SERVER_PORT || '2298' }}
+          SSH_PORT: ${{ secrets.SERVER_PORT || '22' }}
         with:
           host: ${{ secrets.SERVER_IP || '23.94.230.146' }}
           username: ${{ secrets.SERVER_USER }}
