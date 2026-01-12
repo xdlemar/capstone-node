@@ -1,49 +1,150 @@
-import { useMemo, useState } from "react";
+ï»¿import { useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAlmsAssets, useAlmsFinancialSummary } from "@/hooks/useAlmsData";
 
 const currency = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
 const dateFormatter = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric" });
+const SORT_OPTIONS = [
+  { value: "code-asc", label: "Code A-Z" },
+  { value: "code-desc", label: "Code Z-A" },
+  { value: "name-asc", label: "Name A-Z" },
+  { value: "name-desc", label: "Name Z-A" },
+  { value: "category-asc", label: "Category A-Z" },
+  { value: "status-asc", label: "Status A-Z" },
+] as const;
+
+type SortOption = (typeof SORT_OPTIONS)[number]["value"];
 
 export default function FinancialPage() {
   const assetsQuery = useAlmsAssets();
   const [selectedAssetId, setSelectedAssetId] = useState<string | undefined>(undefined);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("code-asc");
 
   const financialQuery = useAlmsFinancialSummary(selectedAssetId);
 
   const assets = useMemo(() => assetsQuery.data?.rows ?? [], [assetsQuery.data?.rows]);
+  const filteredAssets = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    let rows = assets;
+    if (query) {
+      rows = rows.filter((asset) =>
+        [asset.assetCode, asset.name, asset.category ?? "", asset.status]
+          .join(" ")
+          .toLowerCase()
+          .includes(query)
+      );
+    }
+
+    const sorted = [...rows];
+    sorted.sort((a, b) => {
+      switch (sortBy) {
+        case "code-desc":
+          return b.assetCode.localeCompare(a.assetCode);
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "category-asc":
+          return (a.category ?? "").localeCompare(b.category ?? "");
+        case "status-asc":
+          return a.status.localeCompare(b.status);
+        case "code-asc":
+        default:
+          return a.assetCode.localeCompare(b.assetCode);
+      }
+    });
+    return sorted;
+  }, [assets, searchTerm, sortBy]);
 
   return (
     <section className="space-y-6">
       <header className="space-y-3">
         <h1 className="text-3xl font-semibold tracking-tight">Asset financials</h1>
         <p className="text-muted-foreground max-w-3xl">
-          Track depreciation, book value, and maintenance spend by asset. Select an asset from the registry to load financial snapshots.
+          Track depreciation, book value, and maintenance spend by asset. Select an asset from the registry to load
+          financial snapshots.
         </p>
       </header>
 
       <Card className="border bg-card shadow-sm">
         <CardHeader>
-          <CardTitle>Select asset</CardTitle>
-          <CardDescription>Only assets with recorded financial snapshots appear in the trend chart.</CardDescription>
+          <CardTitle>Asset list</CardTitle>
+          <CardDescription>Search, sort, and select an asset to view the financial summary.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Select value={selectedAssetId ?? ""} onValueChange={(value) => setSelectedAssetId(value || undefined)}>
-            <SelectTrigger className="w-full max-w-sm">
-              <SelectValue placeholder="Choose an asset" />
-            </SelectTrigger>
-            <SelectContent>
-              {assets.map((asset) => (
-                <SelectItem key={asset.id} value={asset.id}>
-                  {asset.assetCode} {asset.category ? `• ${asset.category}` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <Input
+              placeholder="Search asset code, name, category, status"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="sm:max-w-md"
+            />
+            <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
+              <SelectTrigger className="sm:w-48">
+                <SelectValue placeholder="Sort assets" />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {assetsQuery.isLoading ? (
+            <Skeleton className="h-32 w-full" />
+          ) : assetsQuery.error ? (
+            <p className="text-sm text-muted-foreground">Unable to load assets right now.</p>
+          ) : filteredAssets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No assets match your search.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Asset code</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAssets.map((asset) => (
+                    <TableRow
+                      key={asset.id}
+                      className={asset.id === selectedAssetId ? "bg-muted/30" : undefined}
+                    >
+                      <TableCell className="font-medium">{asset.assetCode}</TableCell>
+                      <TableCell>{asset.name}</TableCell>
+                      <TableCell>{asset.category ?? "-"}</TableCell>
+                      <TableCell>{asset.status}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedAssetId(asset.id)}
+                        >
+                          {asset.id === selectedAssetId ? "Selected" : "View"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
           {!selectedAssetId ? (
             <p className="text-sm text-muted-foreground">Select an asset to view financial data.</p>
           ) : null}
@@ -71,7 +172,7 @@ export default function FinancialPage() {
                     value={
                       financialQuery.data.totals.latestBookValue != null
                         ? currency.format(financialQuery.data.totals.latestBookValue)
-                        : "—"
+                        : "-"
                     }
                   />
                 </div>
@@ -98,7 +199,7 @@ export default function FinancialPage() {
                         financialQuery.data.periods.map((period) => (
                           <TableRow key={`${period.periodStart}-${period.periodEnd}`}>
                             <TableCell>
-                              {dateFormatter.format(new Date(period.periodStart))} – {dateFormatter.format(new Date(period.periodEnd))}
+                              {dateFormatter.format(new Date(period.periodStart))} - {dateFormatter.format(new Date(period.periodEnd))}
                             </TableCell>
                             <TableCell>{currency.format(period.depreciation)}</TableCell>
                             <TableCell>{currency.format(period.maintenanceCost)}</TableCell>
@@ -126,7 +227,3 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
-
-
-
