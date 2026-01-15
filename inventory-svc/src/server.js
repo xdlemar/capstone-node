@@ -17,6 +17,7 @@ const notifications = require("./routes/notifications");
 const reorder = require("./routes/reorder");
 const lookups = require("./routes/lookups");
 const dashboard = require("./routes/dashboard");
+const forecast = require("./routes/forecast");
 const { authRequired, requireRole } = require("./auth");
 
 const app = express();
@@ -53,6 +54,7 @@ app.use("/reports", managerAccess, reports);
 app.use("/thresholds", adminOnly, thresholds);
 app.use("/lookups", lookups);
 app.use("/dashboard", dashboard);
+app.use("/forecast", staffAccess, forecast);
 
 const port = Number(process.env.PORT || 4001);
 app.listen(port, () => console.log(`inventory-svc on http://localhost:${port}`));

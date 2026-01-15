@@ -27,6 +27,7 @@ app.use("/disposals", managerAccess, require("./routes/disposals"));
 app.use("/alerts", managerAccess, require("./routes/alerts"));
 app.use("/dashboard", require("./routes/dashboard"));
 app.use("/financial", managerAccess, require("./routes/financial"));
+app.use("/forecast", staffAccess, require("./routes/forecast"));
 
 module.exports = app;
 

@@ -13,6 +13,7 @@ async function currentLevels(locationId) {
         COALESCE(SUM(CASE WHEN sm."fromLocId" = $1 THEN sm.qty ELSE 0 END),0) AS onhand
       FROM "StockMove" sm
       JOIN "Item" i ON i.id = sm."itemId"
+      WHERE sm."toLocId" = $1 OR sm."fromLocId" = $1
       GROUP BY i.id, i.sku, i.name
       ORDER BY i.sku ASC
     `, locationId);

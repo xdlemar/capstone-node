@@ -79,6 +79,28 @@ export type FinancialSummary = {
   }>;
 };
 
+export type MaintenanceForecastItem = {
+  assetId: string;
+  assetCode: string;
+  name: string;
+  category: string | null;
+  status: AssetStatus;
+  historyCount: number;
+  lastCompletedAt: string | null;
+  avgIntervalDays: number | null;
+  nextDueAt: string | null;
+  risk: "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+};
+
+export type MaintenanceForecastResponse = {
+  generatedAt: string;
+  windowDays: number;
+  minEvents: number;
+  source: "azure" | "heuristic";
+  items: MaintenanceForecastItem[];
+};
+
 export const WORK_ORDER_TRANSITIONS: Record<WorkOrderStatus, WorkOrderStatus[]> = {
   OPEN: ["SCHEDULED", "CANCELLED"],
   SCHEDULED: ["IN_PROGRESS", "CANCELLED"],
@@ -151,6 +173,17 @@ export function useAlmsFinancialSummary(assetId?: string) {
       });
       return data;
     },
+  });
+}
+
+export function useAlmsMaintenanceForecast() {
+  return useQuery<MaintenanceForecastResponse>({
+    queryKey: ["alms", "forecast", "maintenance"],
+    queryFn: async () => {
+      const { data } = await api.get<MaintenanceForecastResponse>("/alms/forecast/maintenance");
+      return data;
+    },
+    staleTime: 60_000,
   });
 }
 

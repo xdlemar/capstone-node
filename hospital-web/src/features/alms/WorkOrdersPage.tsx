@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -6,10 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useAlmsAssets,
+  useAlmsMaintenanceForecast,
   useAlmsWorkOrders,
   WORK_ORDER_TRANSITIONS,
   type MaintenanceType,
@@ -64,6 +67,7 @@ export default function WorkOrdersPage() {
 
   const assetsQuery = useAlmsAssets();
   const workOrdersQuery = useAlmsWorkOrders();
+  const maintenanceForecastQuery = useAlmsMaintenanceForecast();
 
   const assetMap = useMemo(() => {
     const map = new Map<string, { code: string; category: string | null }>();
@@ -97,6 +101,16 @@ export default function WorkOrdersPage() {
 
     return bucket;
   }, [workOrdersQuery.data?.rows]);
+
+  const forecastRows = useMemo(() => {
+    const items = maintenanceForecastQuery.data?.items ?? [];
+    return [...items].sort((a, b) => {
+      const aDate = a.nextDueAt ? new Date(a.nextDueAt).getTime() : Number.POSITIVE_INFINITY;
+      const bDate = b.nextDueAt ? new Date(b.nextDueAt).getTime() : Number.POSITIVE_INFINITY;
+      if (aDate !== bDate) return aDate - bDate;
+      return (b.historyCount ?? 0) - (a.historyCount ?? 0);
+    });
+  }, [maintenanceForecastQuery.data?.items]);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | MaintenanceType>("all");
@@ -224,6 +238,69 @@ export default function WorkOrdersPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="relative overflow-hidden border-sky-200/70 bg-gradient-to-br from-white via-sky-50/40 to-emerald-50/40 shadow-sm">
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="mt-1 inline-flex rounded-full bg-slate-900 p-2 text-white shadow-sm">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div className="space-y-1">
+              <CardTitle className="text-lg">AI maintenance forecast</CardTitle>
+              <CardDescription>Anticipates upcoming work orders using maintenance completion history.</CardDescription>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className="bg-slate-900 text-white hover:bg-slate-900">AI powered</Badge>
+            <Badge variant="outline">
+              {maintenanceForecastQuery.data?.source === "azure" ? "Azure ML live" : "Baseline model"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {maintenanceForecastQuery.isLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : forecastRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No maintenance history yet to generate forecasts.</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Asset</TableHead>
+                      <TableHead className="w-28">Last done</TableHead>
+                      <TableHead className="w-28 text-right">Avg interval</TableHead>
+                      <TableHead className="w-28">Next due</TableHead>
+                      <TableHead className="w-24">Risk</TableHead>
+                      <TableHead className="w-24">Confidence</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {forecastRows.map((row) => (
+                      <TableRow key={`forecast-${row.assetId}`}>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-foreground">{row.assetCode}</span>
+                            <span className="text-xs text-muted-foreground">{row.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatDate(row.lastCompletedAt)}</TableCell>
+                        <TableCell className="text-right">
+                          {row.avgIntervalDays == null ? "-" : `${row.avgIntervalDays}d`}
+                        </TableCell>
+                        <TableCell>{formatDate(row.nextDueAt)}</TableCell>
+                        <TableCell>{renderRiskBadge(row.risk)}</TableCell>
+                        <TableCell>{renderConfidenceBadge(row.confidence)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card/60 p-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex w-full flex-col gap-3 md:flex-row">
@@ -400,4 +477,17 @@ function OrderCard({ order, assetCode, assetCategory, canAdvance, nextStatuses }
       </CardContent>
     </Card>
   );
+}
+
+function renderRiskBadge(risk: "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN") {
+  if (risk === "HIGH") return <Badge variant="destructive">High</Badge>;
+  if (risk === "MEDIUM") return <Badge variant="secondary">Medium</Badge>;
+  if (risk === "UNKNOWN") return <Badge variant="outline">Unknown</Badge>;
+  return <Badge variant="outline">Low</Badge>;
+}
+
+function renderConfidenceBadge(confidence: "LOW" | "MEDIUM" | "HIGH") {
+  if (confidence === "HIGH") return <Badge variant="secondary">High</Badge>;
+  if (confidence === "MEDIUM") return <Badge variant="outline">Medium</Badge>;
+  return <Badge variant="outline">Low</Badge>;
 }
