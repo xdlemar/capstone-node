@@ -13,7 +13,7 @@ router.use(
   })
 );
 
-const CORE2_SECRET = process.env.CORE2_HMAC_SECRET || "";
+const CORE2_SECRET = process.env.CORE2_HMAC_SECRET || "CHANGE_ME_CORE2";
 const CORE2_TTL_MS = Number(process.env.CORE2_HMAC_TTL_MS || 5 * 60 * 1000);
 
 function timingSafeEqual(a, b) {
