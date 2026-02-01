@@ -23,6 +23,7 @@ import {
 const itemSchema = z.object({
   sku: z.string().min(2, "SKU is required"),
   name: z.string().min(2, "Name is required"),
+  strength: z.string().optional(),
   unit: z.string().min(1, "Unit is required"),
   minQty: z.coerce
     .number({ invalid_type_error: "Min level must be a number" })
@@ -106,8 +107,9 @@ function ItemTable({ rows, onEdit }: { rows: InventoryItem[]; onEdit: (item: Inv
         <TableHeader className="bg-muted/60">
           <TableRow>
             <TableHead className="w-[20%]">SKU</TableHead>
-            <TableHead className="w-[30%]">Name</TableHead>
-            <TableHead className="w-[15%]">Unit</TableHead>
+            <TableHead className="w-[25%]">Name</TableHead>
+            <TableHead className="w-[15%]">Strength</TableHead>
+            <TableHead className="w-[10%]">Unit</TableHead>
             <TableHead className="w-[15%]">Min level</TableHead>
             <TableHead className="w-[10%]">Status</TableHead>
             <TableHead className="w-[10%]" aria-label="Actions" />
@@ -118,6 +120,7 @@ function ItemTable({ rows, onEdit }: { rows: InventoryItem[]; onEdit: (item: Inv
             <TableRow key={item.id}>
               <TableCell className="font-medium">{item.sku}</TableCell>
               <TableCell>{item.name}</TableCell>
+              <TableCell>{item.strength || "-"}</TableCell>
               <TableCell>
                 <Badge variant="outline" className="uppercase tracking-wide">
                   {item.unit}
@@ -149,7 +152,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
 
   const form = useForm<ItemFormValues>({
     resolver: zodResolver(itemSchema),
-    defaultValues: { sku: "", name: "", unit: "", minQty: 0 },
+    defaultValues: { sku: "", name: "", strength: "", unit: "", minQty: 0 },
   });
 
   useEffect(() => {
@@ -157,6 +160,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
       form.reset({
         sku: editingItem.sku,
         name: editingItem.name,
+        strength: editingItem.strength ?? "",
         unit: editingItem.unit,
         minQty: editingItem.minQty,
       });
@@ -167,6 +171,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
     const payload: UpsertInventoryItemInput = {
       sku: values.sku.trim(),
       name: values.name.trim(),
+      strength: values.strength?.trim() || null,
       unit: values.unit.trim(),
       minQty: Number(values.minQty) || 0,
     };
@@ -177,7 +182,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
         title: editingItem ? "Item updated" : "Item added",
         description: `${payload.name} (${payload.sku}) is now in the catalog.`,
       });
-      form.reset({ sku: "", name: "", unit: "", minQty: 0 });
+      form.reset({ sku: "", name: "", strength: "", unit: "", minQty: 0 });
       onDone();
     } catch (error) {
       const description = isAxiosError(error)
@@ -230,6 +235,19 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="strength"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Strength</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. 250mg / 500mg" autoComplete="off" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
@@ -264,7 +282,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
                   type="button"
                   variant="ghost"
                   onClick={() => {
-                    form.reset({ sku: "", name: "", unit: "", minQty: 0 });
+                    form.reset({ sku: "", name: "", strength: "", unit: "", minQty: 0 });
                     onDone();
                   }}
                 >

@@ -15,6 +15,7 @@ r.get("/inventory", async (_req, res) => {
         id: item.id.toString(),
         sku: item.sku,
         name: item.name,
+        strength: item.strength,
         unit: item.unit,
         minQty: item.minQty ? Number(item.minQty) : 0,
       })),

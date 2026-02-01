@@ -9,7 +9,7 @@ const r = Router();
  */
 r.post("/", async (req, res) => {
   try {
-    const { sku, name, unit, minQty } = req.body;
+    const { sku, name, unit, minQty, strength } = req.body;
 
     if (!sku || !name || !unit) {
       return res.status(400).json({ error: "sku, name, unit are required" });
@@ -20,8 +20,8 @@ r.post("/", async (req, res) => {
 
     const item = await prisma.item.upsert({
       where: { sku },
-      update: { name, unit, minQty },
-      create: { sku, name, unit, minQty },
+      update: { name, unit, minQty, strength: strength ?? null },
+      create: { sku, name, unit, minQty, strength: strength ?? null },
     });
 
     return res.status(existing ? 200 : 201).json(item);

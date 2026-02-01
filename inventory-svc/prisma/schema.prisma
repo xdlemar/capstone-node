@@ -17,6 +17,7 @@ model Item {
   id       BigInt  @id @default(autoincrement())
   sku      String  @unique
   name     String
+  strength String?
   unit     String
   minQty   Decimal @default(0)
   isActive Boolean @default(true)

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -79,7 +79,7 @@ function useItemFormatter() {
   const format = (id: string) => {
     const item = itemMap.get(id);
     if (!item) return null;
-    return `${item.name} - ${item.sku}`;
+    return `${item.name}${item.strength ? ` ${item.strength}` : ""} - ${item.sku}`;
   };
 
   return { options, format, query: inv, map: itemMap };
@@ -114,7 +114,8 @@ function PrLineRow({
                 <SelectContent>
                   {items.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {item.name} - {item.sku}
+                      {item.name}
+                      {item.strength ? ` ${item.strength}` : ""} - {item.sku}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -353,7 +354,9 @@ export function ReceiptCard({ className }: { className?: string }) {
 
   const renderLineLabel = (line: { itemId: string; qty: number; unit: string; notes?: string | null }) => {
     const item = itemMap.get(line.itemId);
-    return item ? `${item.name} (${item.sku})` : `Item #${line.itemId}`;
+    return item
+      ? `${item.name}${item.strength ? ` ${item.strength}` : ""} (${item.sku})`
+      : `Item #${line.itemId}`;
   };
 
   return (
@@ -518,6 +521,9 @@ export function ReceiptCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const lookups = useProcurementLookups();
   const { map: itemMap, query: inventoryQuery } = useItemFormatter();
+  const [lineEdits, setLineEdits] = useState<
+    Array<{ id: string; qty: number; unit: string; notes?: string | null; itemId: string }>
+  >([]);
   const form = useForm<ApproveValues>({
     resolver: zodResolver(approveSchema),
     defaultValues: { prNo: "", action: "approve" },
@@ -528,6 +534,21 @@ export function ReceiptCard({ className }: { className?: string }) {
   const selectedAction = form.watch("action") ?? "approve";
   const selectedPr = submittedPrs.find((pr) => pr.prNo === selectedPrNo);
   const safeLines = (lines?: Array<{ itemId: string; qty: number; unit: string; notes?: string | null }>) => lines ?? [];
+
+  useEffect(() => {
+    if (!selectedPr) {
+      setLineEdits([]);
+      return;
+    }
+    const next = safeLines(selectedPr.lines).map((line: any) => ({
+      id: line.id,
+      itemId: line.itemId,
+      qty: Number(line.qty ?? 0),
+      unit: line.unit || "",
+      notes: line.notes ?? null,
+    }));
+    setLineEdits(next);
+  }, [selectedPrNo, lookups.data]);
 
   const onSubmit = async (values: ApproveValues) => {
     const isApprove = values.action === "approve";
@@ -550,9 +571,31 @@ export function ReceiptCard({ className }: { className?: string }) {
     }
   };
 
+  const updateLines = async () => {
+    if (!selectedPr) return;
+    try {
+      await api.patch(`/procurement/pr/${encodeURIComponent(selectedPr.prNo)}/lines`, {
+        lines: lineEdits.map((ln) => ({
+          id: ln.id,
+          qty: ln.qty,
+        })),
+      });
+      toast({
+        title: "Quantities updated",
+        description: `Requisition ${selectedPr.prNo} updated.`,
+      });
+      lookups.refetch();
+    } catch (err: any) {
+      const message = err?.response?.data?.error || err.message || "Failed to update requisition";
+      toast({ title: "Update failed", description: message, variant: "destructive" });
+    }
+  };
+
   const renderLineLabel = (line: { itemId: string; qty: number; unit: string; notes?: string | null }) => {
     const item = itemMap.get(line.itemId);
-    return item ? `${item.name} (${item.sku})` : `Item #${line.itemId}`;
+    return item
+      ? `${item.name}${item.strength ? ` ${item.strength}` : ""} (${item.sku})`
+      : `Item #${line.itemId}`;
   };
 
   return (
@@ -617,24 +660,45 @@ export function ReceiptCard({ className }: { className?: string }) {
                   <h3 className="text-sm font-semibold">Line details</h3>
                   <Table className="mt-3">
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Item</TableHead>
-                        <TableHead className="w-24 text-right">Quantity</TableHead>
-                        <TableHead className="w-24">Unit</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {safeLines(selectedPr.lines).map((line, index) => (
-                        <TableRow key={`${line.itemId}-${index}`}>
-                          <TableCell>{renderLineLabel(line)}</TableCell>
-                          <TableCell className="text-right">{line.qty}</TableCell>
-                          <TableCell>{line.unit}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                    <TableRow>
+                      <TableHead>Item</TableHead>
+                      <TableHead className="w-32 text-right">Quantity</TableHead>
+                      <TableHead className="w-24">Unit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {safeLines(selectedPr.lines).map((line, index) => {
+                        const edit = lineEdits.find((l) => l.id === (line as any).id);
+                        return (
+                          <TableRow key={`${line.itemId}-${index}`}>
+                            <TableCell>{renderLineLabel(line)}</TableCell>
+                            <TableCell className="text-right">
+                              <input
+                                type="number"
+                                min={0}
+                                value={edit?.qty ?? line.qty}
+                                onChange={(e) => {
+                                  const next = Number(e.target.value);
+                                  setLineEdits((prev) =>
+                                    prev.map((l) => (l.id === (line as any).id ? { ...l, qty: next } : l))
+                                  );
+                                }}
+                                className="h-8 w-20 rounded-md border border-input bg-background px-2 text-right text-sm"
+                              />
+                            </TableCell>
+                            <TableCell>{line.unit}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+                <div className="mt-3">
+                  <Button type="button" variant="outline" onClick={updateLines}>
+                    Update quantities
+                  </Button>
                 </div>
-              ) : null}
+              </div>
+            ) : null}
 
               <CardFooter className="px-0 pt-4 flex flex-col gap-2 sm:flex-row">
                 <Button
@@ -718,7 +782,9 @@ export function CreatePoCard({ className }: { className?: string }) {
 
   const renderLineLabel = (line: { itemId: string; qty: number; unit: string; notes?: string | null }) => {
     const item = itemMap.get(line.itemId);
-    return item ? `${item.name} (${item.sku})` : `Item #${line.itemId}`;
+    return item
+      ? `${item.name}${item.strength ? ` ${item.strength}` : ""} (${item.sku})`
+      : `Item #${line.itemId}`;
   };
 
   return (
@@ -1028,42 +1094,3 @@ export function VendorPerformanceTable({ className }: { className?: string }) {
     </Card>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

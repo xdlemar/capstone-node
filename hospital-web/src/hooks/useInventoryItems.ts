@@ -6,6 +6,7 @@ export type InventoryItem = {
   id: string;
   sku: string;
   name: string;
+  strength?: string | null;
   unit: string;
   minQty: number;
   isActive: boolean;
@@ -16,6 +17,7 @@ export type InventoryItem = {
 export type UpsertInventoryItemInput = {
   sku: string;
   name: string;
+  strength?: string | null;
   unit: string;
   minQty: number;
 };
@@ -24,6 +26,7 @@ type RawInventoryItem = {
   id: string;
   sku: string;
   name: string;
+  strength?: string | null;
   unit: string;
   minQty: string | number;
   isActive: boolean;
