@@ -5,6 +5,7 @@ const morgan = require("morgan");
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const dotenv = require("dotenv");
+const core2 = require("./core2");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 dotenv.config({ path: path.resolve(__dirname, "..", "..", ".env") });
@@ -55,7 +56,7 @@ function proxy(target) {
     },
   });
 }
-
+app.use("/api/core2", core2);
 app.use("/api/auth", proxy(process.env.AUTH_URL)); // public
 app.use("/api/inventory", authRequired, proxy(process.env.INVENTORY_URL));
 app.use("/api/procurement", authRequired, proxy(process.env.PROCUREMENT_URL));
