@@ -28,6 +28,10 @@ env:
   DTRS_URL: http://127.0.0.1:4006
   ALMS_URL: http://127.0.0.1:4007
   GATEWAY_URL: http://127.0.0.1:8080
+  CORE2_HMAC_SECRET: ${{ secrets.CORE2_HMAC_SECRET || 'dev_core2_secret' }}
+  CORE2_HMAC_TTL_MS: ${{ secrets.CORE2_HMAC_TTL_MS || '300000' }}
+  CORE2_DEFAULT_FROM_LOC: ${{ secrets.CORE2_DEFAULT_FROM_LOC || 'Main Warehouse' }}
+  CORE2_DEFAULT_TO_LOC: ${{ secrets.CORE2_DEFAULT_TO_LOC || 'Core2 Pharmacy' }}
 
 defaults:
   run:
@@ -175,6 +179,10 @@ jobs:
           DTRS_URL=${DTRS_URL}
           ALMS_URL=${ALMS_URL}
           GATEWAY_URL=${GATEWAY_URL}
+          CORE2_HMAC_SECRET=${CORE2_HMAC_SECRET}
+          CORE2_HMAC_TTL_MS=${CORE2_HMAC_TTL_MS}
+          CORE2_DEFAULT_FROM_LOC=${CORE2_DEFAULT_FROM_LOC}
+          CORE2_DEFAULT_TO_LOC=${CORE2_DEFAULT_TO_LOC}
 
           AUTH_DATABASE_URL=postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/auth_db?schema=public
           INVENTORY_DATABASE_URL=postgresql://${DB_USER}:${DB_PASS_URL}@${POSTGRES_HOST}:${POSTGRES_PORT}/inventory_db?schema=public
