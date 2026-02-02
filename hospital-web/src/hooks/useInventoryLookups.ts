@@ -7,6 +7,7 @@ export type InventoryLookupResponse = {
     id: string;
     sku: string;
     name: string;
+    type: string;
     strength?: string | null;
     unit: string;
     minQty: number;

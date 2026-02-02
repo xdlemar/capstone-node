@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -94,7 +94,8 @@ function LineRow({
               <SelectContent>
                 {itemOptions.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
-                    {item.name} - {item.sku}
+                    {item.name}
+                    {item.strength ? ` ${item.strength}` : ""} - {item.sku}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -150,6 +151,8 @@ function useLineHelpers(data: ReturnType<typeof useInventoryData>) {
     return (
       <span className="text-muted-foreground">
         {meta.unit ? `Unit: ${meta.unit}` : ""}
+        {meta.strength ? ` - Strength: ${meta.strength}` : ""}
+        {meta.type ? ` - Type: ${meta.type}` : ""}
         {meta.minQty ? ` - Min: ${meta.minQty}` : ""}
       </span>
     );
@@ -161,6 +164,7 @@ export function IssueFormCard({ className }: { className?: string }) {
   const { toast } = useToast();
   const data = useInventoryData();
   const { formatItem } = useLineHelpers(data);
+  const [typeFilter, setTypeFilter] = useState<string>("all");
 
   const form = useForm<IssueValues>({
     resolver: zodResolver(issueSchema),
@@ -174,6 +178,9 @@ export function IssueFormCard({ className }: { className?: string }) {
   });
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
+  const items = data.data?.items ?? [];
+  const filteredItems =
+    typeFilter === "all" ? items : items.filter((item) => (item.type || "supply") === typeFilter);
 
   const onSubmit = async (values: IssueValues) => {
     try {
@@ -303,6 +310,26 @@ export function IssueFormCard({ className }: { className?: string }) {
                 />
               </div>
 
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormItem>
+                  <FormLabel>Item type</FormLabel>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <FormControl>
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Filter type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="all">All items</SelectItem>
+                      <SelectItem value="medicine">Medicine</SelectItem>
+                      <SelectItem value="supply">Supply</SelectItem>
+                      <SelectItem value="equipment">Equipment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Filter items by type before selecting.</FormDescription>
+                </FormItem>
+              </div>
+
               <div className="space-y-3">
                 <Label className="text-base">Lines</Label>
                 <LinesTableHeader title="Item" />
@@ -313,7 +340,7 @@ export function IssueFormCard({ className }: { className?: string }) {
                       index={index}
                       control={form.control}
                       remove={remove}
-                      itemOptions={data.data?.items ?? []}
+                      itemOptions={filteredItems}
                       itemHint={formatItem}
                     />
                   ))}
@@ -347,6 +374,7 @@ export function TransferFormCard({ className }: { className?: string }) {
   const requiresApproval = true;
   const data = useInventoryData();
   const { formatItem } = useLineHelpers(data);
+  const [typeFilter, setTypeFilter] = useState<string>("medicine");
 
   const form = useForm<TransferValues>({
     resolver: zodResolver(transferSchema),
@@ -360,6 +388,9 @@ export function TransferFormCard({ className }: { className?: string }) {
   });
 
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "lines" });
+  const items = data.data?.items ?? [];
+  const filteredItems =
+    typeFilter === "all" ? items : items.filter((item) => (item.type || "supply") === typeFilter);
 
   const onSubmit = async (values: TransferValues) => {
     try {
@@ -441,6 +472,26 @@ export function TransferFormCard({ className }: { className?: string }) {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
+                <FormItem>
+                  <FormLabel>Item type</FormLabel>
+                  <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <FormControl>
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Filter type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="all">All items</SelectItem>
+                      <SelectItem value="medicine">Medicine</SelectItem>
+                      <SelectItem value="supply">Supply</SelectItem>
+                      <SelectItem value="equipment">Equipment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>Filter items by type before selecting.</FormDescription>
+                </FormItem>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="fromLocId"
@@ -501,7 +552,7 @@ export function TransferFormCard({ className }: { className?: string }) {
                       index={index}
                       control={form.control}
                       remove={remove}
-                      itemOptions={data.data?.items ?? []}
+                      itemOptions={filteredItems}
                       itemHint={formatItem}
                     />
                   ))}

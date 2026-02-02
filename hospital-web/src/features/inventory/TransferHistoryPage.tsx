@@ -1,79 +1,51 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
 import { useInventoryLookups } from "@/hooks/useInventoryLookups";
 import { api } from "@/lib/api";
 
-type PendingTransfer = {
+type TransferRow = {
   id: string;
   transferNo: string;
-  status: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
   fromLocId: string;
   toLocId: string;
   fromLocName?: string | null;
   toLocName?: string | null;
   requestedBy?: string | null;
   createdAt: string;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  rejectionReason?: string | null;
   lines: Array<{ id: string; itemId: string; qty: number; notes?: string | null }>;
 };
 
-async function fetchPendingTransfers(type?: string): Promise<PendingTransfer[]> {
-  const params: Record<string, string> = { status: "PENDING" };
-  if (type && type !== "all") params.type = type;
+async function fetchTransfers(status?: string): Promise<TransferRow[]> {
+  const params = status ? { status } : undefined;
   const res = await api.get("/inventory/transfers", { params });
   const rows = Array.isArray(res.data?.rows) ? res.data.rows : [];
-  return rows as PendingTransfer[];
+  return rows as TransferRow[];
 }
 
-export default function TransferApprovalsPage() {
-  const { toast } = useToast();
+export default function TransferHistoryPage() {
   const lookups = useInventoryLookups();
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [search, setSearch] = useState<string>("");
 
-  const pendingQuery = useQuery({
-    queryKey: ["inventory", "transfers", "pending", typeFilter],
-    queryFn: () => fetchPendingTransfers(typeFilter),
+  const statusParam = statusFilter === "ALL" ? undefined : statusFilter;
+  const transfersQuery = useQuery({
+    queryKey: ["inventory", "transfers", "history", statusFilter],
+    queryFn: () => fetchTransfers(statusParam),
     refetchInterval: 60_000,
   });
 
-  const approveMutation = useMutation({
-    mutationFn: async (transferId: string) => {
-      const res = await api.post(`/inventory/transfers/${transferId}/approve`);
-      return res.data as PendingTransfer;
-    },
-    onSuccess: (data) => {
-      toast({ title: "Transfer approved", description: `${data.transferNo} released.` });
-      pendingQuery.refetch();
-    },
-    onError: (err: any) => {
-      const message = err?.response?.data?.error || err.message || "Failed to approve transfer";
-      toast({ variant: "destructive", title: "Approval failed", description: message });
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
-      const payload = reason ? { reason } : undefined;
-      const res = await api.post(`/inventory/transfers/${id}/reject`, payload);
-      return res.data as PendingTransfer;
-    },
-    onSuccess: (data) => {
-      toast({ title: "Transfer rejected", description: `${data.transferNo} marked as rejected.` });
-      pendingQuery.refetch();
-    },
-    onError: (err: any) => {
-      const message = err?.response?.data?.error || err.message || "Failed to reject transfer";
-      toast({ variant: "destructive", title: "Rejection failed", description: message });
-    },
-  });
-
-  const rows = pendingQuery.data ?? [];
   const itemMap = useMemo(() => {
     const map = new Map<string, { name: string; strength?: string | null; type?: string | null }>();
     lookups.data?.items.forEach((item) => {
@@ -83,42 +55,60 @@ export default function TransferApprovalsPage() {
   }, [lookups.data?.items]);
 
   const filteredRows = useMemo(() => {
-    if (typeFilter === "all") return rows;
-    return rows.filter((row) =>
-      row.lines.some((line) => (itemMap.get(line.itemId)?.type ?? "supply") === typeFilter)
-    );
-  }, [rows, typeFilter, itemMap]);
-  const isLoading = pendingQuery.isLoading;
-  const isError = pendingQuery.isError;
-  const isBusy = approveMutation.isPending || rejectMutation.isPending;
-  const approvingId = approveMutation.variables;
-  const rejectingId = (rejectMutation.variables as { id: string } | undefined)?.id;
+    const rows = transfersQuery.data ?? [];
+    const searchKey = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (typeFilter !== "all") {
+        const hasType = row.lines.some(
+          (line) => (itemMap.get(line.itemId)?.type ?? "supply") === typeFilter
+        );
+        if (!hasType) return false;
+      }
+      if (searchKey) {
+        return row.transferNo.toLowerCase().includes(searchKey);
+      }
+      return true;
+    });
+  }, [transfersQuery.data, typeFilter, search, itemMap]);
 
-  const handleReject = (id: string) => {
-    const reason = window.prompt("Optional rejection reason");
-    rejectMutation.mutate({ id, reason: reason?.trim() || undefined });
-  };
+  const isLoading = transfersQuery.isLoading;
+  const isError = transfersQuery.isError;
 
   return (
     <section className="space-y-6">
       <header className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight">Transfer approvals</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Transfer history</h1>
         <p className="text-muted-foreground max-w-3xl">
-          Review and action pending inter-location transfers submitted by staff. Approvals execute FEFO allocations and
-          post the related stock moves automatically.
+          Review submitted transfers across locations. Staff only see their own requests; managers see the full queue.
         </p>
       </header>
 
       <Card className="border-border/60">
         <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <CardTitle>Pending transfers</CardTitle>
-            <CardDescription>Approve or reject staff-submitted transfers.</CardDescription>
+            <CardTitle>All transfers</CardTitle>
+            <CardDescription>Filter by status, type, or transfer number.</CardDescription>
           </div>
-          <div className="w-full max-w-xs">
+          <div className="flex w-full max-w-xl flex-col gap-2 sm:flex-row">
+            <Input
+              placeholder="Search transfer no."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All status</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="APPROVED">Approved</SelectItem>
+                <SelectItem value="REJECTED">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="bg-background">
-                <SelectValue placeholder="Filter type" />
+                <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All items</SelectItem>
@@ -133,7 +123,7 @@ export default function TransferApprovalsPage() {
           {isLoading ? (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading pending transfers...
+              Loading transfers...
             </div>
           ) : isError ? (
             <Alert variant="destructive">
@@ -141,7 +131,7 @@ export default function TransferApprovalsPage() {
               <AlertDescription>Try refreshing the page or checking your connection.</AlertDescription>
             </Alert>
           ) : filteredRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No transfers waiting for approval.</p>
+            <p className="text-sm text-muted-foreground">No transfers found.</p>
           ) : (
             <div className="space-y-3">
               {filteredRows.map((row) => (
@@ -150,11 +140,15 @@ export default function TransferApprovalsPage() {
                     <div>
                       <p className="font-medium">{row.transferNo}</p>
                       <p className="text-sm text-muted-foreground">
-                        {(row.fromLocName ?? `Location ${row.fromLocId}`)} to {(row.toLocName ?? `Location ${row.toLocId}`)} · {row.lines.length} line(s)
+                        {(row.fromLocName ?? `Location ${row.fromLocId}`)} to{" "}
+                        {(row.toLocName ?? `Location ${row.toLocId}`)} · {row.lines.length} line(s)
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Requested by {row.requestedBy ?? "Unknown"} · {new Date(row.createdAt).toLocaleString()}
                       </p>
+                      {row.status === "REJECTED" && row.rejectionReason ? (
+                        <p className="text-xs text-destructive">Reason: {row.rejectionReason}</p>
+                      ) : null}
                       <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                         {row.lines.map((line) => {
                           const meta = itemMap.get(line.itemId);
@@ -167,19 +161,18 @@ export default function TransferApprovalsPage() {
                         })}
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => approveMutation.mutate(row.id)} disabled={isBusy}>
-                        {approveMutation.isPending && approvingId === row.id && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
-                        Approve
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleReject(row.id)} disabled={isBusy}>
-                        {rejectMutation.isPending && rejectingId === row.id && (
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        )}
-                        Reject
-                      </Button>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          row.status === "APPROVED"
+                            ? "secondary"
+                            : row.status === "REJECTED"
+                            ? "destructive"
+                            : "outline"
+                        }
+                      >
+                        {row.status}
+                      </Badge>
                     </div>
                   </div>
                 </div>

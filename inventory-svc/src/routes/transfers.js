@@ -202,6 +202,7 @@ r.get("/", async (req, res) => {
     const requester = getUserIdentifier(req.user);
     const approver = isApprover(req.user);
     const statusFilter = req.query.status ? String(req.query.status).toUpperCase() : null;
+    const typeFilter = req.query.type ? String(req.query.type).toLowerCase() : null;
 
     const where = {};
     if (statusFilter) {
@@ -209,6 +210,12 @@ r.get("/", async (req, res) => {
         return res.status(400).json({ error: "Invalid status filter" });
       }
       where.status = statusFilter;
+    }
+    if (typeFilter) {
+      if (!["medicine", "supply", "equipment"].includes(typeFilter)) {
+        return res.status(400).json({ error: "Invalid type filter" });
+      }
+      where.lines = { some: { item: { type: typeFilter } } };
     }
     if (!approver) {
       where.requestedBy = requester || "__UNKNOWN__";

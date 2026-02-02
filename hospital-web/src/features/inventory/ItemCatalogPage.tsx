@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
@@ -23,6 +24,7 @@ import {
 const itemSchema = z.object({
   sku: z.string().min(2, "SKU is required"),
   name: z.string().min(2, "Name is required"),
+  type: z.string().min(1, "Type is required"),
   strength: z.string().optional(),
   unit: z.string().min(1, "Unit is required"),
   minQty: z.coerce
@@ -72,7 +74,12 @@ export default function ItemCatalogPage() {
 
 function ItemTableCard({ onEdit }: { onEdit: (item: InventoryItem) => void }) {
   const itemsQuery = useInventoryItems();
-  const rows = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const rows = useMemo(() => {
+    const items = itemsQuery.data ?? [];
+    if (typeFilter === "all") return items;
+    return items.filter((item) => (item.type || "supply") === typeFilter);
+  }, [itemsQuery.data, typeFilter]);
 
   return (
     <Card className="border-border/60">
@@ -81,7 +88,20 @@ function ItemTableCard({ onEdit }: { onEdit: (item: InventoryItem) => void }) {
           <CardTitle className="text-lg">Registered items</CardTitle>
           <CardDescription>SKUs available to Procurement and Inventory workflows.</CardDescription>
         </div>
-        <Badge variant="secondary" className="w-fit">{rows.length} listed</Badge>
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="h-9 w-[160px]">
+              <SelectValue placeholder="Filter type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All items</SelectItem>
+              <SelectItem value="medicine">Medicine</SelectItem>
+              <SelectItem value="supply">Supply</SelectItem>
+              <SelectItem value="equipment">Equipment</SelectItem>
+            </SelectContent>
+          </Select>
+          <Badge variant="secondary" className="w-fit">{rows.length} listed</Badge>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {itemsQuery.isLoading ? (
@@ -108,6 +128,7 @@ function ItemTable({ rows, onEdit }: { rows: InventoryItem[]; onEdit: (item: Inv
           <TableRow>
             <TableHead className="w-[20%]">SKU</TableHead>
             <TableHead className="w-[25%]">Name</TableHead>
+            <TableHead className="w-[12%]">Type</TableHead>
             <TableHead className="w-[15%]">Strength</TableHead>
             <TableHead className="w-[10%]">Unit</TableHead>
             <TableHead className="w-[15%]">Min level</TableHead>
@@ -120,6 +141,7 @@ function ItemTable({ rows, onEdit }: { rows: InventoryItem[]; onEdit: (item: Inv
             <TableRow key={item.id}>
               <TableCell className="font-medium">{item.sku}</TableCell>
               <TableCell>{item.name}</TableCell>
+              <TableCell className="capitalize">{item.type || "supply"}</TableCell>
               <TableCell>{item.strength || "-"}</TableCell>
               <TableCell>
                 <Badge variant="outline" className="uppercase tracking-wide">
@@ -152,7 +174,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
 
   const form = useForm<ItemFormValues>({
     resolver: zodResolver(itemSchema),
-    defaultValues: { sku: "", name: "", strength: "", unit: "", minQty: 0 },
+    defaultValues: { sku: "", name: "", type: "supply", strength: "", unit: "", minQty: 0 },
   });
 
   useEffect(() => {
@@ -160,6 +182,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
       form.reset({
         sku: editingItem.sku,
         name: editingItem.name,
+        type: editingItem.type || "supply",
         strength: editingItem.strength ?? "",
         unit: editingItem.unit,
         minQty: editingItem.minQty,
@@ -168,10 +191,12 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
   }, [editingItem, form]);
 
   const handleSubmit = async (values: ItemFormValues) => {
+    const normalizedType = values.type.trim().toLowerCase();
     const payload: UpsertInventoryItemInput = {
       sku: values.sku.trim(),
       name: values.name.trim(),
-      strength: values.strength?.trim() || null,
+      type: normalizedType || "supply",
+      strength: normalizedType === "medicine" ? values.strength?.trim() || null : null,
       unit: values.unit.trim(),
       minQty: Number(values.minQty) || 0,
     };
@@ -182,7 +207,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
         title: editingItem ? "Item updated" : "Item added",
         description: `${payload.name} (${payload.sku}) is now in the catalog.`,
       });
-      form.reset({ sku: "", name: "", strength: "", unit: "", minQty: 0 });
+      form.reset({ sku: "", name: "", type: "supply", strength: "", unit: "", minQty: 0 });
       onDone();
     } catch (error) {
       const description = isAxiosError(error)
@@ -197,6 +222,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
   };
 
   const isSubmitting = upsertMutation.isPending;
+  const watchedType = form.watch("type");
 
   return (
     <Card className="border-border/60">
@@ -224,6 +250,28 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
             />
             <FormField
               control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="medicine">Medicine</SelectItem>
+                      <SelectItem value="supply">Supply</SelectItem>
+                      <SelectItem value="equipment">Equipment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
@@ -235,19 +283,21 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="strength"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Strength</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. 250mg / 500mg" autoComplete="off" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {watchedType === "medicine" ? (
+              <FormField
+                control={form.control}
+                name="strength"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Strength</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. 250mg / 500mg" autoComplete="off" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
                 control={form.control}
@@ -282,7 +332,7 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
                   type="button"
                   variant="ghost"
                   onClick={() => {
-                    form.reset({ sku: "", name: "", strength: "", unit: "", minQty: 0 });
+                    form.reset({ sku: "", name: "", type: "supply", strength: "", unit: "", minQty: 0 });
                     onDone();
                   }}
                 >

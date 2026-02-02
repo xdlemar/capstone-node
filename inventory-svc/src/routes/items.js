@@ -9,19 +9,21 @@ const r = Router();
  */
 r.post("/", async (req, res) => {
   try {
-    const { sku, name, unit, minQty, strength } = req.body;
+    const { sku, name, unit, minQty, strength, type } = req.body;
 
     if (!sku || !name || !unit) {
       return res.status(400).json({ error: "sku, name, unit are required" });
     }
+
+    const normalizedType = String(type || "supply").trim().toLowerCase();
 
     // check if exists to pick a proper status code
     const existing = await prisma.item.findUnique({ where: { sku } });
 
     const item = await prisma.item.upsert({
       where: { sku },
-      update: { name, unit, minQty, strength: strength ?? null },
-      create: { sku, name, unit, minQty, strength: strength ?? null },
+      update: { name, unit, minQty, strength: strength ?? null, type: normalizedType },
+      create: { sku, name, unit, minQty, strength: strength ?? null, type: normalizedType },
     });
 
     return res.status(existing ? 200 : 201).json(item);
@@ -41,15 +43,19 @@ r.post("/", async (req, res) => {
 r.get("/", async (req, res) => {
   try {
     const q = String(req.query.search || "");
+    const type = String(req.query.type || "").trim().toLowerCase();
     const items = await prisma.item.findMany({
-      where: q
-        ? {
-            OR: [
-              { sku: { contains: q, mode: "insensitive" } },
-              { name: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : undefined,
+      where: {
+        ...(type ? { type } : {}),
+        ...(q
+          ? {
+              OR: [
+                { sku: { contains: q, mode: "insensitive" } },
+                { name: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { sku: "asc" },
     });
     res.json(items);

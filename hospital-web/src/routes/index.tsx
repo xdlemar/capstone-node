@@ -17,6 +17,7 @@ import ProcurementInsightsPage from "@/features/procurement/ProcurementInsightsP
 import InventoryOverview from "@/features/inventory/InventoryOverview";
 import StockControlPage from "@/features/inventory/StockControlPage";
 import TransferApprovalsPage from "@/features/inventory/TransferApprovalsPage";
+import TransferHistoryPage from "@/features/inventory/TransferHistoryPage";
 import StorageAreasPage from "@/features/inventory/StorageAreasPage";
 import ItemCatalogPage from "@/features/inventory/ItemCatalogPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
@@ -132,6 +133,14 @@ export const router = createBrowserRouter([
                 element: (
                   <RoleGate allowed={MANAGER_SET}>
                     <TransferApprovalsPage />
+                  </RoleGate>
+                ),
+              },
+              {
+                path: "transfer-history",
+                element: (
+                  <RoleGate allowed={STAFF_SET}>
+                    <TransferHistoryPage />
                   </RoleGate>
                 ),
               },

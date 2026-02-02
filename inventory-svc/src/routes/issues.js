@@ -36,6 +36,7 @@ function parseQty(value, field) {
   };
 }
 
+
 /**
  * POST /issues
  * { issueNo, fromLocId, toLocId, notes?, lines: [{ itemId, qty, notes? }] }

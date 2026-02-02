@@ -6,6 +6,7 @@ export type InventoryItem = {
   id: string;
   sku: string;
   name: string;
+  type: string;
   strength?: string | null;
   unit: string;
   minQty: number;
@@ -17,6 +18,7 @@ export type InventoryItem = {
 export type UpsertInventoryItemInput = {
   sku: string;
   name: string;
+  type: string;
   strength?: string | null;
   unit: string;
   minQty: number;
@@ -26,6 +28,7 @@ type RawInventoryItem = {
   id: string;
   sku: string;
   name: string;
+  type?: string | null;
   strength?: string | null;
   unit: string;
   minQty: string | number;
@@ -38,6 +41,7 @@ function normalizeItem(raw: RawInventoryItem): InventoryItem {
   const minQty = Number(raw.minQty);
   return {
     ...raw,
+    type: raw.type ?? "supply",
     minQty: Number.isFinite(minQty) ? minQty : 0,
   };
 }

@@ -13,7 +13,8 @@ router.use(
   })
 );
 
-const CORE2_SECRET = process.env.CORE2_HMAC_SECRET || "CHANGE_ME_CORE2";
+// Hardcoded shared secret for Core2 HMAC integration.
+const CORE2_SECRET = "CHANGE_ME_CORE2";
 const CORE2_TTL_MS = Number(process.env.CORE2_HMAC_TTL_MS || 5 * 60 * 1000);
 
 function timingSafeEqual(a, b) {
@@ -89,6 +90,33 @@ async function callJson(url, payload, rolesOverride) {
     throw err;
   }
   return json;
+}
+
+async function postInventoryItem(url, payload, rolesOverride) {
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${getServiceToken(rolesOverride)}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const text = await resp.text().catch(() => "");
+  let json = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
+  if (!resp.ok) {
+    const err = new Error(`Upstream ${resp.status}`);
+    err.status = resp.status;
+    err.body = text;
+    throw err;
+  }
+  return { status: resp.status, json };
 }
 
 async function getJson(url) {
@@ -290,6 +318,7 @@ router.post("/transfers", async (req, res) => {
               name: item.name,
               unit: item.unit,
               minQty: item.minQty || 0,
+              type: "medicine",
               strength,
             },
             ["ADMIN"]
@@ -355,6 +384,50 @@ router.post("/transfers", async (req, res) => {
     }
 
     res.json({ ok: true, transferNo, transfer });
+  } catch (err) {
+    const status = err?.status && Number.isFinite(err.status) ? err.status : 500;
+    res.status(status).json({ ok: false, error: err?.message || "Internal error", details: err?.body });
+  }
+});
+
+// Core2 -> Logistics2 item master sync
+// POST /api/core2/items-sync
+router.post("/items-sync", async (req, res) => {
+  try {
+    const auth = verifyHmac(req);
+    if (!auth.ok) return res.status(401).json({ ok: false, error: auth.error });
+
+    const body = req.body || {};
+    const items = Array.isArray(body.items) ? body.items : [];
+    if (!items.length) {
+      return res.status(400).json({ ok: false, error: "items[] required" });
+    }
+
+    const inventoryBase = process.env.INVENTORY_URL || "http://127.0.0.1:4001";
+    let created = 0;
+    let updated = 0;
+
+    for (const it of items) {
+      const sku = String(it.sku || "").trim();
+      const name = String(it.name || "").trim();
+      const unit = String(it.unit || "").trim();
+      if (!sku || !name || !unit) continue;
+
+      const payload = {
+        sku,
+        name,
+        unit,
+        minQty: Number(it.minQty || 0),
+        type: "medicine",
+        strength: it.strength ? String(it.strength) : null,
+      };
+
+      const result = await postInventoryItem(`${inventoryBase}/items`, payload, ["ADMIN"]);
+      if (result.status === 201) created += 1;
+      else updated += 1;
+    }
+
+    res.json({ ok: true, created, updated, total: created + updated });
   } catch (err) {
     const status = err?.status && Number.isFinite(err.status) ? err.status : 500;
     res.status(status).json({ ok: false, error: err?.message || "Internal error", details: err?.body });

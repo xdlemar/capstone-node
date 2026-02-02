@@ -13,13 +13,14 @@ import { useInventoryLookups } from "@/hooks/useInventoryLookups";
 export default function InventoryOverview() {
   const { data: lookups } = useInventoryLookups();
   const [locationFilter, setLocationFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const levelsQuery = useInventoryLevels(locationFilter === "all" ? undefined : locationFilter);
   const forecastQuery = useInventoryForecast(locationFilter === "all" ? undefined : locationFilter);
 
   const itemMap = useMemo(() => {
-    const map = new Map<string, { minQty: number; unit: string }>();
+    const map = new Map<string, { minQty: number; unit: string; type: string }>();
     lookups?.items.forEach((item) => {
-      map.set(item.id, { minQty: item.minQty ?? 0, unit: item.unit });
+      map.set(item.id, { minQty: item.minQty ?? 0, unit: item.unit, type: item.type || "supply" });
     });
     return map;
   }, [lookups?.items]);
@@ -30,23 +31,31 @@ export default function InventoryOverview() {
       ...row,
       minQty: meta?.minQty ?? 0,
       unit: meta?.unit ?? "",
+      type: meta?.type ?? "supply",
     };
   });
 
-  const lowStock = levels.filter((row) => row.minQty > 0 && row.onhand < row.minQty);
-  const totalUnits = levels.reduce((sum, row) => sum + row.onhand, 0);
+  const filteredLevels =
+    typeFilter === "all" ? levels : levels.filter((row) => row.type === typeFilter);
+
+  const lowStock = filteredLevels.filter((row) => row.minQty > 0 && row.onhand < row.minQty);
+  const totalUnits = filteredLevels.reduce((sum, row) => sum + row.onhand, 0);
 
   const forecastItems = useMemo(() => {
     const items = forecastQuery.data?.items ?? [];
     const riskOrder: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2, UNKNOWN: 3 };
-    return [...items].sort((a, b) => {
+    const filtered =
+      typeFilter === "all"
+        ? items
+        : items.filter((item) => (itemMap.get(item.itemId)?.type ?? "supply") === typeFilter);
+    return [...filtered].sort((a, b) => {
       const riskDelta = (riskOrder[a.risk] ?? 3) - (riskOrder[b.risk] ?? 3);
       if (riskDelta !== 0) return riskDelta;
       const aDays = a.daysToStockout ?? Number.POSITIVE_INFINITY;
       const bDays = b.daysToStockout ?? Number.POSITIVE_INFINITY;
       return aDays - bDays;
     });
-  }, [forecastQuery.data?.items]);
+  }, [forecastQuery.data?.items, itemMap, typeFilter]);
 
   const activeLocation =
     locationFilter === "all"
@@ -77,10 +86,11 @@ export default function InventoryOverview() {
           <div className="space-y-1">
             <CardTitle className="text-lg">Current balances</CardTitle>
             <CardDescription>
-              Showing {levels.length} SKU{levels.length === 1 ? "" : "s"} for {activeLocation?.name ?? "All storage areas"}.
+              Showing {filteredLevels.length} SKU{filteredLevels.length === 1 ? "" : "s"} for{" "}
+              {activeLocation?.name ?? "All storage areas"}.
             </CardDescription>
           </div>
-          <div className="w-full max-w-xs">
+          <div className="flex w-full max-w-xl flex-col gap-2 sm:flex-row">
             <Select value={locationFilter} onValueChange={setLocationFilter}>
               <SelectTrigger className="bg-background">
                 <SelectValue placeholder="Choose location" />
@@ -94,11 +104,22 @@ export default function InventoryOverview() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Filter type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All items</SelectItem>
+                <SelectItem value="medicine">Medicine</SelectItem>
+                <SelectItem value="supply">Supply</SelectItem>
+                <SelectItem value="equipment">Equipment</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-4">
-            <SummaryCard label="Tracked SKUs" value={levels.length} accent="secondary" />
+            <SummaryCard label="Tracked SKUs" value={filteredLevels.length} accent="secondary" />
             <SummaryCard label="Total units on-hand" value={totalUnits.toLocaleString()} accent="secondary" />
             <SummaryCard label="Low stock alerts" value={lowStock.length} accent={lowStock.length ? "destructive" : "default"} />
             <SummaryCard label="Locations monitored" value={lookups?.locations.length ?? 0} accent="secondary" />
@@ -106,7 +127,7 @@ export default function InventoryOverview() {
 
           {levelsQuery.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading stock levels.</p>
-          ) : levels.length === 0 ? (
+          ) : filteredLevels.length === 0 ? (
             <p className="text-sm text-muted-foreground">No stock movement has been recorded yet for this location.</p>
           ) : (
             <div className="rounded-md border">
@@ -115,13 +136,14 @@ export default function InventoryOverview() {
                   <TableRow>
                     <TableHead>Item</TableHead>
                     <TableHead className="w-32">SKU</TableHead>
+                    <TableHead className="w-24">Type</TableHead>
                     <TableHead className="w-32 text-right">On-hand</TableHead>
                     <TableHead className="w-32 text-right">Min level</TableHead>
                     <TableHead className="w-28">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {levels.map((row) => (
+                  {filteredLevels.map((row) => (
                     <TableRow key={row.itemId}>
                       <TableCell>
                         <div className="flex flex-col">
@@ -130,6 +152,7 @@ export default function InventoryOverview() {
                         </div>
                       </TableCell>
                       <TableCell>{row.sku}</TableCell>
+                      <TableCell className="capitalize">{row.type || "supply"}</TableCell>
                       <TableCell className="text-right">{row.onhand.toLocaleString()}</TableCell>
                       <TableCell className="text-right">{row.minQty ? row.minQty.toLocaleString() : "-"}</TableCell>
                       <TableCell>
