@@ -10,6 +10,7 @@ export type VendorOrderSummary = {
   vendor: { id: string; name: string };
   lineCount: number;
   totalQty: number;
+  linesPreview?: VendorOrderLine[];
   vendorAcknowledgedAt?: string | null;
   vendorAcknowledgedBy?: string | null;
   vendorNote?: string | null;
@@ -21,6 +22,8 @@ export type VendorOrderLine = {
   itemName?: string | null;
   itemSku?: string | null;
   itemUnit?: string | null;
+  itemStrength?: string | null;
+  itemType?: string | null;
   qty: number;
   unit: string;
   price: number;

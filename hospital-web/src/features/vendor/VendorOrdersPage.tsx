@@ -90,7 +90,22 @@ export default function VendorOrdersPage() {
                       )}
                     </TableCell>
                     <TableCell>{dateFormatter.format(new Date(order.orderedAt))}</TableCell>
-                    <TableCell>{order.lineCount}</TableCell>
+                    <TableCell>
+                      <div className="text-sm font-medium">{order.lineCount}</div>
+                      {order.linesPreview && order.linesPreview.length ? (
+                        <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                          {order.linesPreview.map((line) => (
+                            <div key={line.id}>
+                              <span className="font-medium text-foreground/80">
+                                {line.itemName ?? `Item #${line.itemId}`}
+                              </span>
+                              {line.itemStrength ? ` ${line.itemStrength}` : ""}
+                              {line.itemType ? ` (${line.itemType})` : ""}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </TableCell>
                     <TableCell>{order.totalQty}</TableCell>
                     <TableCell className="text-right space-x-2">
                       {!order.vendorAcknowledgedAt ? (

@@ -257,12 +257,16 @@ export default function VendorOrderDetailPage() {
                 {orderQuery.data.lines.map((line) => {
                   const name = line.itemName ?? `Item #${line.itemId}`;
                   const sku = line.itemSku ?? null;
+                  const strength = line.itemStrength ?? null;
                   const unit = line.unit || line.itemUnit || "-";
                   return (
                     <TableRow key={line.id}>
                       <TableCell className="font-medium">
                         {name}
                         {sku ? <span className="block text-xs text-muted-foreground">{sku}</span> : null}
+                        {strength ? (
+                          <span className="block text-xs text-muted-foreground">Strength: {strength}</span>
+                        ) : null}
                       </TableCell>
                       <TableCell>{line.qty}</TableCell>
                       <TableCell>{unit}</TableCell>

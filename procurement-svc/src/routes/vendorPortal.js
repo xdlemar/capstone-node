@@ -75,6 +75,15 @@ router.get("/pos", async (req, res) => {
       }
     }
 
+    let itemMap = new Map();
+    try {
+      const items = await fetchInventoryItems();
+      itemMap = new Map(items.map((item) => [String(item.id), item]));
+    } catch (err) {
+      console.error("[vendor portal] inventory lookup failed", err);
+      itemMap = new Map();
+    }
+
     res.json(
       orders
         .filter((po) => {
@@ -89,6 +98,16 @@ router.get("/pos", async (req, res) => {
           vendor: { id: po.vendor.id.toString(), name: po.vendor.name },
           lineCount: po.lines.length,
           totalQty: po.lines.reduce((sum, line) => sum + Number(line.qty || 0), 0),
+          linesPreview: po.lines.slice(0, 3).map((line) => ({
+            id: line.id.toString(),
+            itemId: line.itemId.toString(),
+            itemName: itemMap.get(line.itemId.toString())?.name ?? null,
+            itemSku: itemMap.get(line.itemId.toString())?.sku ?? null,
+            itemStrength: itemMap.get(line.itemId.toString())?.strength ?? null,
+            itemType: itemMap.get(line.itemId.toString())?.type ?? null,
+            qty: line.qty,
+            unit: line.unit,
+          })),
           vendorAcknowledgedAt: po.vendorAcknowledgedAt,
           vendorAcknowledgedBy: po.vendorAcknowledgedBy,
           vendorNote: po.vendorNote,
@@ -141,6 +160,8 @@ router.get("/pos/:id", async (req, res) => {
         itemName: itemMap.get(line.itemId.toString())?.name ?? null,
         itemSku: itemMap.get(line.itemId.toString())?.sku ?? null,
         itemUnit: itemMap.get(line.itemId.toString())?.unit ?? null,
+        itemStrength: itemMap.get(line.itemId.toString())?.strength ?? null,
+        itemType: itemMap.get(line.itemId.toString())?.type ?? null,
         qty: line.qty,
         unit: line.unit,
         price: Number(line.price),
