@@ -6,6 +6,13 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { hvhLogoUrl } from "@/lib/branding"
 import { loadGoogleIdentityScript } from "@/lib/googleIdentity"
 
@@ -35,6 +42,8 @@ export function LoginForm({
   const [showPassword, setShowPassword] = useState(false)
   const [capsLockOn, setCapsLockOn] = useState(false)
   const [googleError, setGoogleError] = useState<string | null>(null)
+  const [termsOpen, setTermsOpen] = useState(false)
+  const [termsKind, setTermsKind] = useState<"terms" | "privacy">("terms")
   const googleButtonRef = useRef<HTMLDivElement | null>(null)
   const googleInitializedRef = useRef(false)
 
@@ -229,9 +238,80 @@ export function LoginForm({
         </CardContent>
       </Card>
 
-      <div className="text-muted-foreground *:[a]:hover:text-primary text-center text-xs text-balance *:[a]:underline *:[a]:underline-offset-4">
-        By clicking continue, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+      <div className="text-muted-foreground text-center text-xs text-balance">
+        By clicking continue, you agree to our{" "}
+        <button
+          type="button"
+          className="underline underline-offset-4 text-primary"
+          onClick={() => {
+            setTermsKind("terms")
+            setTermsOpen(true)
+          }}
+        >
+          Terms of Service
+        </button>{" "}
+        and{" "}
+        <button
+          type="button"
+          className="underline underline-offset-4 text-primary"
+          onClick={() => {
+            setTermsKind("privacy")
+            setTermsOpen(true)
+          }}
+        >
+          Privacy Policy
+        </button>
+        .
       </div>
+
+      <Dialog open={termsOpen} onOpenChange={setTermsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{termsKind === "terms" ? "Terms of Service" : "Privacy Policy"}</DialogTitle>
+            <DialogDescription>Read-only reference. No action required.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm text-muted-foreground">
+            {termsKind === "terms" ? (
+              <>
+                <p>
+                  This platform is provided solely for authorized hospital, vendor, and staff use. By accessing or
+                  using the service, you agree to comply with all applicable laws and regulations, hospital policies,
+                  procurement procedures, and information security standards.
+                </p>
+                <p>
+                  You are responsible for maintaining the confidentiality of your credentials and for all activities
+                  performed under your account. Suspected misuse or unauthorized access must be reported promptly.
+                </p>
+                <p>
+                  The hospital may monitor, log, and audit usage for security, compliance, and operational purposes.
+                  Access may be suspended or terminated for policy violations, misuse, or security risk.
+                </p>
+                <p>
+                  The service is provided "as is" and "as available." To the fullest extent permitted by law, the
+                  hospital disclaims all warranties and will not be liable for indirect, incidental, or consequential
+                  damages arising from use of the platform.
+                </p>
+              </>
+            ) : (
+              <>
+                <p>
+                  We collect and process information necessary to operate the platform, authenticate users, administer
+                  inventory and procurement workflows, and satisfy regulatory and audit requirements.
+                </p>
+                <p>
+                  Data may include account details, access logs, transaction records, and operational metadata. Access
+                  to sensitive data is restricted to authorized personnel and protected through administrative,
+                  physical, and technical safeguards.
+                </p>
+                <p>
+                  We retain information in accordance with internal retention policies and applicable regulations, and
+                  disclose data only as required for operations, legal compliance, or with authorized consent.
+                </p>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
