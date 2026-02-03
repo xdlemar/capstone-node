@@ -238,11 +238,11 @@ export function LoginForm({
         </CardContent>
       </Card>
 
-      <div className="text-muted-foreground text-center text-xs text-balance">
+      <div className="text-white/80 text-center text-xs text-balance">
         By clicking continue, you agree to our{" "}
         <button
           type="button"
-          className="underline underline-offset-4 text-primary"
+          className="cursor-pointer font-semibold text-white underline underline-offset-4 hover:text-white"
           onClick={() => {
             setTermsKind("terms")
             setTermsOpen(true)
@@ -253,7 +253,7 @@ export function LoginForm({
         and{" "}
         <button
           type="button"
-          className="underline underline-offset-4 text-primary"
+          className="cursor-pointer font-semibold text-white underline underline-offset-4 hover:text-white"
           onClick={() => {
             setTermsKind("privacy")
             setTermsOpen(true)
