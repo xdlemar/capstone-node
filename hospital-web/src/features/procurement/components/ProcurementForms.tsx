@@ -35,11 +35,19 @@ const prSchema = z.object({
 
 type PrValues = z.infer<typeof prSchema>;
 
+const receiptLineSchema = z.object({
+  itemId: z.string().min(1, "Item is required"),
+  qty: z.coerce.number({ invalid_type_error: "Enter quantity" }).positive("Quantity must be greater than zero"),
+  lotNo: z.string().optional(),
+  expiryDate: z.string().optional(),
+});
+
 const receiptSchema = z.object({
   poNo: z.string().min(3, "PO number is required"),
   drNo: z.string().optional(),
   invoiceNo: z.string().optional(),
   toLocId: z.string().min(1, "Select a receiving location"),
+  lines: z.array(receiptLineSchema).min(1, "At least one line is required"),
 });
 
 type ReceiptValues = z.infer<typeof receiptSchema>;
@@ -292,7 +300,11 @@ export function ReceiptCard({ className }: { className?: string }) {
   const [hiddenPoNos, setHiddenPoNos] = useState<Set<string>>(() => new Set());
   const form = useForm<ReceiptValues>({
     resolver: zodResolver(receiptSchema),
-    defaultValues: { poNo: "", drNo: "", invoiceNo: "", toLocId: "" },
+    defaultValues: { poNo: "", drNo: "", invoiceNo: "", toLocId: "", lines: [] },
+  });
+  const { fields: receiptLineFields, replace: replaceReceiptLines } = useFieldArray({
+    control: form.control,
+    name: "lines",
   });
 
   const onSubmit = async (values: ReceiptValues) => {
@@ -303,14 +315,26 @@ export function ReceiptCard({ className }: { className?: string }) {
         invoiceNo: values.invoiceNo || undefined,
       };
 
-      if (selectedPo) {
-        const linePayload = safeLines(selectedPo.lines).map((line) => ({
-          itemId: line.itemId,
-          qty: line.qty,
-          toLocId: values.toLocId,
-        }));
-        if (linePayload.length) payload.lines = linePayload;
-      }
+      const linePayload = (values.lines || []).map((line) => ({
+        itemId: line.itemId,
+        qty: line.qty,
+        toLocId: values.toLocId,
+        lotNo: line.lotNo || undefined,
+        expiryDate: line.expiryDate || undefined,
+      }));
+
+      // Require lot number for medicines
+      let hasErrors = false;
+      linePayload.forEach((line, index) => {
+        const item = itemMap.get(line.itemId);
+        if (item?.type === "medicine" && !line.lotNo) {
+          form.setError(`lines.${index}.lotNo` as any, { message: "Lot No. required for medicines" });
+          hasErrors = true;
+        }
+      });
+      if (hasErrors) return;
+
+      if (linePayload.length) payload.lines = linePayload;
 
       const response = await api.post("/procurement/receipts", payload);
       const dtrsStatus = response?.data?.dtrs?.status;
@@ -351,6 +375,20 @@ export function ReceiptCard({ className }: { className?: string }) {
   const locations = inventoryQuery.data?.locations ?? [];
   const selectedPoNo = form.watch("poNo");
   const selectedPo = openPos.find((po) => po.poNo === selectedPoNo);
+
+  useEffect(() => {
+    if (!selectedPo) {
+      replaceReceiptLines([]);
+      return;
+    }
+    const lines = safeLines(selectedPo.lines).map((line) => ({
+      itemId: line.itemId,
+      qty: line.qty,
+      lotNo: "",
+      expiryDate: "",
+    }));
+    replaceReceiptLines(lines as any);
+  }, [selectedPo?.poNo]);
 
   const renderLineLabel = (line: { itemId: string; qty: number; unit: string; notes?: string | null }) => {
     const item = itemMap.get(line.itemId);
@@ -483,21 +521,51 @@ export function ReceiptCard({ className }: { className?: string }) {
 
               {selectedPo ? (
                 <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
-                  <h3 className="text-sm font-semibold">Open PO line items</h3>
+                  <h3 className="text-sm font-semibold">Receipt line items</h3>
                   <Table className="mt-3">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Item</TableHead>
                         <TableHead className="w-24 text-right">Quantity</TableHead>
                         <TableHead className="w-24">Unit</TableHead>
+                        <TableHead className="w-28">Lot No.</TableHead>
+                        <TableHead className="w-32">Expiry date</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {safeLines(selectedPo.lines).map((line, index) => (
-                        <TableRow key={`${line.itemId}-${index}`}>
-                          <TableCell>{renderLineLabel(line)}</TableCell>
-                          <TableCell className="text-right">{line.qty}</TableCell>
-                          <TableCell>{line.unit}</TableCell>
+                      {receiptLineFields.map((field, index) => (
+                        <TableRow key={field.id}>
+                          <TableCell>{renderLineLabel({ itemId: field.itemId, qty: field.qty, unit: "" })}</TableCell>
+                          <TableCell className="text-right">{field.qty}</TableCell>
+                          <TableCell>{itemMap.get(field.itemId)?.unit || ""}</TableCell>
+                          <TableCell>
+                            <FormField
+                              control={form.control}
+                              name={`lines.${index}.lotNo`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input placeholder="Lot No." {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <FormField
+                              control={form.control}
+                              name={`lines.${index}.expiryDate`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input type="date" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
