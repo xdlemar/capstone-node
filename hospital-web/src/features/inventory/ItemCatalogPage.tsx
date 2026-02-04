@@ -150,7 +150,7 @@ function ItemTable({
   onEdit: (item: InventoryItem) => void;
   typeFilter: string;
 }) {
-  const nameLabel = typeFilter === "medicine" ? "Generic" : "Name";
+  const nameLabel = typeFilter === "medicine" ? "Generic" : typeFilter === "all" ? "Generic/Name" : "Name";
   return (
     <div className="overflow-hidden rounded-xl border">
       <Table>
@@ -172,7 +172,11 @@ function ItemTable({
           {rows.map((item) => (
             <TableRow key={item.id}>
               <TableCell className="font-medium">{item.sku}</TableCell>
-              <TableCell>{item.type === "medicine" ? item.genericName || item.name : item.name}</TableCell>
+              <TableCell>
+                {item.type === "medicine"
+                  ? item.genericName || "Unspecified generic"
+                  : item.name}
+              </TableCell>
               <TableCell className="capitalize">{item.type || "supply"}</TableCell>
               <TableCell>{item.strength || "-"}</TableCell>
               <TableCell>{item.genericName || "-"}</TableCell>

@@ -292,7 +292,7 @@ export default function DocumentsPage() {
   const handlePrintReceipts = () => {
     if (moduleFilter === "ALL") return;
     if (receiptDocs.length === 0) {
-      toast({ title: "Nothing to print", description: "No procurement receipts found for this range." });
+      toast({ title: "Nothing to print", description: "No documents found for this range." });
       return;
     }
     const rangeLabel = RECEIPT_PRINT_RANGES.find((range) => range.value === receiptRange)?.label ?? receiptRange;
@@ -336,47 +336,71 @@ export default function DocumentsPage() {
       })
       .join("");
 
-    const win = window.open("", "_blank", "noopener,noreferrer");
-    if (!win) {
-      toast({ variant: "destructive", title: "Popup blocked", description: "Allow popups to print the report." });
-      return;
-    }
-    win.document.write(`
+    const html = `
       <html>
         <head>
           <title>${moduleLabel} documents - ${rangeLabel}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
-            h1 { font-size: 20px; margin-bottom: 6px; }
-            p { margin: 0 0 12px 0; color: #475569; }
+            @page { size: A4; margin: 12mm; }
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; margin: 0; color: #0f172a; }
+            .page { width: 100%; }
+            h1 { font-size: 20px; margin: 0 0 6px 0; }
+            p { margin: 0 0 8px 0; color: #475569; font-size: 12px; }
             table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
-            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; vertical-align: top; }
             th { background: #f8fafc; }
           </style>
         </head>
         <body>
-          <h1>${moduleLabel} Documents (${rangeLabel})</h1>
-          <p>Generated: ${new Date().toLocaleString()}</p>
-          <p>Total: ${statusCounts.total} · Filed: ${statusCounts.filed} · Pending: ${statusCounts.pending}</p>
-          ${tagSummary ? `<p>By tag: ${tagSummary}</p>` : ""}
-          <table>
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Tags</th>
-                <th>References</th>
-                <th>Created</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
+          <div class="page">
+            <h1>${moduleLabel} Documents (${rangeLabel})</h1>
+            <p>Generated: ${new Date().toLocaleString()}</p>
+            <p>Total: ${statusCounts.total} · Filed: ${statusCounts.filed} · Pending: ${statusCounts.pending}</p>
+            ${tagSummary ? `<p>By tag: ${tagSummary}</p>` : ""}
+            <table>
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Tags</th>
+                  <th>References</th>
+                  <th>Created</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
         </body>
       </html>
-    `);
-    win.document.close();
-    win.focus();
-    win.print();
+    `;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      toast({ variant: "destructive", title: "Print failed", description: "Unable to open print preview." });
+      document.body.removeChild(iframe);
+      return;
+    }
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 500);
+    };
   };
 
   const handleCopyKey = async (key?: string | null) => {

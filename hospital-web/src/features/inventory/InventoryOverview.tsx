@@ -362,7 +362,11 @@ export default function InventoryOverview() {
                           <TableRow key={row.itemId}>
                             <TableCell>
                               <div className="flex flex-col">
-                                <span className="font-medium text-foreground">{row.name}</span>
+                                <span className="font-medium text-foreground">
+                                  {row.type === "medicine"
+                                    ? row.genericName || row.name || "Unspecified generic"
+                                    : row.name}
+                                </span>
                                 <span className="text-xs text-muted-foreground">{row.unit || "unit"}</span>
                               </div>
                             </TableCell>
@@ -416,7 +420,11 @@ export default function InventoryOverview() {
                         <TableRow key={row.itemId}>
                           <TableCell>
                             <div className="flex flex-col">
-                              <span className="font-medium text-foreground">{row.name}</span>
+                              <span className="font-medium text-foreground">
+                                {row.type === "medicine"
+                                  ? row.genericName || row.name || "Unspecified generic"
+                                  : row.name}
+                              </span>
                               <span className="text-xs text-muted-foreground">{row.unit || "unit"}</span>
                             </div>
                           </TableCell>
