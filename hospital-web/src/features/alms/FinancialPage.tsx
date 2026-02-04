@@ -66,29 +66,29 @@ export default function FinancialPage() {
   return (
     <section className="space-y-6">
       <header className="space-y-3">
-        <h1 className="text-3xl font-semibold tracking-tight">Asset financials</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Equipment financials</h1>
         <p className="text-muted-foreground max-w-3xl">
-          Track depreciation, book value, and maintenance spend by asset. Select an asset from the registry to load
+          Track depreciation, book value, and maintenance spend by equipment. Select equipment from the registry to load
           financial snapshots.
         </p>
       </header>
 
       <Card className="border bg-card shadow-sm">
         <CardHeader>
-          <CardTitle>Asset list</CardTitle>
-          <CardDescription>Search, sort, and select an asset to view the financial summary.</CardDescription>
+          <CardTitle>Equipment list</CardTitle>
+          <CardDescription>Search, sort, and select equipment to view the financial summary.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <Input
-              placeholder="Search asset code, name, category, status"
+              placeholder="Search equipment code, name, category, status"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               className="sm:max-w-md"
             />
             <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
               <SelectTrigger className="sm:w-48">
-                <SelectValue placeholder="Sort assets" />
+                <SelectValue placeholder="Sort equipment" />
               </SelectTrigger>
               <SelectContent>
                 {SORT_OPTIONS.map((option) => (
@@ -103,15 +103,15 @@ export default function FinancialPage() {
           {assetsQuery.isLoading ? (
             <Skeleton className="h-32 w-full" />
           ) : assetsQuery.error ? (
-            <p className="text-sm text-muted-foreground">Unable to load assets right now.</p>
+            <p className="text-sm text-muted-foreground">Unable to load equipment right now.</p>
           ) : filteredAssets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No assets match your search.</p>
+            <p className="text-sm text-muted-foreground">No equipment matches your search.</p>
           ) : (
             <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Asset code</TableHead>
+                <TableHead>Equipment code</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Status</TableHead>
@@ -146,7 +146,7 @@ export default function FinancialPage() {
           )}
 
           {!selectedAssetId ? (
-            <p className="text-sm text-muted-foreground">Select an asset to view financial data.</p>
+            <p className="text-sm text-muted-foreground">Select equipment to view financial data.</p>
           ) : null}
         </CardContent>
       </Card>
@@ -155,13 +155,13 @@ export default function FinancialPage() {
         <Card className="border bg-card shadow-sm">
           <CardHeader>
             <CardTitle>Financial summary</CardTitle>
-            <CardDescription>Totals and monthly breakdown for the selected asset.</CardDescription>
+            <CardDescription>Totals and monthly breakdown for the selected equipment.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {financialQuery.isLoading ? (
               <Skeleton className="h-40 w-full" />
             ) : !financialQuery.data ? (
-              <p className="text-sm text-muted-foreground">No financial snapshots recorded for this asset.</p>
+              <p className="text-sm text-muted-foreground">No financial snapshots recorded for this equipment.</p>
             ) : (
               <div className="space-y-6">
                 <div className="grid gap-4 sm:grid-cols-3">

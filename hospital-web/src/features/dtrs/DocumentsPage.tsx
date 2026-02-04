@@ -837,7 +837,7 @@ function DocumentRow({ doc, onCopyKey, onViewDetails, onViewFile }: DocumentRowP
     if (doc.projectId) refs.push({ label: "Project", value: doc.projectId });
     if (doc.receiptId) refs.push({ label: "Receipt", value: doc.receiptId });
     if (doc.deliveryId) refs.push({ label: "Delivery", value: doc.deliveryId });
-    if (doc.assetId) refs.push({ label: "Asset", value: doc.assetId });
+    if (doc.assetId) refs.push({ label: "Equipment", value: doc.assetId });
     if (doc.woId) refs.push({ label: "Work order", value: doc.woId });
     return refs;
   }, [doc.assetId, doc.deliveryId, doc.poId, doc.projectId, doc.receiptId, doc.woId]);
@@ -1128,7 +1128,7 @@ function GuidedScopeFields({
         name="assetId"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Asset</FormLabel>
+            <FormLabel>Equipment</FormLabel>
             <Select value={field.value} onValueChange={field.onChange}>
               <FormControl>
                 <SelectTrigger>

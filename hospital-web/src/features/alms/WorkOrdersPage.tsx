@@ -268,7 +268,7 @@ export default function WorkOrdersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Asset</TableHead>
+                <TableHead>Equipment</TableHead>
                       <TableHead className="w-28">Last done</TableHead>
                       <TableHead className="w-28 text-right">Avg interval</TableHead>
                       <TableHead className="w-28">Next due</TableHead>
@@ -306,7 +306,7 @@ export default function WorkOrdersPage() {
         <div className="flex w-full flex-col gap-3 md:flex-row">
           <Input
             className="md:w-72"
-            placeholder="Search WO number, asset, technician"
+            placeholder="Search WO number, equipment, technician"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
           />
@@ -345,7 +345,7 @@ export default function WorkOrdersPage() {
             <SelectContent>
               <SelectItem value="newest">Newest first</SelectItem>
               <SelectItem value="oldest">Oldest first</SelectItem>
-              <SelectItem value="asset">Asset code</SelectItem>
+              <SelectItem value="asset">Equipment code</SelectItem>
               <SelectItem value="status">Status</SelectItem>
             </SelectContent>
           </Select>
@@ -386,7 +386,7 @@ export default function WorkOrdersPage() {
                   <OrderCard
                     key={order.id}
                     order={order}
-                    assetCode={assetInfo?.code ?? `Asset ${order.assetId}`} 
+                    assetCode={assetInfo?.code ?? `Equipment ${order.assetId}`} 
                     assetCategory={assetInfo?.category}
                     canAdvance={isManager && transitions.length > 0}
                     nextStatuses={transitions}
@@ -410,7 +410,7 @@ export default function WorkOrdersPage() {
                   <OrderCard
                     key={order.id}
                     order={order}
-                    assetCode={assetInfo?.code ?? `Asset ${order.assetId}`} 
+                    assetCode={assetInfo?.code ?? `Equipment ${order.assetId}`} 
                     assetCategory={assetInfo?.category}
                     canAdvance={false}
                     nextStatuses={[]}

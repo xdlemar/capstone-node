@@ -31,7 +31,7 @@ import { api } from "@/lib/api";
 import type { AssetRecord, MaintenanceType, ScheduleRecord } from "@/hooks/useAlmsData";
 
 const scheduleSchema = z.object({
-  assetId: z.string({ required_error: "Select an asset" }),
+  assetId: z.string({ required_error: "Select equipment" }),
   type: z.enum(["PREVENTIVE", "CORRECTIVE", "INSPECTION", "CALIBRATION"], {
     required_error: "Select a maintenance type",
   }),
@@ -92,7 +92,7 @@ export function AddScheduleDialog({ assets, trigger, onSaved }: ScheduleDialogPr
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create maintenance schedule</DialogTitle>
-          <DialogDescription>Define a preventive or inspection cycle for an asset.</DialogDescription>
+          <DialogDescription>Define a preventive or inspection cycle for equipment.</DialogDescription>
         </DialogHeader>
         <ScheduleForm assets={assets} form={form} onSubmit={(values) => mutation.mutate(values)} submitting={mutation.isPending} />
       </DialogContent>
@@ -214,11 +214,11 @@ function ScheduleForm({ assets, form, onSubmit, submitting, allowAssetChange = t
             name="assetId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Asset</FormLabel>
+                <FormLabel>Equipment</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select asset" />
+                      <SelectValue placeholder="Select equipment" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>

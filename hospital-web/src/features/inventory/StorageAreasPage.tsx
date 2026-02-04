@@ -56,7 +56,7 @@ export default function StorageAreasPage() {
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Storage areas</h1>
             <p className="text-muted-foreground max-w-3xl">
-              Maintain logistics locations used across Inventory, Procurement, and Asset workflows. Consistent storage
+              Maintain logistics locations used across Inventory, Procurement, and Equipment workflows. Consistent storage
               names keep every request, transfer, and alert aligned to the same reference list.
             </p>
           </div>

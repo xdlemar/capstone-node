@@ -48,7 +48,7 @@ const CTA_ROLES = {
 const MODULE_LABELS: Record<DashboardUnavailableKey, string> = {
   procurement: "Procurement summary",
   inventory: "Inventory metrics",
-  assets: "Asset maintenance",
+  assets: "Equipment maintenance",
   logistics: "Project logistics",
   documents: "Document tracking",
   users: "User directory",
@@ -147,7 +147,7 @@ export default function DashboardPage() {
       title: "Scheduled maintenance",
       value: formatCount(assets?.maintenanceDueSoon),
       change: `${formatCount(assets?.openWorkOrders)} work orders in progress`,
-      helper: "Asset lifecycle",
+      helper: "Equipment lifecycle",
       icon: Stethoscope,
       roles: ["STAFF", "MANAGER", "ADMIN"],
     },
@@ -430,7 +430,7 @@ export default function DashboardPage() {
                 roles: ["STAFF", "MANAGER", "ADMIN"],
               },
               {
-                title: "Asset maintenance",
+                title: "Equipment maintenance",
                 description: `${formatCount(assets?.openWorkOrders)} work orders scheduled`,
                 href: "/alms",
                 icon: Factory,
@@ -500,7 +500,7 @@ export default function DashboardPage() {
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <CardTitle>Asset financials</CardTitle>
+                  <CardTitle>Equipment financials</CardTitle>
                   <CardDescription>Book value and maintenance spend snapshot</CardDescription>
                 </div>
                 <PiggyBank className="size-5 text-primary" />
@@ -537,7 +537,7 @@ export default function DashboardPage() {
               </div>
               {topMaintenanceAssets.length > 0 && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-foreground">Top assets by maintenance (YTD)</p>
+                  <p className="text-sm font-medium text-foreground">Top equipment by maintenance (YTD)</p>
                   <ul className="space-y-2">
                     {topMaintenanceAssets.map((asset) => (
                       <li

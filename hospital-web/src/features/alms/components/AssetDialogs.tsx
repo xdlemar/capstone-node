@@ -32,7 +32,7 @@ import { api } from "@/lib/api";
 import type { AssetRecord, MaintenanceType } from "@/hooks/useAlmsData";
 
 const maintenanceSchema = z.object({
-  assetId: z.string({ required_error: "Select an asset" }),
+  assetId: z.string({ required_error: "Select equipment" }),
   type: z.enum(["PREVENTIVE", "CORRECTIVE", "INSPECTION", "CALIBRATION"], {
     required_error: "Select a maintenance type",
   }),
@@ -54,8 +54,8 @@ function generateWorkOrderNo(assetCode?: string) {
 }
 
 const assetSchema = z.object({
-  name: z.string().min(2, "Asset name is required"),
-  assetCode: z.string().min(2, "Asset code is required"),
+  name: z.string().min(2, "Equipment name is required"),
+  assetCode: z.string().min(2, "Equipment code is required"),
   category: z.string().optional(),
   status: z.enum(["ACTIVE", "UNDER_MAINTENANCE", "RETIRED", "DISPOSED"]),
   locationId: z.string().optional(),
@@ -128,7 +128,7 @@ export function MaintenanceRequestDialog({ assets, defaultAssetId, trigger, onSu
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Request maintenance</DialogTitle>
-          <DialogDescription>Select the asset and maintenance type. Managers will schedule and approve the work order.</DialogDescription>
+          <DialogDescription>Select the equipment and maintenance type. Managers will schedule and approve the work order.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
@@ -137,11 +137,11 @@ export function MaintenanceRequestDialog({ assets, defaultAssetId, trigger, onSu
               name="assetId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Asset</FormLabel>
+                  <FormLabel>Equipment</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Select asset" />
+                        <SelectValue placeholder="Select equipment" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -296,7 +296,7 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
     },
     onSuccess: (data) => {
       toast({
-        title: "Asset registered",
+        title: "Equipment registered",
         description: data?.assetCode ? `Generated code: ${data.assetCode}` : undefined,
       });
       qc.invalidateQueries({ queryKey: ["alms", "assets"] });
@@ -316,19 +316,19 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
       });
     },
     onError: (err: any) => {
-      toast({ variant: "destructive", title: "Failed to register asset", description: err?.response?.data?.error ?? err.message });
+      toast({ variant: "destructive", title: "Failed to register equipment", description: err?.response?.data?.error ?? err.message });
     },
   });
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button disabled={disabled}>Register asset</Button>
+        <Button disabled={disabled}>Register equipment</Button>
       </DialogTrigger>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Register new asset</DialogTitle>
-          <DialogDescription>Provide asset details. A unique asset code will be generated automatically.</DialogDescription>
+          <DialogTitle>Register new equipment</DialogTitle>
+          <DialogDescription>Provide equipment details. A unique equipment code will be generated automatically.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => mutation.mutate(values))}>
@@ -337,7 +337,7 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Asset name</FormLabel>
+                  <FormLabel>Equipment name</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., Operating room refrigerator" {...field} />
                   </FormControl>
@@ -350,7 +350,7 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
               name="assetCode"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Asset code</FormLabel>
+                  <FormLabel>Equipment code</FormLabel>
                   <FormControl>
                     <>
                       <input type="hidden" {...field} />
@@ -493,7 +493,7 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
             />
             <DialogFooter>
               <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? "Saving..." : "Save asset"}
+                {mutation.isPending ? "Saving..." : "Save equipment"}
               </Button>
             </DialogFooter>
           </form>

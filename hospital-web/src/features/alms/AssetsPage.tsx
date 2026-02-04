@@ -113,10 +113,10 @@ export default function AssetsPage() {
       <header className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight">Asset registry</h1>
+            <h1 className="text-3xl font-semibold tracking-tight">Equipment registry</h1>
             <p className="text-muted-foreground max-w-3xl">
               Browse tagged biomedical equipment, review warranty timelines, and launch maintenance workflows. Staff can
-              raise requests, while managers and admins can register and maintain assets directly.
+              raise requests, while managers and admins can register and maintain equipment directly.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -143,9 +143,9 @@ export default function AssetsPage() {
 
       <Card className="border bg-card shadow-sm">
         <CardHeader>
-          <CardTitle>Assets</CardTitle>
+          <CardTitle>Equipment</CardTitle>
           <CardDescription>
-            Showing {filteredAssets.length} of {totalAssets} assets{filtersActive ? " (filters applied)" : ""}. Managers can
+            Showing {filteredAssets.length} of {totalAssets} equipment items{filtersActive ? " (filters applied)" : ""}. Managers can
             register equipment; staff can raise maintenance requests only.
           </CardDescription>
         </CardHeader>
@@ -154,7 +154,7 @@ export default function AssetsPage() {
             <div className="flex w-full flex-col gap-3 sm:flex-row">
               <Input
                 className="sm:w-72"
-                placeholder="Search asset name, code, or serial"
+                placeholder="Search equipment name, code, or serial"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
               />
@@ -216,7 +216,7 @@ export default function AssetsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Asset</TableHead>
+                <TableHead>Equipment</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Status</TableHead>
@@ -234,13 +234,13 @@ export default function AssetsPage() {
               ) : assets.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
-                    No assets found yet. {isManager ? "Use the Register asset button to add one." : "Managers can register equipment; you can raise maintenance requests."}
+                    No equipment found yet. {isManager ? "Use the Register equipment button to add one." : "Managers can register equipment; you can raise maintenance requests."}
                   </TableCell>
                 </TableRow>
               ) : filteredAssets.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="py-6 text-center text-sm text-muted-foreground">
-                    No assets match the current filters. Adjust filters or reset to view all assets.
+                    No equipment matches the current filters. Adjust filters or reset to view all equipment.
                   </TableCell>
                 </TableRow>
               ) : (

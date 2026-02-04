@@ -54,12 +54,12 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     ],
   },
   {
-    title: "Asset lifecycle",
+    title: "Equipment lifecycle",
     url: "/alms",
     icon: Stethoscope,
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
-      { title: "Asset register", url: "/alms/assets", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Equipment register", url: "/alms/assets", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Work orders", url: "/alms/work-orders", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Maintenance schedule", url: "/alms/schedules", roles: ["MANAGER", "ADMIN"] },
       { title: "Financials", url: "/alms/financial", roles: ["ADMIN"] },

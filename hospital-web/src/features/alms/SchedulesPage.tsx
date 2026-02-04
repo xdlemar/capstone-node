@@ -55,14 +55,14 @@ export default function SchedulesPage() {
         <CardHeader>
           <CardTitle>Upcoming maintenance</CardTitle>
           <CardDescription>
-            Managers can plan cycles and reschedule as work orders progress. Alerts are generated as due dates approach.
+            Managers can plan cycles and reschedule as work orders progress.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Asset</TableHead>
+                <TableHead>Equipment</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Interval (days)</TableHead>
                 <TableHead>Next due</TableHead>
@@ -89,7 +89,7 @@ export default function SchedulesPage() {
                   return (
                     <TableRow key={schedule.id}>
                       <TableCell className="font-medium">
-                        {assetInfo?.code ?? `Asset ${schedule.assetId}`}
+                        {assetInfo?.code ?? `Equipment ${schedule.assetId}`}
                         {assetInfo?.category ? (
                           <span className="block text-xs text-muted-foreground">{assetInfo.category}</span>
                         ) : null}

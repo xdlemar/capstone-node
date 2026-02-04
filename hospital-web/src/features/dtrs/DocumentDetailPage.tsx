@@ -32,7 +32,7 @@ export default function DocumentDetailPage() {
     if (ref.projectId) entries.push({ label: "Project", value: ref.projectId });
     if (ref.receiptId) entries.push({ label: "Receipt", value: ref.receiptId });
     if (ref.deliveryId) entries.push({ label: "Delivery", value: ref.deliveryId });
-    if (ref.assetId) entries.push({ label: "Asset", value: ref.assetId });
+    if (ref.assetId) entries.push({ label: "Equipment", value: ref.assetId });
     if (ref.woId) entries.push({ label: "Work order", value: ref.woId });
     return entries;
   }, [query.data]);
