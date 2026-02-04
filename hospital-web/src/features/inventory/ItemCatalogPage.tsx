@@ -160,7 +160,6 @@ function ItemTable({
             <TableHead className="w-[25%]">{nameLabel}</TableHead>
             <TableHead className="w-[12%]">Type</TableHead>
             <TableHead className="w-[14%]">Strength</TableHead>
-            <TableHead className="w-[14%]">Generic</TableHead>
             <TableHead className="w-[14%]">Brand</TableHead>
             <TableHead className="w-[10%]">Unit</TableHead>
             <TableHead className="w-[15%]">Min level</TableHead>
@@ -179,7 +178,6 @@ function ItemTable({
               </TableCell>
               <TableCell className="capitalize">{item.type || "supply"}</TableCell>
               <TableCell>{item.strength || "-"}</TableCell>
-              <TableCell>{item.genericName || "-"}</TableCell>
               <TableCell>{item.brand || "-"}</TableCell>
               <TableCell>
                 <Badge variant="outline" className="uppercase tracking-wide">
