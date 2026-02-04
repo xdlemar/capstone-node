@@ -382,21 +382,18 @@ export default function DocumentsPage() {
     iframe.style.width = "0";
     iframe.style.height = "0";
     iframe.style.border = "0";
+    iframe.srcdoc = html;
     document.body.appendChild(iframe);
 
-    const doc = iframe.contentWindow?.document;
-    if (!doc) {
-      toast({ variant: "destructive", title: "Print failed", description: "Unable to open print preview." });
-      document.body.removeChild(iframe);
-      return;
-    }
-    doc.open();
-    doc.write(html);
-    doc.close();
-
     iframe.onload = () => {
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
+      const win = iframe.contentWindow;
+      if (!win) {
+        toast({ variant: "destructive", title: "Print failed", description: "Unable to open print preview." });
+        document.body.removeChild(iframe);
+        return;
+      }
+      win.focus();
+      win.print();
       setTimeout(() => {
         document.body.removeChild(iframe);
       }, 500);
@@ -471,15 +468,15 @@ export default function DocumentsPage() {
 
       <Card className="border bg-card shadow-sm">
         <CardHeader className="space-y-4">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-              <div className="space-y-1">
-                <CardTitle>Document library</CardTitle>
-                <CardDescription>
-                  Filter by module, keywords, or status to surface urgent transactions without endless scrolling.
-                </CardDescription>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <Select value={moduleFilter} onValueChange={setModuleFilter}>
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="space-y-1">
+              <CardTitle>Document library</CardTitle>
+              <CardDescription>
+                Filter by module, keywords, or status to surface urgent transactions without endless scrolling.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-end gap-3 xl:justify-end">
+              <Select value={moduleFilter} onValueChange={setModuleFilter}>
                 <SelectTrigger className="sm:w-48">
                   <SelectValue placeholder="All modules" />
                 </SelectTrigger>
@@ -492,38 +489,38 @@ export default function DocumentsPage() {
                   ))}
                 </SelectContent>
               </Select>
-                {moduleFilter !== "ALL" ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Select value={receiptRange} onValueChange={(value: ReceiptPrintRange) => setReceiptRange(value)}>
-                      <SelectTrigger className="w-36">
-                        <SelectValue placeholder="Range" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {RECEIPT_PRINT_RANGES.map((range) => (
-                          <SelectItem key={range.value} value={range.value}>
-                            {range.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button type="button" variant="outline" onClick={handlePrintReceipts}>
-                      Print {moduleFilter.toLowerCase()} docs
-                    </Button>
-                  </div>
-                ) : null}
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Search title, tag, or storage key"
-                    value={searchValue}
-                    onChange={(event) => setSearchValue(event.target.value)}
-                    className="sm:w-72"
-                  />
-                  <Button type="button" variant="ghost" disabled={!filtersActive} onClick={handleResetFilters}>
-                    Reset
+              {moduleFilter !== "ALL" ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Select value={receiptRange} onValueChange={(value: ReceiptPrintRange) => setReceiptRange(value)}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue placeholder="Range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RECEIPT_PRINT_RANGES.map((range) => (
+                        <SelectItem key={range.value} value={range.value}>
+                          {range.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button type="button" variant="outline" onClick={handlePrintReceipts}>
+                    Print {moduleFilter.toLowerCase()} docs
                   </Button>
                 </div>
+              ) : null}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Search title, tag, or storage key"
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  className="sm:w-72"
+                />
+                <Button type="button" variant="ghost" disabled={!filtersActive} onClick={handleResetFilters}>
+                  Reset
+                </Button>
               </div>
             </div>
+          </div>
           <StatusFilterButtons active={statusFilter} counts={statusTotals} onChange={setStatusFilter} />
         </CardHeader>
         <CardContent className="space-y-4">
