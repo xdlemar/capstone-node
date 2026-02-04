@@ -1,28 +1,17 @@
 ﻿import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-
 import { Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import { useInventoryExpiringBatches } from "@/hooks/useInventoryExpiringBatches";
 import { useInventoryFlaggedBatches } from "@/hooks/useInventoryFlaggedBatches";
 import { useInventoryForecast } from "@/hooks/useInventoryForecast";
-import { api } from "@/lib/api";
 import { useInventoryLevels } from "@/hooks/useInventoryLevels";
 import { useInventoryLookups } from "@/hooks/useInventoryLookups";
 
 export default function InventoryOverview() {
-  const { toast } = useToast();
-  const { user } = useAuth();
   const { data: lookups } = useInventoryLookups();
   const [locationFilter, setLocationFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -31,16 +20,6 @@ export default function InventoryOverview() {
   const forecastQuery = useInventoryForecast(locationFilter === "all" ? undefined : locationFilter);
   const expiringQuery = useInventoryExpiringBatches({ windowDays: Number(expiryWindowDays) || 30, take: 50 });
   const flaggedQuery = useInventoryFlaggedBatches(["EXPIRED", "QUARANTINED"]);
-
-  const [disposalOpen, setDisposalOpen] = useState(false);
-  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
-  const [selectedBatchName, setSelectedBatchName] = useState<string | null>(null);
-  const [disposalQty, setDisposalQty] = useState<string>("");
-  const [disposalLocation, setDisposalLocation] = useState<string>("");
-  const [disposalReason, setDisposalReason] = useState<string>("");
-
-  const roleSet = new Set(user?.roles ?? []);
-  const canRequestDisposal = roleSet.has("STAFF") && !roleSet.has("MANAGER") && !roleSet.has("ADMIN");
 
 
   const itemMap = useMemo(() => {
@@ -139,56 +118,6 @@ export default function InventoryOverview() {
     }
   });
 
-  const disposalBatchByItem = new Map<string, typeof expiringBatches[number]>();
-  (flaggedQuery.data ?? []).forEach((batch) => {
-    if (!disposalBatchByItem.has(batch.itemId)) {
-      disposalBatchByItem.set(batch.itemId, batch as typeof expiringBatches[number]);
-    }
-  });
-  expiringBatches.forEach((batch) => {
-    if (!disposalBatchByItem.has(batch.itemId)) {
-      disposalBatchByItem.set(batch.itemId, batch);
-    }
-  });
-
-  const disposalMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedBatchId) throw new Error("No batch selected");
-      if (!disposalLocation) throw new Error("Location is required");
-      const qtyNumber = Number(disposalQty);
-      if (!Number.isFinite(qtyNumber) || qtyNumber <= 0) {
-        throw new Error("Quantity must be positive");
-      }
-      const payload = {
-        batchId: selectedBatchId,
-        fromLocId: disposalLocation,
-        qty: qtyNumber,
-        reason: disposalReason || undefined,
-      };
-      const res = await api.post("/inventory/disposals", payload);
-      return res.data;
-    },
-    onSuccess: () => {
-      toast({ title: "Disposal requested", description: "Manager approval is now required." });
-      setDisposalOpen(false);
-      setSelectedBatchId(null);
-      setSelectedBatchName(null);
-      setDisposalQty("");
-      setDisposalLocation("");
-      setDisposalReason("");
-    },
-    onError: (err: any) => {
-      const message = err?.response?.data?.error || err?.message || "Failed to request disposal";
-      toast({ variant: "destructive", title: "Request failed", description: message });
-    },
-  });
-
-  const openDisposalDialog = (batch: { id: string; item?: { name?: string | null } | null; qtyOnHand?: number }) => {
-    setSelectedBatchId(batch.id);
-    setSelectedBatchName(batch.item?.name ?? "Unknown item");
-    setDisposalQty(batch.qtyOnHand != null ? String(batch.qtyOnHand) : "");
-    setDisposalOpen(true);
-  };
   return (
     <section className="space-y-6">
       <header className="space-y-3">
@@ -276,8 +205,7 @@ export default function InventoryOverview() {
                     <TableHead className="w-32 text-right">On-hand</TableHead>
                     <TableHead className="w-32 text-right">Min level</TableHead>
                     <TableHead className="w-28">Status</TableHead>
-                    {canRequestDisposal ? <TableHead className="w-28">Action</TableHead> : null}
-                  </TableRow>
+                                      </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredLevels.map((row) => (
@@ -323,21 +251,6 @@ export default function InventoryOverview() {
                           })()}
                         </div>
                       </TableCell>
-                      {canRequestDisposal ? (
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              const candidate = disposalBatchByItem.get(row.itemId);
-                              if (candidate) openDisposalDialog(candidate);
-                            }}
-                            disabled={!disposalBatchByItem.get(row.itemId)}
-                          >
-                            Request disposal
-                          </Button>
-                        </TableCell>
-                      ) : null}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -378,8 +291,7 @@ export default function InventoryOverview() {
                     <TableHead className="w-24 text-right">Days left</TableHead>
                     <TableHead className="w-28 text-right">On-hand</TableHead>
                     <TableHead className="w-28">Status</TableHead>
-                    {canRequestDisposal ? <TableHead className="w-28">Action</TableHead> : null}
-                  </TableRow>
+                                      </TableRow>
                 </TableHeader>
                 <TableBody>
                   {expiringBatches.slice(0, 20).map((batch) => {
@@ -407,18 +319,6 @@ export default function InventoryOverview() {
                             {remaining == null ? "Unknown" : remaining <= 0 ? "Expired" : remaining <= 7 ? "Critical" : remaining <= 14 ? "Soon" : "Upcoming"}
                           </Badge>
                         </TableCell>
-                        {canRequestDisposal ? (
-                          <TableCell>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openDisposalDialog(batch)}
-                              disabled={(lookups?.locations.length ?? 0) === 0 || batch.qtyOnHand <= 0}
-                            >
-                              Request disposal
-                            </Button>
-                          </TableCell>
-                        ) : null}
                       </TableRow>
                     );
                   })}
@@ -543,62 +443,7 @@ export default function InventoryOverview() {
         </Card>
       ) : null}
 
-      <Dialog open={disposalOpen} onOpenChange={setDisposalOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Disposal request</DialogTitle>
-            <DialogDescription>
-              Submit expired or quarantined stock for manager approval.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm">
-              <span className="text-muted-foreground">Item:</span> {selectedBatchName ?? "-"}
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">From location</label>
-              <Select value={disposalLocation} onValueChange={setDisposalLocation}>
-                <SelectTrigger className="bg-background">
-                  <SelectValue placeholder="Select location" />
-                </SelectTrigger>
-                <SelectContent>
-                  {lookups?.locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id}>
-                      {loc.name} ({loc.kind})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Quantity</label>
-              <Input
-                type="number"
-                min={1}
-                value={disposalQty}
-                onChange={(event) => setDisposalQty(event.target.value)}
-                placeholder="Quantity to dispose"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Reason (optional)</label>
-              <Textarea
-                value={disposalReason}
-                onChange={(event) => setDisposalReason(event.target.value)}
-                placeholder="Expired or damaged stock"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setDisposalOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={() => disposalMutation.mutate()} disabled={disposalMutation.isPending}>
-              Submit request
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      
     </section>
   );
 }

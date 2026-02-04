@@ -22,6 +22,7 @@ import StorageAreasPage from "@/features/inventory/StorageAreasPage";
 import ItemCatalogPage from "@/features/inventory/ItemCatalogPage";
 import DisposalApprovalsPage from "@/features/inventory/DisposalApprovalsPage";
 import DisposalLogPage from "@/features/inventory/DisposalLogPage";
+import ExpiringItemsPage from "@/features/inventory/ExpiringItemsPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
 import AssetsPage from "@/features/alms/AssetsPage";
 import WorkOrdersPage from "@/features/alms/WorkOrdersPage";
@@ -128,6 +129,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to="stock-levels" replace /> },
               { path: "stock-levels", element: <InventoryOverview /> },
+              { path: "expiring-items", element: <ExpiringItemsPage /> },
               { path: "stock-control", element: <StockControlPage /> },
               {
                 path: "disposal-approvals",

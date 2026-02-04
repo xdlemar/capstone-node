@@ -1,7 +1,9 @@
 const { Router } = require("express");
 const { prisma } = require("../prisma");
+const { requireRole } = require("../auth");
 const { recordStockMove } = require("../services/stockMove");
 const r = Router();
+const managerAccess = requireRole("MANAGER", "ADMIN");
 
 function clampNumber(value, { min, max, fallback }) {
   const num = Number(value);
@@ -11,7 +13,7 @@ function clampNumber(value, { min, max, fallback }) {
   return Math.floor(num);
 }
 
-r.post("/", async (req, res) => {
+r.post("/", managerAccess, async (req, res) => {
   const { itemId, lotNo, expiryDate, qtyOnHand } = req.body;
   const batch = await prisma.batch.create({
     data: {
@@ -68,7 +70,7 @@ r.get("/expiring", async (req, res) => {
   }
 });
 
-r.post("/:id/quarantine", async (req, res) => {
+r.post("/:id/quarantine", managerAccess, async (req, res) => {
   try {
     const batchId = BigInt(req.params.id);
     const { fromLocId, qty } = req.body || {};
