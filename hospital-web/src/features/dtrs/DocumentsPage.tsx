@@ -168,6 +168,7 @@ export default function DocumentsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortOption>("created-desc");
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState<"csv" | "pdf" | null>(null);
 
   const summaryQuery = useDocumentSummary({ enabled: isManager });
   const documentsQuery = useDocumentsList({
@@ -302,6 +303,45 @@ export default function DocumentsPage() {
     }
   };
 
+  const handleExport = async (format: "csv" | "pdf") => {
+    if (exporting) return;
+    setExporting(format);
+    try {
+      const params: Record<string, string> = {
+        status: statusFilter,
+        sort: sortBy,
+      };
+      if (moduleFilter !== "ALL") params.module = moduleFilter;
+      if (searchValue.trim()) params.q = searchValue.trim();
+
+      const { data } = await api.get(`/dtrs/documents/export.${format}`, {
+        params,
+        responseType: "blob",
+      });
+
+      const blob = new Blob([data], {
+        type: format === "csv" ? "text/csv;charset=utf-8" : "application/pdf",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `documents-${new Date().toISOString().slice(0, 10)}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast({ title: `Exported ${format.toUpperCase()}` });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Export failed",
+        description: err?.response?.data?.error ?? err?.message ?? "Unexpected error",
+      });
+    } finally {
+      setExporting(null);
+    }
+  };
+
   return (
     <section className="space-y-6">
       <header className="space-y-2">
@@ -329,15 +369,15 @@ export default function DocumentsPage() {
 
       <Card className="border bg-card shadow-sm">
         <CardHeader className="space-y-4">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-            <div className="space-y-1">
-              <CardTitle>Document library</CardTitle>
-              <CardDescription>
-                Filter by module, keywords, or status to surface urgent transactions without endless scrolling.
-              </CardDescription>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <Select value={moduleFilter} onValueChange={setModuleFilter}>
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+              <div className="space-y-1">
+                <CardTitle>Document library</CardTitle>
+                <CardDescription>
+                  Filter by module, keywords, or status to surface urgent transactions without endless scrolling.
+                </CardDescription>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Select value={moduleFilter} onValueChange={setModuleFilter}>
                 <SelectTrigger className="sm:w-48">
                   <SelectValue placeholder="All modules" />
                 </SelectTrigger>
@@ -350,19 +390,37 @@ export default function DocumentsPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Search title, tag, or storage key"
-                  value={searchValue}
-                  onChange={(event) => setSearchValue(event.target.value)}
-                  className="sm:w-72"
-                />
-                <Button type="button" variant="ghost" disabled={!filtersActive} onClick={handleResetFilters}>
-                  Reset
-                </Button>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Search title, tag, or storage key"
+                    value={searchValue}
+                    onChange={(event) => setSearchValue(event.target.value)}
+                    className="sm:w-72"
+                  />
+                  <Button type="button" variant="ghost" disabled={!filtersActive} onClick={handleResetFilters}>
+                    Reset
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleExport("csv")}
+                    disabled={exporting !== null}
+                  >
+                    {exporting === "csv" ? "Exporting..." : "Export CSV"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleExport("pdf")}
+                    disabled={exporting !== null}
+                  >
+                    {exporting === "pdf" ? "Exporting..." : "Export PDF"}
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
           <StatusFilterButtons active={statusFilter} counts={statusTotals} onChange={setStatusFilter} />
         </CardHeader>
         <CardContent className="space-y-4">

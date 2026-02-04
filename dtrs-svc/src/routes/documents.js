@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const crypto = require("crypto");
+const PDFDocument = require("pdfkit");
 const { prisma } = require("../prisma");
 const { requireRole } = require("../auth");
 
@@ -49,6 +50,7 @@ const managerOnly = requireRole("MANAGER", "ADMIN");
 const ELEVATED_ROLES = new Set(["ADMIN", "MANAGER"]);
 const ALLOWED_SIGNATURE_METHODS = new Set(["DRAWN", "TYPED", "UPLOADED", "PKI"]);
 const ALLOWED_AUDIT_ACTIONS = new Set(["VIEW", "DOWNLOAD", "CREATE", "UPDATE", "DELETE", "SIGN"]);
+const EXPORT_LIMIT = Math.max(1, Number(process.env.DTRS_EXPORT_LIMIT || 5000));
 
 function getUserRoles(user = {}) {
   const roles = Array.isArray(user.roles) ? user.roles : [user.role].filter(Boolean);
@@ -206,6 +208,105 @@ function buildDocumentScopeFilters(user) {
   return filters;
 }
 
+function computeStatus(storageKey) {
+  if (!storageKey) return "PENDING";
+  return storageKey.startsWith("placeholder:") ? "PENDING" : "FILED";
+}
+
+function buildOrderBy(sort) {
+  switch (String(sort || "")) {
+    case "created-asc":
+      return { createdAt: "asc" };
+    case "title-asc":
+      return { title: "asc" };
+    case "title-desc":
+      return { title: "desc" };
+    case "module-asc":
+      return [{ module: "asc" }, { createdAt: "desc" }];
+    case "module-desc":
+      return [{ module: "desc" }, { createdAt: "desc" }];
+    case "status-pending":
+      return [{ storageKey: "asc" }, { createdAt: "desc" }];
+    case "created-desc":
+    default:
+      return { createdAt: "desc" };
+  }
+}
+
+function applyStatusFilter(where, status) {
+  const normalized = String(status || "").toLowerCase();
+  if (!normalized || normalized === "all") return where;
+  if (normalized === "filed") {
+    return {
+      AND: [
+        where,
+        { storageKey: { not: null } },
+        { NOT: { storageKey: { startsWith: "placeholder:" } } },
+      ],
+    };
+  }
+  if (normalized === "pending") {
+    return {
+      AND: [
+        where,
+        {
+          OR: [{ storageKey: null }, { storageKey: { startsWith: "placeholder:" } }],
+        },
+      ],
+    };
+  }
+  return where;
+}
+
+function buildDocumentWhere(query) {
+  const {
+    module,
+    projectId,
+    poId,
+    receiptId,
+    deliveryId,
+    assetId,
+    woId,
+    q,
+  } = query || {};
+
+  return {
+    module: module ? String(module).toUpperCase() : undefined,
+    projectId: projectId ? toBigInt(projectId, "projectId", { optional: true }) : undefined,
+    poId: poId ? toBigInt(poId, "poId", { optional: true }) : undefined,
+    receiptId: receiptId ? toBigInt(receiptId, "receiptId", { optional: true }) : undefined,
+    deliveryId: deliveryId ? toBigInt(deliveryId, "deliveryId", { optional: true }) : undefined,
+    assetId: assetId ? toBigInt(assetId, "assetId", { optional: true }) : undefined,
+    woId: woId ? toBigInt(woId, "woId", { optional: true }) : undefined,
+    ...(q
+      ? {
+          OR: [
+            { title: { contains: q, mode: "insensitive" } },
+            { tags: { some: { name: { contains: q, mode: "insensitive" } } } },
+          ],
+        }
+      : {}),
+  };
+}
+
+function csvEscape(value) {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (str.includes("\"") || str.includes(",") || str.includes("\n") || str.includes("\r")) {
+    return `"${str.replace(/\"/g, "\"\"")}"`;
+  }
+  return str;
+}
+
+function formatDate(value) {
+  if (!value) return "";
+  try {
+    return new Date(value).toISOString();
+  } catch {
+    return String(value);
+  }
+}
+
 function getDocumentScopeValue(doc) {
   const scopeField = MODULE_SCOPE_FIELD[doc.module];
   if (!scopeField) return null;
@@ -361,36 +462,8 @@ router.post("/", async (req, res) => {
 
 router.get("/", async (req, res) => {
   try {
-    const {
-      module,
-      projectId,
-      poId,
-      receiptId,
-      deliveryId,
-      assetId,
-      woId,
-      q,
-      skip = 0,
-      take = 50,
-    } = req.query;
-
-    const where = {
-      module: module ? String(module).toUpperCase() : undefined,
-      projectId: projectId ? toBigInt(projectId, "projectId", { optional: true }) : undefined,
-      poId: poId ? toBigInt(poId, "poId", { optional: true }) : undefined,
-      receiptId: receiptId ? toBigInt(receiptId, "receiptId", { optional: true }) : undefined,
-      deliveryId: deliveryId ? toBigInt(deliveryId, "deliveryId", { optional: true }) : undefined,
-      assetId: assetId ? toBigInt(assetId, "assetId", { optional: true }) : undefined,
-      woId: woId ? toBigInt(woId, "woId", { optional: true }) : undefined,
-      ...(q
-        ? {
-            OR: [
-              { title: { contains: q, mode: "insensitive" } },
-              { tags: { some: { name: { contains: q, mode: "insensitive" } } } },
-            ],
-          }
-        : {}),
-    };
+    const { skip = 0, take = 50 } = req.query;
+    const where = buildDocumentWhere(req.query);
 
     const scopeFilters = buildDocumentScopeFilters(req.user);
     if (Array.isArray(scopeFilters)) {
@@ -412,6 +485,172 @@ router.get("/", async (req, res) => {
     if (e?.status === 400) return res.status(400).json({ error: e.message });
     console.error("[GET /documents]", e);
     res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.get("/export.csv", async (req, res) => {
+  try {
+    const whereBase = buildDocumentWhere(req.query);
+    const where = applyStatusFilter(whereBase, req.query?.status);
+
+    const scopeFilters = buildDocumentScopeFilters(req.user);
+    if (Array.isArray(scopeFilters)) {
+      if (scopeFilters.length === 0) {
+        return res.status(403).json({ error: "No document scope access configured" });
+      }
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), { OR: scopeFilters }];
+    }
+
+    const take = Math.min(Number(req.query?.take || EXPORT_LIMIT), EXPORT_LIMIT);
+    const orderBy = buildOrderBy(req.query?.sort);
+
+    const rows = await prisma.document.findMany({
+      where,
+      include: { tags: true },
+      orderBy,
+      take,
+    });
+
+    const header = [
+      "id",
+      "title",
+      "module",
+      "status",
+      "createdAt",
+      "uploaderId",
+      "storageKey",
+      "tags",
+      "poId",
+      "projectId",
+      "receiptId",
+      "deliveryId",
+      "assetId",
+      "woId",
+      "notes",
+    ];
+
+    const lines = [header.join(",")];
+    for (const doc of rows) {
+      const line = [
+        doc.id?.toString() ?? "",
+        doc.title ?? "",
+        doc.module ?? "",
+        computeStatus(doc.storageKey),
+        formatDate(doc.createdAt),
+        doc.uploaderId ? doc.uploaderId.toString() : "",
+        doc.storageKey ?? "",
+        (doc.tags || []).map((t) => t.name).join(";"),
+        doc.poId ? doc.poId.toString() : "",
+        doc.projectId ? doc.projectId.toString() : "",
+        doc.receiptId ? doc.receiptId.toString() : "",
+        doc.deliveryId ? doc.deliveryId.toString() : "",
+        doc.assetId ? doc.assetId.toString() : "",
+        doc.woId ? doc.woId.toString() : "",
+        doc.notes ?? "",
+      ].map(csvEscape);
+      lines.push(line.join(","));
+    }
+
+    const filename = `dtrs-documents-${new Date().toISOString().slice(0, 10)}.csv`;
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(lines.join("\n"));
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[GET /documents/export.csv]", e);
+    res.status(500).json({ error: "Failed to export CSV" });
+  }
+});
+
+router.get("/export.pdf", async (req, res) => {
+  try {
+    const whereBase = buildDocumentWhere(req.query);
+    const where = applyStatusFilter(whereBase, req.query?.status);
+
+    const scopeFilters = buildDocumentScopeFilters(req.user);
+    if (Array.isArray(scopeFilters)) {
+      if (scopeFilters.length === 0) {
+        return res.status(403).json({ error: "No document scope access configured" });
+      }
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), { OR: scopeFilters }];
+    }
+
+    const take = Math.min(Number(req.query?.take || EXPORT_LIMIT), EXPORT_LIMIT);
+    const orderBy = buildOrderBy(req.query?.sort);
+
+    const rows = await prisma.document.findMany({
+      where,
+      include: { tags: true },
+      orderBy,
+      take,
+    });
+
+    const filename = `dtrs-documents-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    doc.pipe(res);
+
+    doc.fontSize(16).text("Document Export", { align: "left" });
+    doc.moveDown(0.5);
+    doc.fontSize(10).fillColor("#555").text(`Generated: ${new Date().toLocaleString()}`);
+    doc.moveDown(1);
+
+    const columns = [
+      { label: "Title", width: 200 },
+      { label: "Module", width: 70 },
+      { label: "Status", width: 60 },
+      { label: "Uploaded", width: 120 },
+      { label: "Refs/Tags", width: 120 },
+    ];
+
+    doc.fontSize(10).fillColor("#000");
+    let x = doc.x;
+    columns.forEach((col) => {
+      doc.text(col.label, x, doc.y, { width: col.width, continued: false });
+      x += col.width;
+    });
+    doc.moveDown(0.5);
+    doc.moveTo(doc.x, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke();
+    doc.moveDown(0.5);
+
+    rows.forEach((row) => {
+      const refs = [
+        row.poId ? `PO:${row.poId}` : null,
+        row.projectId ? `PRJ:${row.projectId}` : null,
+        row.receiptId ? `RCPT:${row.receiptId}` : null,
+        row.deliveryId ? `DLV:${row.deliveryId}` : null,
+        row.assetId ? `EQ:${row.assetId}` : null,
+        row.woId ? `WO:${row.woId}` : null,
+      ].filter(Boolean);
+      const tagList = (row.tags || []).map((t) => t.name);
+      const refTag = [...refs, ...tagList].join(", ");
+
+      const values = [
+        row.title || "",
+        row.module || "",
+        computeStatus(row.storageKey),
+        formatDate(row.createdAt),
+        refTag,
+      ];
+
+      let rowX = doc.x;
+      values.forEach((val, idx) => {
+        doc.text(val, rowX, doc.y, { width: columns[idx].width });
+        rowX += columns[idx].width;
+      });
+      doc.moveDown(0.5);
+      if (doc.y > doc.page.height - doc.page.margins.bottom - 40) {
+        doc.addPage();
+      }
+    });
+
+    doc.end();
+  } catch (e) {
+    if (e?.status === 400) return res.status(400).json({ error: e.message });
+    console.error("[GET /documents/export.pdf]", e);
+    res.status(500).json({ error: "Failed to export PDF" });
   }
 });
 
