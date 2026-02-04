@@ -4,7 +4,16 @@ import { Loader2 } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useInventoryLookups } from "@/hooks/useInventoryLookups";
@@ -38,6 +47,7 @@ export default function TransferHistoryPage() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [search, setSearch] = useState<string>("");
+  const [selectedTransfer, setSelectedTransfer] = useState<TransferRow | null>(null);
 
   const statusParam = statusFilter === "ALL" ? undefined : statusFilter;
   const transfersQuery = useQuery({
@@ -73,6 +83,12 @@ export default function TransferHistoryPage() {
 
   const isLoading = transfersQuery.isLoading;
   const isError = transfersQuery.isError;
+
+  const renderLineName = (line: TransferRow["lines"][number]) => {
+    const meta = itemMap.get(line.itemId);
+    const strength = meta?.strength ? ` ${meta.strength}` : "";
+    return `${meta?.name ?? `Item ${line.itemId}`}${strength}`;
+  };
 
   return (
     <section className="space-y-6">
@@ -150,13 +166,12 @@ export default function TransferHistoryPage() {
                         <p className="text-xs text-destructive">Reason: {row.rejectionReason}</p>
                       ) : null}
                       <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                        {row.lines.map((line) => {
-                          const meta = itemMap.get(line.itemId);
-                          const strength = meta?.strength ? ` ${meta.strength}` : "";
-                          return (
-                            <div key={line.id}>
-                              {(meta?.name ?? `Item ${line.itemId}`) + strength} · Qty {line.qty}
-                            </div>
+                        {row.lines.map((line) => (
+                          <div key={line.id}>
+                            {renderLineName(line)} · Qty {line.qty}
+                          </div>
+                        ))}
+                      </div>
                           );
                         })}
                       </div>
@@ -173,6 +188,9 @@ export default function TransferHistoryPage() {
                       >
                         {row.status}
                       </Badge>
+                      <Button variant="outline" size="sm" onClick={() => setSelectedTransfer(row)}>
+                        View
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -181,6 +199,66 @@ export default function TransferHistoryPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!selectedTransfer} onOpenChange={(open) => !open && setSelectedTransfer(null)}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Transfer details</DialogTitle>
+            <DialogDescription>Full history of the selected transfer.</DialogDescription>
+          </DialogHeader>
+          {selectedTransfer ? (
+            <div className="space-y-4">
+              <div className="rounded-md border border-border/60 p-3">
+                <div className="text-sm text-muted-foreground">Transfer no.</div>
+                <div className="text-lg font-semibold">{selectedTransfer.transferNo}</div>
+                <div className="mt-2 text-sm text-muted-foreground">
+                  {(selectedTransfer.fromLocName ?? `Location ${selectedTransfer.fromLocId}`)} to{" "}
+                  {(selectedTransfer.toLocName ?? `Location ${selectedTransfer.toLocId}`)}
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">Requested by</div>
+                  <div className="text-sm font-medium">{selectedTransfer.requestedBy ?? "Unknown"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {new Date(selectedTransfer.createdAt).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase text-muted-foreground">Reviewed by</div>
+                  <div className="text-sm font-medium">{selectedTransfer.reviewedBy ?? "-"}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {selectedTransfer.reviewedAt ? new Date(selectedTransfer.reviewedAt).toLocaleString() : "-"}
+                  </div>
+                </div>
+              </div>
+              {selectedTransfer.status === "REJECTED" && selectedTransfer.rejectionReason ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Rejected</AlertTitle>
+                  <AlertDescription>{selectedTransfer.rejectionReason}</AlertDescription>
+                </Alert>
+              ) : null}
+              <div className="rounded-md border border-border/60 p-3">
+                <div className="text-sm font-semibold">Line items</div>
+                <div className="mt-2 space-y-2 text-sm">
+                  {selectedTransfer.lines.map((line) => (
+                    <div key={line.id} className="flex items-center justify-between">
+                      <span>{renderLineName(line)}</span>
+                      <span className="text-muted-foreground">Qty {line.qty}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedTransfer(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
+
