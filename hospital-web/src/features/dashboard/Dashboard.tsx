@@ -1,4 +1,5 @@
-﻿import { Link } from "react-router-dom";
+﻿import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -58,6 +59,10 @@ const MODULE_LABELS: Record<DashboardUnavailableKey, string> = {
 
 const PIN_STORAGE_KEY = "dashboard.pins";
 
+type NextBestAction =
+  | { title: string; description: string; href: string }
+  | { title: string; description: string; actionLabel: string; onClick: () => void };
+
 function formatCurrency(value?: number | null) {
   return currencyFormatter.format(value ?? 0);
 }
@@ -115,7 +120,7 @@ export default function DashboardPage() {
 
   const togglePin = (id: string) => {
     const next = pinnedWorkspaces.includes(id)
-      ? pinnedWorkspaces.filter((pin) => pin !== id)
+      ? pinnedWorkspaces.filter((pin: string) => pin !== id)
       : [id, ...pinnedWorkspaces].slice(0, pinLimit);
     persistPins(next);
   };
@@ -295,7 +300,7 @@ export default function DashboardPage() {
     },
   ];
 
-  const nextBestAction = (() => {
+  const nextBestAction: NextBestAction = (() => {
     if (isUnavailable("procurement") && isUnavailable("inventory") && isUnavailable("logistics")) {
       return {
         title: "Retry dashboard data",
