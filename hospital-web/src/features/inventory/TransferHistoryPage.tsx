@@ -157,10 +157,10 @@ export default function TransferHistoryPage() {
                       <p className="font-medium">{row.transferNo}</p>
                       <p className="text-sm text-muted-foreground">
                         {(row.fromLocName ?? `Location ${row.fromLocId}`)} to{" "}
-                        {(row.toLocName ?? `Location ${row.toLocId}`)} · {row.lines.length} line(s)
+                        {(row.toLocName ?? `Location ${row.toLocId}`)} - {row.lines.length} line(s)
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Requested by {row.requestedBy ?? "Unknown"} · {new Date(row.createdAt).toLocaleString()}
+                        Requested by {row.requestedBy ?? "Unknown"} - {new Date(row.createdAt).toLocaleString()}
                       </p>
                       {row.status === "REJECTED" && row.rejectionReason ? (
                         <p className="text-xs text-destructive">Reason: {row.rejectionReason}</p>
@@ -168,12 +168,9 @@ export default function TransferHistoryPage() {
                       <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                         {row.lines.map((line) => (
                           <div key={line.id}>
-                            {renderLineName(line)} · Qty {line.qty}
+                            {renderLineName(line)} - Qty {line.qty}
                           </div>
                         ))}
-                      </div>
-                          );
-                        })}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -261,4 +258,7 @@ export default function TransferHistoryPage() {
     </section>
   );
 }
+
+
+
 
