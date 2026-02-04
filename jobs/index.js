@@ -26,11 +26,6 @@ const schedules = [
     interval: ms(process.env.VENDOR_METRICS_INTERVAL_MS, 6 * 60 * 60 * 1000),
   },
   {
-    name: "alms-maintenance-alerts",
-    script: path.join(rootDir, "alms-svc", "src", "jobs", "maintenanceAlerts.js"),
-    interval: ms(process.env.ALMS_ALERT_INTERVAL_MS, 60 * 60 * 1000),
-  },
-  {
     name: "alms-financial-snapshots",
     script: path.join(rootDir, "alms-svc", "src", "jobs", "financialSnapshots.js"),
     interval: ms(process.env.ALMS_FINANCIAL_INTERVAL_MS, 24 * 60 * 60 * 1000),

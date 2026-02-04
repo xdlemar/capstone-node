@@ -37,7 +37,9 @@ module.exports = {
       env: {
         NODE_ENV: "production",
         PORT: 4005,
-        PROCUREMENT_URL: "http://127.0.0.1:4002"
+        PROCUREMENT_URL: "http://127.0.0.1:4002",
+        JWT_SECRET: "ABAD_SECRET",
+        JWT_EXPIRES: "12h"
       }
     },
     {

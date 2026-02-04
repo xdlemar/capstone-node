@@ -41,13 +41,6 @@ export type AssetSummary = {
   activeAssets: number;
   openWorkOrders: number;
   maintenanceDueSoon: number;
-  alertsOpen: number;
-  alerts: Array<{
-    id: string;
-    message: string;
-    triggeredAt: string;
-    type: string;
-  }>;
   financials?: AssetFinancialSummary;
 };
 

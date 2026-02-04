@@ -43,26 +43,6 @@ export type ScheduleRecord = {
   notes: string | null;
 };
 
-export type AlertRecord = {
-  id: string;
-  assetId: string;
-  scheduleId: string | null;
-  type: string;
-  message: string;
-  triggeredAt: string;
-  resolvedAt: string | null;
-  asset: {
-    id: string;
-    assetCode: string;
-    status: AssetStatus;
-  };
-  schedule: {
-    id: string;
-    nextDue: string | null;
-    type: MaintenanceType;
-  } | null;
-};
-
 export type FinancialSummary = {
   assetId: string;
   totals: {
@@ -144,19 +124,6 @@ export function useAlmsSchedules() {
     queryKey: ["alms", "schedules"],
     queryFn: async () => {
       const { data } = await api.get<{ total: number; rows: ScheduleRecord[] }>("/alms/schedules");
-      return data;
-    },
-    staleTime: 30_000,
-  });
-}
-
-export function useAlmsAlerts(unresolvedOnly = true) {
-  return useQuery({
-    queryKey: ["alms", "alerts", unresolvedOnly],
-    queryFn: async () => {
-      const { data } = await api.get<AlertRecord[]>("/alms/alerts", {
-        params: { unresolved: unresolvedOnly },
-      });
       return data;
     },
     staleTime: 30_000,

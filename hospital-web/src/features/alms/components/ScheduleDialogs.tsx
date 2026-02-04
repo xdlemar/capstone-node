@@ -176,7 +176,7 @@ export function EditScheduleDialog({ assets, schedule, trigger, onSaved, onDelet
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit schedule</DialogTitle>
-          <DialogDescription>Adjust due dates or intervals. Removing a schedule clears associated alerts.</DialogDescription>
+          <DialogDescription>Adjust due dates or intervals.</DialogDescription>
         </DialogHeader>
         <ScheduleForm
           assets={assets}

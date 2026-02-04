@@ -62,7 +62,6 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
       { title: "Asset register", url: "/alms/assets", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Work orders", url: "/alms/work-orders", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Maintenance schedule", url: "/alms/schedules", roles: ["MANAGER", "ADMIN"] },
-      { title: "Alerts", url: "/alms/alerts", roles: ["MANAGER", "ADMIN"] },
       { title: "Financials", url: "/alms/financial", roles: ["ADMIN"] },
     ],
   },

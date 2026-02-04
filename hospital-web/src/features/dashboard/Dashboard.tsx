@@ -187,13 +187,6 @@ export default function DashboardPage() {
     type: alert.type === "EXPIRY" ? "warning" : "info",
   }));
 
-  const assetAlerts = (assets?.alerts ?? []).map((alert) => ({
-    id: alert.id,
-    title: "Maintenance alert",
-    detail: alert.message,
-    type: alert.type === "OVERDUE_MAINTENANCE" ? "critical" : "warning",
-  }));
-
   const logisticsAlerts = (logistics?.alerts ?? []).map((alert) => ({
     id: alert.id,
     title: alert.delivery?.trackingNo ? `Delivery ${alert.delivery.trackingNo}` : "Delivery alert",
@@ -209,7 +202,7 @@ export default function DashboardPage() {
   const topMaintenanceAssets = assetFinancials?.topAssetsByMaintenance ?? [];
 
 
-  const liveAlerts = [...inventoryAlerts, ...assetAlerts, ...logisticsAlerts].slice(0, 5);
+  const liveAlerts = [...inventoryAlerts, ...logisticsAlerts].slice(0, 5);
 
   const checklist = [
     {

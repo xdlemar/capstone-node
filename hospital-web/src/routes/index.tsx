@@ -24,7 +24,6 @@ import AlmsOverview from "@/features/alms/AlmsOverview";
 import AssetsPage from "@/features/alms/AssetsPage";
 import WorkOrdersPage from "@/features/alms/WorkOrdersPage";
 import SchedulesPage from "@/features/alms/SchedulesPage";
-import AlmsAlertsPage from "@/features/alms/AlertsPage";
 import FinancialPage from "@/features/alms/FinancialPage";
 import PltOverview from "@/features/plt/PltOverview";
 import DeliveriesPage from "@/features/plt/DeliveriesPage";
@@ -178,14 +177,6 @@ export const router = createBrowserRouter([
                 element: (
                   <RoleGate allowed={MANAGER_SET}>
                     <SchedulesPage />
-                  </RoleGate>
-                ),
-              },
-              {
-                path: "alerts",
-                element: (
-                  <RoleGate allowed={MANAGER_SET}>
-                    <AlmsAlertsPage />
                   </RoleGate>
                 ),
               },

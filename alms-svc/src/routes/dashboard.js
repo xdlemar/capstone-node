@@ -24,8 +24,6 @@ router.get("/dashboard/summary", staffAccess, async (_req, res) => {
       activeAssets,
       openWorkOrders,
       maintenanceDueSoon,
-      alertsOpen,
-      recentAlerts,
       assetRecords,
       repairLast30,
       repairYear,
@@ -44,18 +42,6 @@ router.get("/dashboard/summary", staffAccess, async (_req, res) => {
             gte: now,
             lte: upcomingThreshold,
           },
-        },
-      }),
-      prisma.maintenanceAlert.count({ where: { resolvedAt: null } }),
-      prisma.maintenanceAlert.findMany({
-        where: { resolvedAt: null },
-        orderBy: { triggeredAt: "desc" },
-        take: 5,
-        select: {
-          id: true,
-          message: true,
-          triggeredAt: true,
-          type: true,
         },
       }),
       prisma.asset.findMany({
@@ -144,13 +130,6 @@ router.get("/dashboard/summary", staffAccess, async (_req, res) => {
       activeAssets,
       openWorkOrders,
       maintenanceDueSoon,
-      alertsOpen,
-      alerts: recentAlerts.map((alert) => ({
-        id: alert.id.toString(),
-        message: alert.message,
-        triggeredAt: alert.triggeredAt,
-        type: alert.type,
-      })),
       financials: {
         acquisitionValue,
         bookValue,

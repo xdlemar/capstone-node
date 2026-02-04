@@ -37,13 +37,6 @@ function toDate(value, field, { optional = true } = {}) {
   return dt;
 }
 
-async function resolveAlertsForSchedule(scheduleId) {
-  await prisma.maintenanceAlert.updateMany({
-    where: { scheduleId, resolvedAt: null },
-    data: { resolvedAt: new Date() },
-  });
-}
-
 // CREATE
 router.post("/", async (req, res, next) => {
   try {
@@ -119,10 +112,6 @@ router.put("/:id", async (req, res, next) => {
       },
     });
 
-    if (!nextDue || nextDue > new Date()) {
-      await resolveAlertsForSchedule(id);
-    }
-
     res.json(row);
   } catch (e) {
     if (e?.status === 400) return res.status(400).json({ error: e.message });
@@ -135,7 +124,6 @@ router.delete("/:id", async (req, res, next) => {
   try {
     const id = toBigInt(req.params.id, "id");
     await prisma.maintenanceSchedule.delete({ where: { id } });
-    await resolveAlertsForSchedule(id);
     res.status(204).end();
   } catch (e) {
     if (e?.status === 400) return res.status(400).json({ error: e.message });
