@@ -26,6 +26,7 @@ model Item {
   batches    Batch[]
   movements  StockMove[]
   thresholds Threshold[]
+  DisposalRequest DisposalRequest[]
 
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -55,6 +56,7 @@ model Location {
   updatedAt    DateTime       @updatedAt
   Threshold    Threshold[]
   CountSession CountSession[]
+  DisposalRequest DisposalRequest[]
 }
 
 /**
@@ -80,6 +82,7 @@ model Batch {
   updatedAt  DateTime     @updatedAt
   StockMove  StockMove[]
   IssueAlloc IssueAlloc[]
+  DisposalRequest DisposalRequest[]
 
   // one batch row per (item, lot, expiry)
   @@unique([itemId, lotNo, expiryDate])
