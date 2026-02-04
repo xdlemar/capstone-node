@@ -154,7 +154,7 @@ export default function DeliveriesPage() {
               <SummaryTile
                 label="Open alerts"
                 value={summary.alertsOpen}
-                icon={<ShieldAlert className="h-5 w-5" />}
+                icon={<AlertCircle className="h-5 w-5" />}
                 tone={summary.alertsOpen ? "destructive" : "neutral"}
               />
             </div>
