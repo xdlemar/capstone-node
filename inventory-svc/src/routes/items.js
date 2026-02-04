@@ -11,11 +11,23 @@ r.post("/", async (req, res) => {
   try {
     const { sku, name, unit, minQty, strength, type, genericName, brand } = req.body;
 
-    if (!sku || !name || !unit) {
-      return res.status(400).json({ error: "sku, name, unit are required" });
+    if (!sku || !unit) {
+      return res.status(400).json({ error: "sku and unit are required" });
     }
 
     const normalizedType = String(type || "supply").trim().toLowerCase();
+    const normalizedGeneric = typeof genericName === "string" ? genericName.trim() : "";
+    const normalizedName = typeof name === "string" ? name.trim() : "";
+
+    if (normalizedType === "medicine") {
+      if (!normalizedGeneric) {
+        return res.status(400).json({ error: "genericName is required for medicine items" });
+      }
+    } else if (!normalizedName) {
+      return res.status(400).json({ error: "name is required for non-medicine items" });
+    }
+
+    const finalName = normalizedType === "medicine" ? normalizedGeneric : normalizedName;
 
     // check if exists to pick a proper status code
     const existing = await prisma.item.findUnique({ where: { sku } });
@@ -23,21 +35,21 @@ r.post("/", async (req, res) => {
     const item = await prisma.item.upsert({
       where: { sku },
       update: {
-        name,
+        name: finalName,
         unit,
         minQty,
         strength: strength ?? null,
-        genericName: genericName ?? null,
+        genericName: normalizedGeneric || null,
         brand: brand ?? null,
         type: normalizedType,
       },
       create: {
         sku,
-        name,
+        name: finalName,
         unit,
         minQty,
         strength: strength ?? null,
-        genericName: genericName ?? null,
+        genericName: normalizedGeneric || null,
         brand: brand ?? null,
         type: normalizedType,
       },

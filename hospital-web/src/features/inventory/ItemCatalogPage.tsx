@@ -21,18 +21,37 @@ import {
   type UpsertInventoryItemInput,
 } from "@/hooks/useInventoryItems";
 
-const itemSchema = z.object({
-  sku: z.string().min(2, "SKU is required"),
-  name: z.string().min(2, "Name is required"),
-  type: z.string().min(1, "Type is required"),
-  strength: z.string().optional(),
-  genericName: z.string().optional(),
-  brand: z.string().optional(),
-  unit: z.string().min(1, "Unit is required"),
-  minQty: z.coerce
-    .number({ invalid_type_error: "Min level must be a number" })
-    .min(0, "Min level cannot be negative"),
-});
+const itemSchema = z
+  .object({
+    sku: z.string().min(2, "SKU is required"),
+    name: z.string().optional(),
+    type: z.string().min(1, "Type is required"),
+    strength: z.string().optional(),
+    genericName: z.string().optional(),
+    brand: z.string().optional(),
+    unit: z.string().min(1, "Unit is required"),
+    minQty: z.coerce
+      .number({ invalid_type_error: "Min level must be a number" })
+      .min(0, "Min level cannot be negative"),
+  })
+  .superRefine((values, ctx) => {
+    const normalizedType = values.type?.trim().toLowerCase();
+    if (normalizedType === "medicine") {
+      if (!values.genericName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["genericName"],
+          message: "Generic name is required for medicine",
+        });
+      }
+    } else if (!values.name?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["name"],
+        message: "Name is required for non-medicine items",
+      });
+    }
+  });
 
 export type ItemFormValues = z.infer<typeof itemSchema>;
 
@@ -115,21 +134,30 @@ function ItemTableCard({ onEdit }: { onEdit: (item: InventoryItem) => void }) {
         ) : rows.length === 0 ? (
           <EmptyItemsState />
         ) : (
-          <ItemTable rows={rows} onEdit={onEdit} />
+          <ItemTable rows={rows} onEdit={onEdit} typeFilter={typeFilter} />
         )}
       </CardContent>
     </Card>
   );
 }
 
-function ItemTable({ rows, onEdit }: { rows: InventoryItem[]; onEdit: (item: InventoryItem) => void }) {
+function ItemTable({
+  rows,
+  onEdit,
+  typeFilter,
+}: {
+  rows: InventoryItem[];
+  onEdit: (item: InventoryItem) => void;
+  typeFilter: string;
+}) {
+  const nameLabel = typeFilter === "medicine" ? "Generic" : "Name";
   return (
     <div className="overflow-hidden rounded-xl border">
       <Table>
         <TableHeader className="bg-muted/60">
           <TableRow>
             <TableHead className="w-[20%]">SKU</TableHead>
-            <TableHead className="w-[25%]">Name</TableHead>
+            <TableHead className="w-[25%]">{nameLabel}</TableHead>
             <TableHead className="w-[12%]">Type</TableHead>
             <TableHead className="w-[14%]">Strength</TableHead>
             <TableHead className="w-[14%]">Generic</TableHead>
@@ -144,7 +172,7 @@ function ItemTable({ rows, onEdit }: { rows: InventoryItem[]; onEdit: (item: Inv
           {rows.map((item) => (
             <TableRow key={item.id}>
               <TableCell className="font-medium">{item.sku}</TableCell>
-              <TableCell>{item.name}</TableCell>
+              <TableCell>{item.type === "medicine" ? item.genericName || item.name : item.name}</TableCell>
               <TableCell className="capitalize">{item.type || "supply"}</TableCell>
               <TableCell>{item.strength || "-"}</TableCell>
               <TableCell>{item.genericName || "-"}</TableCell>
@@ -209,9 +237,12 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
 
   const handleSubmit = async (values: ItemFormValues) => {
     const normalizedType = values.type.trim().toLowerCase();
+    const normalizedGeneric = values.genericName?.trim() || "";
+    const normalizedName = values.name?.trim() || "";
+    const finalName = normalizedType === "medicine" ? normalizedGeneric : normalizedName;
     const payload: UpsertInventoryItemInput = {
       sku: values.sku.trim(),
-      name: values.name.trim(),
+      name: finalName,
       type: normalizedType || "supply",
       strength: normalizedType === "medicine" ? values.strength?.trim() || null : null,
       genericName: normalizedType === "medicine" ? values.genericName?.trim() || null : null,
@@ -298,21 +329,36 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Item name" autoComplete="off" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {watchedType !== "medicine" ? (
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Item name" autoComplete="off" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
             {watchedType === "medicine" ? (
               <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="genericName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Generic name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Amoxicillin" autoComplete="off" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="strength"
@@ -327,19 +373,6 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
                   )}
                 />
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="genericName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Generic name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. Amoxicillin" autoComplete="off" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                   <FormField
                     control={form.control}
                     name="brand"
