@@ -3,6 +3,7 @@ const router = express.Router();
 const prisma = require("../prisma.js");
 const { fetchInventoryItems } = require("../inventoryClient");
 const { fetchPoDeliveryStatuses } = require("../pltClient");
+const { getSignedUrl } = require("../dtrsClient");
 
 function toBigInt(value, field) {
   if (value === undefined || value === null || value === "") {
@@ -225,6 +226,108 @@ router.patch("/pos/:id/ack", async (req, res) => {
   } catch (err) {
     if (err?.status === 400) return res.status(400).json({ error: err.message });
     console.error("[vendor portal] PATCH /pos/:id/ack", err);
+    res.status(500).json({ error: "Internal error" });
+  }
+});
+
+router.get("/pos/:id/damages", async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const vendorIds = await getVendorIdsForUser(userId);
+    if (!vendorIds.length) return res.status(403).json({ error: "Vendor access not configured" });
+
+    const poId = toBigInt(req.params.id, "id");
+    const po = await prisma.pO.findFirst({
+      where: { id: poId, vendorId: { in: vendorIds } },
+      include: {
+        receipts: {
+          include: {
+            lines: {
+              where: { qtyDamaged: { gt: 0 } },
+              include: { damagePhotos: true },
+            },
+          },
+          orderBy: { receivedAt: "desc" },
+        },
+      },
+    });
+
+    if (!po) return res.status(404).json({ error: "PO not found" });
+
+    let itemMap = new Map();
+    try {
+      const items = await fetchInventoryItems();
+      itemMap = new Map(items.map((item) => [String(item.id), item]));
+    } catch (err) {
+      console.error("[vendor portal] inventory lookup failed for damages", err);
+      itemMap = new Map();
+    }
+
+    const receipts = [];
+    for (const receipt of po.receipts) {
+      if (!receipt.lines.length) continue;
+      const lines = [];
+      for (const line of receipt.lines) {
+        const item = itemMap.get(line.itemId.toString());
+        const photos = [];
+        for (const photo of line.damagePhotos) {
+          try {
+            const signed = await getSignedUrl(photo.storageKey);
+            photos.push({
+              id: photo.id.toString(),
+              storageKey: photo.storageKey,
+              url: signed?.url ?? null,
+              mimeType: photo.mimeType,
+              size: photo.size,
+              checksum: photo.checksum,
+              createdAt: photo.createdAt,
+            });
+          } catch (err) {
+            console.warn("[vendor portal] signed url failed", err.message);
+            photos.push({
+              id: photo.id.toString(),
+              storageKey: photo.storageKey,
+              url: null,
+              mimeType: photo.mimeType,
+              size: photo.size,
+              checksum: photo.checksum,
+              createdAt: photo.createdAt,
+            });
+          }
+        }
+
+        lines.push({
+          id: line.id.toString(),
+          itemId: line.itemId.toString(),
+          itemName: item?.name ?? null,
+          itemSku: item?.sku ?? null,
+          qtyReceived: line.qty,
+          qtyDamaged: line.qtyDamaged,
+          damageReason: line.damageReason ?? null,
+          damageNotes: line.damageNotes ?? null,
+          photos,
+        });
+      }
+
+      receipts.push({
+        id: receipt.id.toString(),
+        receivedAt: receipt.receivedAt,
+        drNo: receipt.drNo ?? null,
+        invoiceNo: receipt.invoiceNo ?? null,
+        lines,
+      });
+    }
+
+    res.json({
+      poId: po.id.toString(),
+      poNo: po.poNo,
+      receipts,
+    });
+  } catch (err) {
+    if (err?.status === 400) return res.status(400).json({ error: err.message });
+    console.error("[vendor portal] GET /pos/:id/damages", err);
     res.status(500).json({ error: "Internal error" });
   }
 });

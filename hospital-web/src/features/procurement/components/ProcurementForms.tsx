@@ -40,6 +40,19 @@ const receiptLineSchema = z.object({
   qty: z.coerce.number({ invalid_type_error: "Enter quantity" }).positive("Quantity must be greater than zero"),
   lotNo: z.string().optional(),
   expiryDate: z.string().optional(),
+  damagedQty: z.coerce.number({ invalid_type_error: "Enter quantity" }).min(0, "Damage qty cannot be negative"),
+  damageReason: z.string().optional(),
+  damageNotes: z.string().optional(),
+  damagePhotos: z
+    .array(
+      z.object({
+        storageKey: z.string(),
+        mimeType: z.string().optional(),
+        size: z.number().optional(),
+        checksum: z.string().optional(),
+      })
+    )
+    .optional(),
 });
 
 const receiptSchema = z.object({
@@ -320,13 +333,27 @@ export function ReceiptCard({ className }: { className?: string }) {
         invoiceNo: values.invoiceNo || undefined,
       };
 
-      const linePayload = (values.lines || []).map((line) => ({
+      const linePayload = (values.lines || []).map((line, idx) => {
+        const qty = Number(line.qty || 0);
+        const damagedQty = Number(line.damagedQty || 0);
+        if (damagedQty > qty) {
+          throw new Error(`Line ${idx + 1}: damaged qty cannot exceed received qty.`);
+        }
+        if (damagedQty > 0 && !line.damageReason?.trim()) {
+          throw new Error(`Line ${idx + 1}: damage reason is required.`);
+        }
+        return {
         itemId: line.itemId,
-        qty: line.qty,
+        qty,
         toLocId: values.toLocId,
         lotNo: line.lotNo || undefined,
         expiryDate: line.expiryDate || undefined,
-      }));
+        damagedQty: damagedQty || undefined,
+        damageReason: line.damageReason || undefined,
+        damageNotes: line.damageNotes || undefined,
+        damagePhotos: line.damagePhotos && line.damagePhotos.length ? line.damagePhotos : undefined,
+      };
+      });
 
       if (linePayload.length) payload.lines = linePayload;
 
@@ -387,6 +414,10 @@ export function ReceiptCard({ className }: { className?: string }) {
       qty: line.qty,
       lotNo: "",
       expiryDate: "",
+      damagedQty: 0,
+      damageReason: "",
+      damageNotes: "",
+      damagePhotos: [],
     }));
     replaceReceiptLines(lines as any);
 
@@ -422,6 +453,10 @@ export function ReceiptCard({ className }: { className?: string }) {
         qty: vendorLine?.qty ?? line.qty,
         lotNo: vendorLine?.lotNo ?? "",
         expiryDate: vendorLine?.expiryDate ? vendorLine.expiryDate.slice(0, 10) : "",
+        damagedQty: 0,
+        damageReason: "",
+        damageNotes: "",
+        damagePhotos: [],
       };
     });
     replaceReceiptLines(lines as any);
@@ -602,10 +637,10 @@ export function ReceiptCard({ className }: { className?: string }) {
                         <TableHead className="w-32">Expiry date</TableHead>
                       </TableRow>
                     </TableHeader>
-                    <TableBody>
-                      {receiptLineFields.map((field, index) => (
-                        <TableRow key={field.id}>
-                          <TableCell>{renderLineLabel({ itemId: field.itemId, qty: field.qty, unit: "" })}</TableCell>
+                  <TableBody>
+                    {receiptLineFields.map((field, index) => (
+                      <TableRow key={field.id}>
+                        <TableCell>{renderLineLabel({ itemId: field.itemId, qty: field.qty, unit: "" })}</TableCell>
                           <TableCell className="text-right">
                             <FormField
                               control={form.control}
@@ -635,26 +670,132 @@ export function ReceiptCard({ className }: { className?: string }) {
                               )}
                             />
                           </TableCell>
-                          <TableCell>
-                            <FormField
-                              control={form.control}
-                              name={`lines.${index}.expiryDate`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input type="date" {...field} />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                        <TableCell>
+                          <FormField
+                            control={form.control}
+                            name={`lines.${index}.expiryDate`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Input type="date" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <div className="mt-4 space-y-4">
+                  <h4 className="text-sm font-semibold">Damage feedback (optional)</h4>
+                  {receiptLineFields.map((field, index) => (
+                    <div key={`${field.id}-damage`} className="rounded-md border border-border/60 p-3 space-y-3">
+                      <div className="text-sm font-medium">
+                        {renderLineLabel({ itemId: field.itemId, qty: field.qty, unit: "" })}
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-[140px_1fr]">
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.damagedQty`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Damaged qty</FormLabel>
+                              <FormControl>
+                                <Input type="number" min="0" step="1" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`lines.${index}.damageReason`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Damage reason</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Packaging broken, leaking, etc." {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <FormField
+                        control={form.control}
+                        name={`lines.${index}.damageNotes`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Notes</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Optional details" {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <div className="space-y-2">
+                        <Label>Photos (visible to vendor)</Label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={async (event) => {
+                            const file = event.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const formData = new FormData();
+                              formData.append("file", file);
+                              const { data } = await api.post("/dtrs/uploads/s3", formData, {
+                                headers: { "Content-Type": "multipart/form-data" },
+                              });
+                              if (!data?.storageKey) throw new Error("Upload failed");
+                              const current = form.getValues(`lines.${index}.damagePhotos`) || [];
+                              form.setValue(`lines.${index}.damagePhotos`, [
+                                ...current,
+                                {
+                                  storageKey: data.storageKey,
+                                  mimeType: data.mimeType || undefined,
+                                  size: data.size || undefined,
+                                  checksum: data.checksum || undefined,
+                                },
+                              ]);
+                              toast({ title: "Photo uploaded", description: "Damage photo attached." });
+                            } catch (err: any) {
+                              const message = err?.response?.data?.error || err.message || "Upload failed";
+                              toast({ title: "Upload failed", description: message, variant: "destructive" });
+                            } finally {
+                              event.target.value = "";
+                            }
+                          }}
+                        />
+                        {form.watch(`lines.${index}.damagePhotos`)?.length ? (
+                          <div className="space-y-1 text-xs text-muted-foreground">
+                            {form.watch(`lines.${index}.damagePhotos`)?.map((photo: any, photoIdx: number) => (
+                              <div key={`${field.id}-photo-${photoIdx}`} className="flex items-center gap-2">
+                                <span className="truncate">{photo.storageKey}</span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    const current = form.getValues(`lines.${index}.damagePhotos`) || [];
+                                    const next = current.filter((_: any, idx: number) => idx !== photoIdx);
+                                    form.setValue(`lines.${index}.damagePhotos`, next);
+                                  }}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ) : null}
+              </div>
+            ) : null}
 
               <CardFooter className="px-0 pt-4">
                 <Button type="submit" disabled={form.formState.isSubmitting}>

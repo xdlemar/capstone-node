@@ -153,6 +153,48 @@ async function createReceiptDocuments({ po, receipt }) {
   return result;
 }
 
+async function createDamageDocument({ po, receipt, damagedLines }) {
+  if (!receipt || !damagedLines.length) {
+    return false;
+  }
+
+  const vendorName = po?.vendor?.name || "Unknown vendor";
+  const vendorLabel = vendorName !== "Unknown vendor" ? vendorName : null;
+  const linePreview = damagedLines
+    .map((line, index) => {
+      const sku = line.itemSku ? ` (${line.itemSku})` : "";
+      const reason = line.damageReason ? ` | Reason: ${line.damageReason}` : "";
+      const notes = line.damageNotes ? ` | Notes: ${line.damageNotes}` : "";
+      return `${index + 1}. ${line.itemName || `Item #${line.itemId}`}${sku} - damaged ${line.qtyDamaged}${reason}${notes}`;
+    })
+    .join("\n");
+
+  const baseNotes = [
+    "Auto-recorded from Receiving (Damaged on arrival).",
+    `PO: ${po.poNo}`,
+    `Vendor: ${vendorName}`,
+    `Receipt ID: ${receipt.id.toString()}`,
+    `Received at: ${receipt.receivedAt.toISOString()}`,
+    `Damaged lines: ${damagedLines.length}`,
+    linePreview ? `Details:\n${linePreview}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  await createDocument({
+    module: "PROCUREMENT",
+    poId: po.id.toString(),
+    receiptId: receipt.id.toString(),
+    title: vendorLabel
+      ? `Damage report - ${vendorLabel} (PO ${po.poNo})`
+      : `Damage report - PO ${po.poNo}`,
+    notes: baseNotes,
+    tags: ["DAMAGED"],
+  });
+
+  return true;
+}
+
 // POST /receipts
 router.post("/receipts", staffAccess, async (req, res) => {
   try {
@@ -181,12 +223,47 @@ router.post("/receipts", staffAccess, async (req, res) => {
             });
           }
           const lotNo = typeof l.lotNo === "string" ? l.lotNo.trim() : "";
+          const damagedQty = l.damagedQty !== undefined ? Number(l.damagedQty) : 0;
+          if (!Number.isFinite(damagedQty) || damagedQty < 0) {
+            throw Object.assign(new Error(`lines[${lineNo}].damagedQty must be >= 0`), {
+              status: 400,
+              code: "VALIDATION_ERROR",
+            });
+          }
+          if (damagedQty > qtyNumber) {
+            throw Object.assign(new Error(`lines[${lineNo}].damagedQty cannot exceed qty`), {
+              status: 400,
+              code: "VALIDATION_ERROR",
+            });
+          }
+          const damageReason =
+            typeof l.damageReason === "string" && l.damageReason.trim().length ? l.damageReason.trim() : null;
+          const damageNotes =
+            typeof l.damageNotes === "string" && l.damageNotes.trim().length ? l.damageNotes.trim() : null;
+          if (damagedQty > 0 && !damageReason) {
+            throw Object.assign(new Error(`lines[${lineNo}].damageReason is required when damagedQty > 0`), {
+              status: 400,
+              code: "VALIDATION_ERROR",
+            });
+          }
+          const damagePhotos = Array.isArray(l.damagePhotos) ? l.damagePhotos : [];
           return {
             itemId,
             toLocId,
             qty: qtyNumber,
             lotNo: lotNo || null,
             expiryDate: toDate(l.expiryDate, `lines[${lineNo}].expiryDate`),
+            qtyDamaged: damagedQty,
+            damageReason,
+            damageNotes,
+            damagePhotos: damagePhotos
+              .map((photo) => ({
+                storageKey: typeof photo?.storageKey === "string" ? photo.storageKey.trim() : "",
+                mimeType: typeof photo?.mimeType === "string" ? photo.mimeType.trim() : null,
+                size: typeof photo?.size === "number" ? photo.size : null,
+                checksum: typeof photo?.checksum === "string" ? photo.checksum.trim() : null,
+              }))
+              .filter((photo) => photo.storageKey),
           };
         })
       : (() => {
@@ -202,6 +279,10 @@ router.post("/receipts", staffAccess, async (req, res) => {
             qty: Number(line.qty),
             lotNo: null,
             expiryDate: null,
+            qtyDamaged: 0,
+            damageReason: null,
+            damageNotes: null,
+            damagePhotos: [],
           }));
         })();
 
@@ -235,17 +316,34 @@ router.post("/receipts", staffAccess, async (req, res) => {
             qty: line.qty,
             lotNo: line.lotNo,
             expiryDate: line.expiryDate,
+            qtyDamaged: line.qtyDamaged,
+            damageReason: line.damageReason,
+            damageNotes: line.damageNotes,
+            damagePhotos: line.damagePhotos.length
+              ? {
+                  create: line.damagePhotos.map((photo) => ({
+                    storageKey: photo.storageKey,
+                    mimeType: photo.mimeType,
+                    size: photo.size,
+                    checksum: photo.checksum,
+                  })),
+                }
+              : undefined,
           })),
         },
       },
-      include: { lines: true },
+      include: { lines: { include: { damagePhotos: true } } },
     });
 
     try {
       for (const line of receipt.lines) {
+        const qtyGood = Number(line.qty) - Number(line.qtyDamaged || 0);
+        if (qtyGood <= 0) {
+          continue;
+        }
         await postStockMove({
           itemId: line.itemId.toString(),
-          qty: line.qty.toString(),
+          qty: qtyGood.toString(),
           reason: "RECEIPT",
           refType: "RECEIPT",
           refId: receipt.id.toString(),
@@ -263,13 +361,38 @@ router.post("/receipts", staffAccess, async (req, res) => {
       });
     }
 
-    let dtrs = { status: "skipped", drCreated: false, invoiceCreated: false };
+    let dtrs = { status: "skipped", drCreated: false, invoiceCreated: false, damageCreated: false };
     try {
       const created = await createReceiptDocuments({ po, receipt });
-      dtrs = { status: "ok", ...created };
+      let itemMap = new Map();
+      try {
+        const items = await fetchInventoryItems();
+        itemMap = new Map(items.map((item) => [String(item.id), item]));
+      } catch (err) {
+        console.warn("[/receipts] inventory lookup failed for damage report", err.message);
+        itemMap = new Map();
+      }
+
+      const damagedLines = receipt.lines
+        .filter((line) => Number(line.qtyDamaged || 0) > 0)
+        .map((line) => {
+          const itemId = line.itemId.toString();
+          const item = itemMap.get(itemId);
+          return {
+            itemId,
+            itemName: item?.name ?? null,
+            itemSku: item?.sku ?? null,
+            qtyDamaged: Number(line.qtyDamaged || 0),
+            damageReason: line.damageReason || null,
+            damageNotes: line.damageNotes || null,
+          };
+        });
+
+      const damageCreated = await createDamageDocument({ po, receipt, damagedLines });
+      dtrs = { status: "ok", damageCreated, ...created };
     } catch (docErr) {
       console.warn("[/receipts] dtrs sync failed", docErr.message);
-      dtrs = { status: "failed", drCreated: false, invoiceCreated: false };
+      dtrs = { status: "failed", drCreated: false, invoiceCreated: false, damageCreated: false };
     }
 
     res.status(201).json({ receipt, dtrs });

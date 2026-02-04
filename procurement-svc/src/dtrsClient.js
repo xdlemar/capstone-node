@@ -53,4 +53,31 @@ async function createDocument(payload) {
   return data;
 }
 
-module.exports = { createDocument };
+async function getSignedUrl(storageKey) {
+  const url = new URL(`${BASE}/uploads/s3-url`);
+  url.searchParams.set("storageKey", storageKey);
+
+  const resp = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${getServiceToken()}`,
+    },
+  });
+
+  const text = await resp.text().catch(() => "");
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+  }
+
+  if (!resp.ok) {
+    throw new Error(`[dtrsClient] ${resp.status} ${text}`);
+  }
+
+  return data;
+}
+
+module.exports = { createDocument, getSignedUrl };

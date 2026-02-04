@@ -179,8 +179,24 @@ model ReceiptLine {
   qty        Int
   lotNo      String?
   expiryDate DateTime?
+  qtyDamaged Int       @default(0)
+  damageReason String?
+  damageNotes String?
 
   Receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  damagePhotos ReceiptLineDamagePhoto[]
+}
+
+model ReceiptLineDamagePhoto {
+  id            BigInt   @id @default(autoincrement())
+  receiptLineId BigInt
+  storageKey    String
+  mimeType      String?
+  size          Int?
+  checksum      String?
+  createdAt     DateTime @default(now())
+
+  ReceiptLine ReceiptLine @relation(fields: [receiptLineId], references: [id], onDelete: Cascade)
 }
 
 model VendorReceipt {

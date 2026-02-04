@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 import { useVendorOrder } from "@/hooks/useVendorOrders";
+import { useVendorDamages } from "@/hooks/useVendorDamages";
 import { useVendorShipments } from "@/hooks/useVendorShipments";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ export default function VendorOrderDetailPage() {
   const qc = useQueryClient();
   const orderQuery = useVendorOrder(id);
   const shipmentsQuery = useVendorShipments({ poId: id });
+  const damagesQuery = useVendorDamages(id);
   const isApproved = !!orderQuery.data?.vendorAcknowledgedAt;
   const hasShipment = (shipmentsQuery.data?.length ?? 0) > 0;
   const [scheduleOpen, setScheduleOpen] = useState(false);
@@ -320,6 +322,78 @@ export default function VendorOrderDetailPage() {
             </Table>
           ) : (
             <div className="text-sm text-muted-foreground">No line items available.</div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Damage feedback</CardTitle>
+          <CardDescription>Reported damaged items and supporting photos.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {damagesQuery.isLoading ? (
+            <div className="text-sm text-muted-foreground">Loading damage feedback...</div>
+          ) : damagesQuery.data?.receipts?.length ? (
+            <div className="space-y-6">
+              {damagesQuery.data.receipts.map((receipt) => (
+                <div key={receipt.id} className="rounded-lg border border-border/60 p-4 space-y-3">
+                  <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                    <span>Receipt #{receipt.id}</span>
+                    <span>Received: {dateFormatter.format(new Date(receipt.receivedAt))}</span>
+                    {receipt.drNo ? <span>DR: {receipt.drNo}</span> : null}
+                    {receipt.invoiceNo ? <span>Invoice: {receipt.invoiceNo}</span> : null}
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Item</TableHead>
+                        <TableHead className="w-24 text-right">Received</TableHead>
+                        <TableHead className="w-24 text-right">Damaged</TableHead>
+                        <TableHead>Reason</TableHead>
+                        <TableHead>Notes</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {receipt.lines.map((line) => (
+                        <TableRow key={line.id}>
+                          <TableCell className="font-medium">
+                            {line.itemName ?? `Item #${line.itemId}`}
+                            {line.itemSku ? (
+                              <span className="block text-xs text-muted-foreground">{line.itemSku}</span>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="text-right">{line.qtyReceived}</TableCell>
+                          <TableCell className="text-right">{line.qtyDamaged}</TableCell>
+                          <TableCell>{line.damageReason || "-"}</TableCell>
+                          <TableCell>{line.damageNotes || "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {receipt.lines.some((line) => line.photos?.length) ? (
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {receipt.lines.flatMap((line) =>
+                        (line.photos || []).map((photo) => (
+                          <div key={photo.id} className="rounded-md border border-border/60 p-2">
+                            {photo.url ? (
+                              <img src={photo.url} alt="Damage evidence" className="w-full rounded-md" />
+                            ) : (
+                              <div className="text-xs text-muted-foreground">Photo unavailable</div>
+                            )}
+                            <div className="mt-2 text-xs text-muted-foreground break-all">
+                              {photo.storageKey}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No damage feedback recorded for this order.</div>
           )}
         </CardContent>
       </Card>
