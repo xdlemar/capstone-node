@@ -69,6 +69,10 @@ model Batch {
   lotNo      String?
   expiryDate DateTime?
   qtyOnHand  Decimal   @default(0)
+  status     BatchStatus @default(ACTIVE)
+  expiredAt  DateTime?
+  quarantinedAt DateTime?
+  disposedAt DateTime?
 
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
@@ -81,6 +85,48 @@ model Batch {
   @@unique([itemId, lotNo, expiryDate])
   @@index([itemId, expiryDate])
   @@index([itemId, lotNo])
+}
+
+enum BatchStatus {
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  QUARANTINED
+  DISPOSED
+}
+
+enum DisposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model DisposalRequest {
+  id             BigInt         @id @default(autoincrement())
+  batchId        BigInt
+  itemId         BigInt
+  qty            Decimal
+  fromLocId      BigInt
+  status         DisposalStatus @default(PENDING)
+  reason         String?
+  requestedBy    String?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  rejectionReason String?
+  disposedAt     DateTime?
+  method         String?
+  witness        String?
+  referenceNo    String?
+
+  batch   Batch    @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  item    Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  fromLoc Location @relation(fields: [fromLocId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([batchId])
 }
 
 /**

@@ -20,6 +20,8 @@ import TransferApprovalsPage from "@/features/inventory/TransferApprovalsPage";
 import TransferHistoryPage from "@/features/inventory/TransferHistoryPage";
 import StorageAreasPage from "@/features/inventory/StorageAreasPage";
 import ItemCatalogPage from "@/features/inventory/ItemCatalogPage";
+import DisposalApprovalsPage from "@/features/inventory/DisposalApprovalsPage";
+import DisposalLogPage from "@/features/inventory/DisposalLogPage";
 import AlmsOverview from "@/features/alms/AlmsOverview";
 import AssetsPage from "@/features/alms/AssetsPage";
 import WorkOrdersPage from "@/features/alms/WorkOrdersPage";
@@ -127,6 +129,22 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to="stock-levels" replace /> },
               { path: "stock-levels", element: <InventoryOverview /> },
               { path: "stock-control", element: <StockControlPage /> },
+              {
+                path: "disposal-approvals",
+                element: (
+                  <RoleGate allowed={MANAGER_SET}>
+                    <DisposalApprovalsPage />
+                  </RoleGate>
+                ),
+              },
+              {
+                path: "disposal-log",
+                element: (
+                  <RoleGate allowed={STAFF_SET}>
+                    <DisposalLogPage />
+                  </RoleGate>
+                ),
+              },
               {
                 path: "transfer-approvals",
                 element: (

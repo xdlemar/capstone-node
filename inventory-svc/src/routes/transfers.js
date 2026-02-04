@@ -87,7 +87,10 @@ async function fulfillTransfer(client, transfer) {
     if (remaining <= 0) continue;
 
     const batches = await client.batch.findMany({
-      where: { itemId: ln.itemId },
+      where: {
+        itemId: ln.itemId,
+        status: { notIn: ["EXPIRED", "QUARANTINED", "DISPOSED"] },
+      },
       orderBy: [{ expiryDate: "asc" }, { id: "asc" }],
       select: { id: true, qtyOnHand: true },
     });

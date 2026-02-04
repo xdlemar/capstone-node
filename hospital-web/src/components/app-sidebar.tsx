@@ -47,6 +47,8 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     items: [
       { title: "Stock levels", url: "/inventory/stock-levels", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Issue & transfer", url: "/inventory/stock-control", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Disposal approvals", url: "/inventory/disposal-approvals", roles: ["MANAGER", "ADMIN"] },
+      { title: "Disposal log", url: "/inventory/disposal-log", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Transfer approvals", url: "/inventory/transfer-approvals", roles: ["MANAGER", "ADMIN"] },
       { title: "Transfer history", url: "/inventory/transfer-history", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Item catalog", url: "/inventory/item-catalog", roles: ["MANAGER", "ADMIN"] },

@@ -90,7 +90,10 @@ r.post("/", async (req, res) => {
         if (remaining <= 0) continue;
 
         const batches = await p.batch.findMany({
-          where: { itemId: ln.itemId },
+          where: {
+            itemId: ln.itemId,
+            status: { notIn: ["EXPIRED", "QUARANTINED", "DISPOSED"] },
+          },
           orderBy: [{ expiryDate: "asc" }, { id: "asc" }],
           select: { id: true, qtyOnHand: true },
         });
