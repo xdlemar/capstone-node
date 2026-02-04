@@ -202,6 +202,8 @@ model ReceiptLineDamagePhoto {
 model VendorReceipt {
   id        BigInt   @id @default(autoincrement())
   poId      BigInt   @unique
+  drNo      String?
+  invoiceNo String?
   createdBy String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

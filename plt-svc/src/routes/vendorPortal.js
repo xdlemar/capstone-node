@@ -195,6 +195,8 @@ router.post("/shipments", async (req, res, next) => {
     const departedAt = toDate(req.body?.departedAt, "departedAt");
     const status = normalizeStatus(req.body?.status) || "DISPATCHED";
     const receiptLines = normalizeReceiptLines(req.body?.receiptLines);
+    const receiptDrNo = req.body?.receiptDrNo ? String(req.body.receiptDrNo).trim() : null;
+    const receiptInvoiceNo = req.body?.receiptInvoiceNo ? String(req.body.receiptInvoiceNo).trim() : null;
 
     const approval = await getPoApprovalById(poId);
     if (!approval) {
@@ -251,6 +253,8 @@ router.post("/shipments", async (req, res, next) => {
         poId: poId.toString(),
         vendorId: vendorId.toString(),
         createdBy: userId,
+        drNo: receiptDrNo || null,
+        invoiceNo: receiptInvoiceNo || null,
         lines: receiptLines,
       });
     } catch (err) {

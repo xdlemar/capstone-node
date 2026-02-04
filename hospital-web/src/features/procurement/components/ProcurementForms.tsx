@@ -312,7 +312,14 @@ export function ReceiptCard({ className }: { className?: string }) {
   const { map: itemMap, query: inventoryQuery } = useItemFormatter();
   const [hiddenPoNos, setHiddenPoNos] = useState<Set<string>>(() => new Set());
   const [vendorReceipt, setVendorReceipt] = useState<{
-    receipt: { id: string; createdAt: string; updatedAt: string; createdBy: string | null };
+    receipt: {
+      id: string;
+      createdAt: string;
+      updatedAt: string;
+      createdBy: string | null;
+      drNo: string | null;
+      invoiceNo: string | null;
+    };
     lines: Array<{ itemId: string; qty: number; lotNo: string; expiryDate: string }>;
   } | null>(null);
   const [vendorReceiptError, setVendorReceiptError] = useState<string | null>(null);
@@ -460,6 +467,12 @@ export function ReceiptCard({ className }: { className?: string }) {
       };
     });
     replaceReceiptLines(lines as any);
+    if (!form.getValues("drNo") && vendorReceipt.receipt.drNo) {
+      form.setValue("drNo", vendorReceipt.receipt.drNo);
+    }
+    if (!form.getValues("invoiceNo") && vendorReceipt.receipt.invoiceNo) {
+      form.setValue("invoiceNo", vendorReceipt.receipt.invoiceNo);
+    }
   }, [selectedPo?.poNo, vendorReceipt?.receipt?.id]);
 
   const watchedLines = form.watch("lines");
@@ -642,13 +655,13 @@ export function ReceiptCard({ className }: { className?: string }) {
                       <TableRow key={field.id}>
                         <TableCell>{renderLineLabel({ itemId: field.itemId, qty: field.qty, unit: "" })}</TableCell>
                           <TableCell className="text-right">
-                            <FormField
+                          <FormField
                               control={form.control}
                               name={`lines.${index}.qty`}
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input type="number" min="1" step="1" {...field} />
+                                    <Input type="number" min="1" step="1" readOnly className="bg-muted/50" {...field} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>

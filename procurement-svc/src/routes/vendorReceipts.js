@@ -32,6 +32,8 @@ router.get("/by-po/:poNo", staffAccess, async (req, res) => {
       receipt: {
         id: po.vendorReceipt.id.toString(),
         poId: po.vendorReceipt.poId.toString(),
+        drNo: po.vendorReceipt.drNo ?? null,
+        invoiceNo: po.vendorReceipt.invoiceNo ?? null,
         createdBy: po.vendorReceipt.createdBy ?? null,
         createdAt: po.vendorReceipt.createdAt,
         updatedAt: po.vendorReceipt.updatedAt,

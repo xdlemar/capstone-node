@@ -119,6 +119,8 @@ router.post("/vendor-receipts", async (req, res) => {
     const poId = toBigInt(req.body?.poId, "poId");
     const vendorId = req.body?.vendorId ? toBigInt(req.body.vendorId, "vendorId") : null;
     const createdBy = normalizeString(req.body?.createdBy);
+    const drNo = normalizeString(req.body?.drNo);
+    const invoiceNo = normalizeString(req.body?.invoiceNo);
     const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
 
     if (!lines.length) {
@@ -175,10 +177,14 @@ router.post("/vendor-receipts", async (req, res) => {
       create: {
         poId,
         createdBy,
+        drNo,
+        invoiceNo,
         lines: { create: normalizedLines },
       },
       update: {
         ...(createdBy ? { createdBy } : {}),
+        ...(drNo !== null ? { drNo } : {}),
+        ...(invoiceNo !== null ? { invoiceNo } : {}),
         lines: { deleteMany: {}, create: normalizedLines },
       },
       include: { lines: true },
@@ -188,6 +194,8 @@ router.post("/vendor-receipts", async (req, res) => {
       receipt: {
         id: receipt.id.toString(),
         poId: receipt.poId.toString(),
+        drNo: receipt.drNo ?? null,
+        invoiceNo: receipt.invoiceNo ?? null,
         createdBy: receipt.createdBy ?? null,
         createdAt: receipt.createdAt,
         updatedAt: receipt.updatedAt,

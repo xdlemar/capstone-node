@@ -89,8 +89,8 @@ async function getPoApprovalByNo(poNo) {
   return fetchJson(`/internal/po/by-no/${encodeURIComponent(poNo)}/approval`);
 }
 
-async function upsertVendorReceiptDraft({ poId, vendorId, createdBy, lines }) {
-  return postJson("/internal/vendor-receipts", { poId, vendorId, createdBy, lines });
+async function upsertVendorReceiptDraft({ poId, vendorId, createdBy, drNo, invoiceNo, lines }) {
+  return postJson("/internal/vendor-receipts", { poId, vendorId, createdBy, drNo, invoiceNo, lines });
 }
 
 module.exports = { getPoApprovalById, getPoApprovalByNo, upsertVendorReceiptDraft };

@@ -47,6 +47,8 @@ export default function VendorOrderDetailPage() {
   const [departedAt, setDepartedAt] = useState("");
   const [lastKnown, setLastKnown] = useState("");
   const [notes, setNotes] = useState("");
+  const [receiptDrNo, setReceiptDrNo] = useState("");
+  const [receiptInvoiceNo, setReceiptInvoiceNo] = useState("");
   const [lotSeed] = useState(() => Date.now());
   const [receiptLines, setReceiptLines] = useState<
     Array<{
@@ -66,6 +68,8 @@ export default function VendorOrderDetailPage() {
       setDepartedAt("");
       setLastKnown("");
       setNotes("");
+      setReceiptDrNo("");
+      setReceiptInvoiceNo("");
       setReceiptLines([]);
       setTrackingLoading(false);
       return;
@@ -99,6 +103,18 @@ export default function VendorOrderDetailPage() {
       cancelled = true;
     };
   }, [scheduleOpen, trackingNo, toast]);
+
+  useEffect(() => {
+    if (!scheduleOpen || !orderQuery.data) return;
+    const dateToken = lotDateFormatter.format(new Date()).replace(/-/g, "");
+    const poToken = orderQuery.data.poNo.replace(/\s+/g, "");
+    if (!receiptDrNo) {
+      setReceiptDrNo(`DR-${poToken}-${dateToken}-${lotSeed}`);
+    }
+    if (!receiptInvoiceNo) {
+      setReceiptInvoiceNo(`INV-${poToken}-${dateToken}-${lotSeed}`);
+    }
+  }, [scheduleOpen, orderQuery.data, receiptDrNo, receiptInvoiceNo, lotSeed]);
 
   useEffect(() => {
     if (!scheduleOpen || !orderQuery.data) return;
@@ -156,6 +172,8 @@ export default function VendorOrderDetailPage() {
         status: "DISPATCHED",
         receiptLines: normalizedReceiptLines,
       };
+      if (receiptDrNo.trim()) payload.receiptDrNo = receiptDrNo.trim();
+      if (receiptInvoiceNo.trim()) payload.receiptInvoiceNo = receiptInvoiceNo.trim();
       if (eta) payload.eta = new Date(eta).toISOString();
       if (departedAt) payload.departedAt = new Date(departedAt).toISOString();
       await api.post("/plt/vendor/shipments", payload);
@@ -467,6 +485,30 @@ export default function VendorOrderDetailPage() {
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder="Handling notes (optional)"
               />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground" htmlFor="vendor-drno">
+                  Delivery receipt no.
+                </label>
+                <Input
+                  id="vendor-drno"
+                  value={receiptDrNo}
+                  onChange={(event) => setReceiptDrNo(event.target.value)}
+                  placeholder="DR-123"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-foreground" htmlFor="vendor-invoiceno">
+                  Invoice no.
+                </label>
+                <Input
+                  id="vendor-invoiceno"
+                  value={receiptInvoiceNo}
+                  onChange={(event) => setReceiptInvoiceNo(event.target.value)}
+                  placeholder="INV-456"
+                />
+              </div>
             </div>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
               <h3 className="text-sm font-semibold">Receipt line items</h3>
