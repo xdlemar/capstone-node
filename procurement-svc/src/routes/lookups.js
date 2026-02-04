@@ -11,7 +11,7 @@ router.get("/procurement", staffAccess, async (req, res) => {
   try {
     const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
 
-    const [prs, vendors, pos] = await Promise.all([
+    const [prs, vendors, pos, vendorOrders] = await Promise.all([
       prisma.pR.findMany({
         orderBy: { createdAt: "desc" },
         take: 50,
@@ -56,6 +56,13 @@ router.get("/procurement", staffAccess, async (req, res) => {
           _count: { select: { receipts: true } },
         },
       }),
+      prisma.pO.findMany({
+        select: {
+          id: true,
+          vendorId: true,
+          lines: { select: { qty: true } },
+        },
+      }),
     ]);
 
     const mapPr = (status, { excludeWithPo = false } = {}) =>
@@ -80,7 +87,20 @@ router.get("/procurement", staffAccess, async (req, res) => {
     const submittedPrs = mapPr("SUBMITTED");
     const approvedPrs = mapPr("APPROVED", { excludeWithPo: true });
 
-    const vendorPayload = vendors.map((vendor) => ({
+    const vendorOrderStats = new Map();
+    vendorOrders.forEach((po) => {
+      if (!po.vendorId) return;
+      const vendorId = po.vendorId.toString();
+      const stat = vendorOrderStats.get(vendorId) || { orderCount: 0, totalQty: 0 };
+      stat.orderCount += 1;
+      const qty = po.lines.reduce((sum, line) => sum + Number(line.qty || 0), 0);
+      stat.totalQty += qty;
+      vendorOrderStats.set(vendorId, stat);
+    });
+
+    const vendorPayload = vendors.map((vendor) => {
+      const stats = vendorOrderStats.get(vendor.id.toString()) || { orderCount: 0, totalQty: 0 };
+      return ({
       id: vendor.id.toString(),
       name: vendor.name,
       email: vendor.email,
@@ -95,7 +115,10 @@ router.get("/procurement", staffAccess, async (req, res) => {
             lastEvaluatedAt: vendor.metrics.lastEvaluatedAt,
       }
         : null,
-    }));
+      orderCount: stats.orderCount,
+      totalQty: Number(stats.totalQty.toFixed(2)),
+    });
+    });
 
     let deliveryStatusMap = new Map();
     if (pos.length) {

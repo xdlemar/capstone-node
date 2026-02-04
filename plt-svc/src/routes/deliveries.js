@@ -1,5 +1,8 @@
 const router = require("express").Router();
 const { prisma } = require("../prisma");
+const { requireRole } = require("../auth");
+
+const managerAccess = requireRole("MANAGER", "ADMIN");
 const { getPoApprovalById, getPoApprovalByNo } = require("../procurementClient");
 
 const ALLOWED = {
@@ -77,8 +80,8 @@ async function resolveAlerts(deliveryId, type = null) {
   });
 }
 
-// Create delivery
-router.post("/", async (req, res, next) => {
+// Create delivery (manager/admin)
+router.post("/", managerAccess, async (req, res, next) => {
   try {
     const projectId = toBigInt(req.body.projectId, "projectId");
     const poId = toBigInt(req.body.poId, "poId", { optional: true });
@@ -106,7 +109,7 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-router.delete("/by-po", async (req, res, next) => {
+router.delete("/by-po", managerAccess, async (req, res, next) => {
   try {
     const poIdParam = req.query.poId ? toBigInt(req.query.poId, "poId", { optional: true }) : null;
     const poNoParam = req.query.poNo ? String(req.query.poNo).trim() : "";
@@ -138,7 +141,7 @@ router.delete("/by-po", async (req, res, next) => {
 });
 
 // Update status + append DeliveryUpdate
-router.patch("/:id/status", async (req, res, next) => {
+router.patch("/:id/status", managerAccess, async (req, res, next) => {
   try {
     const id = toBigInt(req.params.id, "id");
     const { status, message, place } = req.body || {};

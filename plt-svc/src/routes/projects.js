@@ -1,5 +1,8 @@
 const router = require("express").Router();
 const { prisma } = require("../prisma");
+const { requireRole } = require("../auth");
+
+const managerAccess = requireRole("MANAGER", "ADMIN");
 
 function coerceNumber(value) {
   if (value == null) return null;
@@ -77,7 +80,7 @@ router.get("/", async (req, res, next) => {
 });
 
 // Create project
-router.post("/", async (req, res, next) => {
+router.post("/", managerAccess, async (req, res, next) => {
   try {
     const { code, name, managerId, startsOn, endsOn, description, status, budget } = req.body || {};
     const project = await prisma.project.create({
@@ -99,7 +102,7 @@ router.post("/", async (req, res, next) => {
 });
 
 // Upsert planned material for a project
-router.post("/:id/materials", async (req, res, next) => {
+router.post("/:id/materials", managerAccess, async (req, res, next) => {
   try {
     const projectId = BigInt(req.params.id);
     const { itemId, qtyPlanned, unit, notes } = req.body;

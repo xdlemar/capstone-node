@@ -4,25 +4,23 @@ const prisma = require("../prisma");
 const { requireRole } = require("../auth");
 
 const managerAccess = requireRole("MANAGER", "ADMIN");
+const staffAccess = requireRole("STAFF", "MANAGER", "ADMIN");
 
-router.get("/insights", managerAccess, async (_req, res) => {
+router.get("/insights", staffAccess, async (_req, res) => {
   try {
-    const [vendorMetrics, poLines] = await Promise.all([
-      prisma.vendorMetric.findMany({
-        include: {
-          vendor: {
-            select: { id: true, name: true, email: true, phone: true },
-          },
+    const [pos, poLines] = await Promise.all([
+      prisma.pO.findMany({
+        select: {
+          id: true,
+          vendorId: true,
+          vendor: { select: { id: true, name: true, email: true, phone: true } },
+          orderedAt: true,
         },
-        orderBy: { totalSpend: "desc" },
-        take: 10,
       }),
       prisma.pOLine.findMany({
-        where: { price: { gt: 0 } },
         select: {
           itemId: true,
           qty: true,
-          price: true,
           PO: {
             select: {
               vendorId: true,
@@ -33,82 +31,64 @@ router.get("/insights", managerAccess, async (_req, res) => {
       }),
     ]);
 
-    const topVendorsBySpend = vendorMetrics.map((metric) => ({
-      vendorId: metric.vendorId.toString(),
-      vendorName: metric.vendor?.name || "Unknown",
-      contact: {
-        email: metric.vendor?.email || null,
-        phone: metric.vendor?.phone || null,
-      },
-      totalSpend: Number(metric.totalSpend || 0),
-      onTimePercentage: metric.onTimePercentage,
-      avgLeadTimeDays: metric.avgLeadTimeDays,
-      fulfillmentRate: metric.fulfillmentRate,
-      lastEvaluatedAt: metric.lastEvaluatedAt,
-    }));
-
-    const itemVendorStats = new Map();
-    const vendorTotals = new Map();
-
-    for (const line of poLines) {
-      if (!line.PO?.vendorId) continue;
-      const itemId = line.itemId.toString();
-      const vendorId = line.PO.vendorId.toString();
-      const vendorName = line.PO.vendor?.name || "Unknown";
-      const qty = Number(line.qty || 0);
-      const price = Number(line.price || 0);
-      if (!qty || !Number.isFinite(price)) continue;
-
-      const itemStat = itemVendorStats.get(itemId) || new Map();
-      const vendorStat = itemStat.get(vendorId) || { vendorId, vendorName, qty: 0, spend: 0 };
-      vendorStat.qty += qty;
-      vendorStat.spend += price * qty;
-      itemStat.set(vendorId, vendorStat);
-      itemVendorStats.set(itemId, itemStat);
-
-      const vendorTotal = vendorTotals.get(vendorId) || { vendorName, spend: 0 };
-      vendorTotal.spend += price * qty;
-      vendorTotals.set(vendorId, vendorTotal);
-    }
-
-    const priceLeaders = [];
-
-    for (const [itemId, vendorMap] of itemVendorStats.entries()) {
-      const vendors = Array.from(vendorMap.values()).filter((v) => v.qty > 0);
-      if (vendors.length === 0) continue;
-      const enriched = vendors.map((vendor) => ({
-        vendorId: vendor.vendorId,
-        vendorName: vendor.vendorName,
-        avgPrice: vendor.spend / vendor.qty,
-      }));
-      enriched.sort((a, b) => a.avgPrice - b.avgPrice);
-      const best = enriched[0];
-      const average = enriched.reduce((sum, v) => sum + v.avgPrice, 0) / enriched.length;
-      const delta = average > 0 ? ((average - best.avgPrice) / average) * 100 : 0;
-
-      priceLeaders.push({
-        itemId,
-        bestVendor: best,
-        averagePrice: average,
-        savingsPercent: Number(delta.toFixed(2)),
-      });
-    }
-
-    priceLeaders.sort((a, b) => b.savingsPercent - a.savingsPercent);
-
-    const vendorSpendShare = Array.from(vendorTotals.entries())
-      .map(([vendorId, value]) => ({
+    const vendorStats = new Map();
+    for (const po of pos) {
+      if (!po.vendorId) continue;
+      const vendorId = po.vendorId.toString();
+      const vendorName = po.vendor?.name || "Unknown";
+      const stat = vendorStats.get(vendorId) || {
         vendorId,
-        vendorName: value.vendorName,
-        totalSpend: Number(value.spend.toFixed(2)),
-      }))
-      .sort((a, b) => b.totalSpend - a.totalSpend)
+        vendorName,
+        contact: {
+          email: po.vendor?.email || null,
+          phone: po.vendor?.phone || null,
+        },
+        orderCount: 0,
+        totalQty: 0,
+      };
+      stat.orderCount += 1;
+      vendorStats.set(vendorId, stat);
+    }
+
+    const itemTotals = new Map();
+    for (const line of poLines) {
+      const qty = Number(line.qty || 0);
+      if (!qty) continue;
+      const itemId = line.itemId.toString();
+      const item = itemTotals.get(itemId) || { itemId, totalQty: 0, orderLines: 0 };
+      item.totalQty += qty;
+      item.orderLines += 1;
+      itemTotals.set(itemId, item);
+
+      if (line.PO?.vendorId) {
+        const vendorId = line.PO.vendorId.toString();
+        const vendorName = line.PO.vendor?.name || "Unknown";
+        const stat = vendorStats.get(vendorId) || {
+          vendorId,
+          vendorName,
+          contact: {
+            email: line.PO.vendor?.email || null,
+            phone: line.PO.vendor?.phone || null,
+          },
+          orderCount: 0,
+          totalQty: 0,
+        };
+        stat.totalQty += qty;
+        vendorStats.set(vendorId, stat);
+      }
+    }
+
+    const topVendorsByOrders = Array.from(vendorStats.values())
+      .sort((a, b) => b.orderCount - a.orderCount || b.totalQty - a.totalQty)
       .slice(0, 10);
 
+    const topItemsByQty = Array.from(itemTotals.values())
+      .sort((a, b) => b.totalQty - a.totalQty)
+      .slice(0, 15);
+
     res.json({
-      topVendorsBySpend,
-      vendorSpendShare,
-      priceLeaders: priceLeaders.slice(0, 15),
+      topVendorsByOrders,
+      topItemsByQty,
     });
   } catch (err) {
     console.error("[GET /procurement/insights]", err);

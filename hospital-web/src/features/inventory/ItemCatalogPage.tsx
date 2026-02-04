@@ -26,6 +26,8 @@ const itemSchema = z.object({
   name: z.string().min(2, "Name is required"),
   type: z.string().min(1, "Type is required"),
   strength: z.string().optional(),
+  genericName: z.string().optional(),
+  brand: z.string().optional(),
   unit: z.string().min(1, "Unit is required"),
   minQty: z.coerce
     .number({ invalid_type_error: "Min level must be a number" })
@@ -129,7 +131,9 @@ function ItemTable({ rows, onEdit }: { rows: InventoryItem[]; onEdit: (item: Inv
             <TableHead className="w-[20%]">SKU</TableHead>
             <TableHead className="w-[25%]">Name</TableHead>
             <TableHead className="w-[12%]">Type</TableHead>
-            <TableHead className="w-[15%]">Strength</TableHead>
+            <TableHead className="w-[14%]">Strength</TableHead>
+            <TableHead className="w-[14%]">Generic</TableHead>
+            <TableHead className="w-[14%]">Brand</TableHead>
             <TableHead className="w-[10%]">Unit</TableHead>
             <TableHead className="w-[15%]">Min level</TableHead>
             <TableHead className="w-[10%]">Status</TableHead>
@@ -143,6 +147,8 @@ function ItemTable({ rows, onEdit }: { rows: InventoryItem[]; onEdit: (item: Inv
               <TableCell>{item.name}</TableCell>
               <TableCell className="capitalize">{item.type || "supply"}</TableCell>
               <TableCell>{item.strength || "-"}</TableCell>
+              <TableCell>{item.genericName || "-"}</TableCell>
+              <TableCell>{item.brand || "-"}</TableCell>
               <TableCell>
                 <Badge variant="outline" className="uppercase tracking-wide">
                   {item.unit}
@@ -174,7 +180,16 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
 
   const form = useForm<ItemFormValues>({
     resolver: zodResolver(itemSchema),
-    defaultValues: { sku: "", name: "", type: "supply", strength: "", unit: "", minQty: 0 },
+    defaultValues: {
+      sku: "",
+      name: "",
+      type: "supply",
+      strength: "",
+      genericName: "",
+      brand: "",
+      unit: "",
+      minQty: 0,
+    },
   });
 
   useEffect(() => {
@@ -184,6 +199,8 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
         name: editingItem.name,
         type: editingItem.type || "supply",
         strength: editingItem.strength ?? "",
+        genericName: editingItem.genericName ?? "",
+        brand: editingItem.brand ?? "",
         unit: editingItem.unit,
         minQty: editingItem.minQty,
       });
@@ -197,6 +214,8 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
       name: values.name.trim(),
       type: normalizedType || "supply",
       strength: normalizedType === "medicine" ? values.strength?.trim() || null : null,
+      genericName: normalizedType === "medicine" ? values.genericName?.trim() || null : null,
+      brand: normalizedType === "medicine" ? values.brand?.trim() || null : null,
       unit: values.unit.trim(),
       minQty: Number(values.minQty) || 0,
     };
@@ -207,7 +226,16 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
         title: editingItem ? "Item updated" : "Item added",
         description: `${payload.name} (${payload.sku}) is now in the catalog.`,
       });
-      form.reset({ sku: "", name: "", type: "supply", strength: "", unit: "", minQty: 0 });
+      form.reset({
+        sku: "",
+        name: "",
+        type: "supply",
+        strength: "",
+        genericName: "",
+        brand: "",
+        unit: "",
+        minQty: 0,
+      });
       onDone();
     } catch (error) {
       const description = isAxiosError(error)
@@ -284,19 +312,49 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
               )}
             />
             {watchedType === "medicine" ? (
-              <FormField
-                control={form.control}
-                name="strength"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Strength</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. 250mg / 500mg" autoComplete="off" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="strength"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Strength</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. 250mg / 500mg" autoComplete="off" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="genericName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Generic name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. Amoxicillin" autoComplete="off" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="brand"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Brand</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. Amoxil" autoComplete="off" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
             ) : null}
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField
@@ -332,7 +390,16 @@ function ItemFormCard({ editingItem, onDone }: { editingItem: InventoryItem | nu
                   type="button"
                   variant="ghost"
                   onClick={() => {
-                    form.reset({ sku: "", name: "", type: "supply", strength: "", unit: "", minQty: 0 });
+                    form.reset({
+                      sku: "",
+                      name: "",
+                      type: "supply",
+                      strength: "",
+                      genericName: "",
+                      brand: "",
+                      unit: "",
+                      minQty: 0,
+                    });
                     onDone();
                   }}
                 >

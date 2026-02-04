@@ -40,19 +40,9 @@ export default function DeliveriesPage() {
   const roles = user?.roles ?? [];
   const isManager = roles.includes("MANAGER") || roles.includes("ADMIN");
 
-  const summaryQuery = usePltSummary({ enabled: isManager });
+  const summaryQuery = usePltSummary({ enabled: true });
   const deliveriesQuery = usePltDeliveries();
   const projectsQuery = usePltProjects();
-
-  if (!isManager) {
-    return (
-      <Alert className="border-dashed">
-        <ShieldAlert className="h-5 w-5" />
-        <AlertTitle>Restricted</AlertTitle>
-        <AlertDescription>Only managers and administrators can manage logistics deliveries.</AlertDescription>
-      </Alert>
-    );
-  }
 
   const deliveries = deliveriesQuery.data ?? [];
   const projects = projectsQuery.data ?? [];
@@ -128,7 +118,7 @@ export default function DeliveriesPage() {
               Monitor shipment milestones, flag delayed routes, and keep project teams in the loop.
             </p>
           </div>
-          {projects.length > 0 ? (
+          {isManager && projects.length > 0 ? (
             <CreateDeliveryDialog
               projects={projects}
               trigger={<Button>Create delivery</Button>}
@@ -311,11 +301,15 @@ export default function DeliveriesPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <UpdateDeliveryStatusDialog
-                            delivery={delivery}
-                            trigger={<Button size="sm" variant="outline">Update</Button>}
-                            onUpdated={() => deliveriesQuery.refetch()}
-                          />
+                          {isManager ? (
+                            <UpdateDeliveryStatusDialog
+                              delivery={delivery}
+                              trigger={<Button size="sm" variant="outline">Update</Button>}
+                              onUpdated={() => deliveriesQuery.refetch()}
+                            />
+                          ) : (
+                            <Badge variant="secondary">View only</Badge>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

@@ -3,30 +3,17 @@
 import { api } from "@/lib/api";
 
 export type ProcurementInsightResponse = {
-  topVendorsBySpend: Array<{
+  topVendorsByOrders: Array<{
     vendorId: string;
     vendorName: string;
     contact: { email: string | null; phone: string | null };
-    totalSpend: number;
-    onTimePercentage: number | null;
-    avgLeadTimeDays: number | null;
-    fulfillmentRate: number | null;
-    lastEvaluatedAt: string | null;
+    orderCount: number;
+    totalQty: number;
   }>;
-  vendorSpendShare: Array<{
-    vendorId: string;
-    vendorName: string;
-    totalSpend: number;
-  }>;
-  priceLeaders: Array<{
+  topItemsByQty: Array<{
     itemId: string;
-    bestVendor: {
-      vendorId: string;
-      vendorName: string;
-      avgPrice: number;
-    };
-    averagePrice: number;
-    savingsPercent: number;
+    totalQty: number;
+    orderLines: number;
   }>;
 };
 

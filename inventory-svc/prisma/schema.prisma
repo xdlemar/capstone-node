@@ -19,6 +19,8 @@ model Item {
   name     String
   type     String  @default("supply")
   strength String?
+  genericName String?
+  brand    String?
   unit     String
   minQty   Decimal @default(0)
   isActive Boolean @default(true)

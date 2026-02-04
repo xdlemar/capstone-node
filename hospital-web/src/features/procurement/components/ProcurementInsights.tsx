@@ -1,4 +1,4 @@
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -6,8 +6,8 @@ import { useInventoryLookups } from "@/hooks/useInventoryLookups";
 import { useProcurementInsights } from "@/hooks/useProcurementInsights";
 import { cn } from "@/lib/utils";
 
-function formatMoney(value: number) {
-  return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(value);
+function formatWhole(value: number) {
+  return new Intl.NumberFormat("en-US").format(value);
 }
 
 export function ProcurementInsightsPanel({ className }: { className?: string }) {
@@ -31,7 +31,7 @@ export function ProcurementInsightsPanel({ className }: { className?: string }) 
     );
   }
 
-  const { topVendorsBySpend, priceLeaders } = insights.data;
+  const { topVendorsByOrders, topItemsByQty } = insights.data;
 
   return (
     <section className={cn("space-y-4", className)}>
@@ -45,23 +45,23 @@ export function ProcurementInsightsPanel({ className }: { className?: string }) 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="border bg-card shadow-sm">
           <CardHeader>
-            <CardTitle>Top vendors by spend</CardTitle>
-            <CardDescription>Based on cumulative PO values.</CardDescription>
+            <CardTitle>Top vendors by orders</CardTitle>
+            <CardDescription>Based on total PO volume.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {topVendorsBySpend.length === 0 ? (
+            {topVendorsByOrders.length === 0 ? (
               <p className="text-sm text-muted-foreground">No purchase order history yet.</p>
             ) : (
               <ul className="space-y-3">
-                {topVendorsBySpend.slice(0, 5).map((vendor) => (
+                {topVendorsByOrders.slice(0, 5).map((vendor) => (
                   <li key={vendor.vendorId} className="flex items-start justify-between gap-4 rounded-lg border p-3">
                     <div>
                       <p className="font-medium">{vendor.vendorName}</p>
                       <p className="text-xs text-muted-foreground">
-                        On-time {vendor.onTimePercentage ?? "-"}% &bull; Lead time {vendor.avgLeadTimeDays ?? "-"} days
+                        {formatWhole(vendor.orderCount)} order(s)
                       </p>
                     </div>
-                    <span className="text-sm font-semibold">{formatMoney(vendor.totalSpend)}</span>
+                    <span className="text-sm font-semibold">{formatWhole(vendor.totalQty)} units</span>
                   </li>
                 ))}
               </ul>
@@ -71,30 +71,26 @@ export function ProcurementInsightsPanel({ className }: { className?: string }) 
 
         <Card className="border bg-card shadow-sm">
           <CardHeader>
-            <CardTitle>Price leaders by item</CardTitle>
-            <CardDescription>Vendors offering the best average unit cost.</CardDescription>
+            <CardTitle>Most ordered items</CardTitle>
+            <CardDescription>Top items by total quantity ordered.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {priceLeaders.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Pricing history not available yet.</p>
+            {topItemsByQty.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No purchase order history yet.</p>
             ) : (
               <ul className="space-y-3">
-                {priceLeaders.slice(0, 6).map((leader) => {
-                  const item = itemMap.get(leader.itemId);
-                  const label = item ? `${item.name} (${item.sku})` : `Item ${leader.itemId}`;
+                {topItemsByQty.slice(0, 6).map((itemStat) => {
+                  const item = itemMap.get(itemStat.itemId);
+                  const label = item ? `${item.name} (${item.sku})` : `Item ${itemStat.itemId}`;
                   return (
-                    <li key={`${leader.itemId}-${leader.bestVendor.vendorId}`} className="rounded-lg border p-3">
+                    <li key={itemStat.itemId} className="rounded-lg border p-3">
                       <div className="flex items-center gap-2 text-sm font-medium">
-                        <TrendingDown className="h-4 w-4 text-emerald-500" />
-                        {leader.bestVendor.vendorName}
+                        <TrendingUp className="h-4 w-4 text-emerald-500" />
+                        {label}
                       </div>
-                      <p className="mt-1 text-sm text-muted-foreground">{label}</p>
                       <div className="mt-2 flex items-center justify-between text-sm">
-                        <span>Avg price {formatMoney(leader.bestVendor.avgPrice)}</span>
-                        <span className="inline-flex items-center gap-1 text-emerald-600">
-                          <TrendingUp className="h-4 w-4" />
-                          {leader.savingsPercent}% savings vs avg
-                        </span>
+                        <span>{formatWhole(itemStat.totalQty)} units ordered</span>
+                        <span className="text-muted-foreground">{formatWhole(itemStat.orderLines)} line(s)</span>
                       </div>
                     </li>
                   );

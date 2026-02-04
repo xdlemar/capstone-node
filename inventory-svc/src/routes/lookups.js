@@ -17,6 +17,8 @@ r.get("/inventory", async (_req, res) => {
         name: item.name,
         type: item.type,
         strength: item.strength,
+        genericName: item.genericName,
+        brand: item.brand,
         unit: item.unit,
         minQty: item.minQty ? Number(item.minQty) : 0,
       })),

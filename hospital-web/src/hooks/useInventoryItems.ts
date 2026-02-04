@@ -8,6 +8,8 @@ export type InventoryItem = {
   name: string;
   type: string;
   strength?: string | null;
+  genericName?: string | null;
+  brand?: string | null;
   unit: string;
   minQty: number;
   isActive: boolean;
@@ -20,6 +22,8 @@ export type UpsertInventoryItemInput = {
   name: string;
   type: string;
   strength?: string | null;
+  genericName?: string | null;
+  brand?: string | null;
   unit: string;
   minQty: number;
 };
@@ -30,6 +34,8 @@ type RawInventoryItem = {
   name: string;
   type?: string | null;
   strength?: string | null;
+  genericName?: string | null;
+  brand?: string | null;
   unit: string;
   minQty: string | number;
   isActive: boolean;

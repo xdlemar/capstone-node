@@ -1365,7 +1365,8 @@ export function VendorPerformanceTable({ className }: { className?: string }) {
               <TableHead>On-time %</TableHead>
               <TableHead>Lead time (days)</TableHead>
               <TableHead>Fulfillment %</TableHead>
-              <TableHead>Total spend</TableHead>
+              <TableHead>Orders</TableHead>
+              <TableHead>Total qty</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1375,9 +1376,8 @@ export function VendorPerformanceTable({ className }: { className?: string }) {
                 <TableCell>{vendor.metrics?.onTimePercentage ?? "-"}</TableCell>
                 <TableCell>{vendor.metrics?.avgLeadTimeDays ?? "-"}</TableCell>
                 <TableCell>{vendor.metrics?.fulfillmentRate ?? "-"}</TableCell>
-                <TableCell>
-                  {vendor.metrics ? new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(vendor.metrics.totalSpend) : "-"}
-                </TableCell>
+                <TableCell>{vendor.orderCount ?? 0}</TableCell>
+                <TableCell>{(vendor.totalQty ?? 0).toLocaleString()}</TableCell>
               </TableRow>
             ))}
           </TableBody>

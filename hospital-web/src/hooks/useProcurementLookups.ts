@@ -38,6 +38,8 @@ export type ProcurementLookups = {
       totalSpend: number;
       lastEvaluatedAt: string | null;
     };
+    orderCount: number;
+    totalQty: number;
   }>;
   openPos: Array<{
     id: string;

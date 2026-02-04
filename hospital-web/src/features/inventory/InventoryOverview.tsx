@@ -15,6 +15,8 @@ export default function InventoryOverview() {
   const { data: lookups } = useInventoryLookups();
   const [locationFilter, setLocationFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [genericFilter, setGenericFilter] = useState<string>("all");
+  const [brandFilter, setBrandFilter] = useState<string>("all");
   const [expiryWindowDays, setExpiryWindowDays] = useState<string>("30");
   const levelsQuery = useInventoryLevels(locationFilter === "all" ? undefined : locationFilter);
   const forecastQuery = useInventoryForecast(locationFilter === "all" ? undefined : locationFilter);
@@ -23,9 +25,26 @@ export default function InventoryOverview() {
 
 
   const itemMap = useMemo(() => {
-    const map = new Map<string, { minQty: number; unit: string; type: string }>();
+    const map = new Map<
+      string,
+      {
+        minQty: number;
+        unit: string;
+        type: string;
+        strength?: string | null;
+        genericName?: string | null;
+        brand?: string | null;
+      }
+    >();
     lookups?.items.forEach((item) => {
-      map.set(item.id, { minQty: item.minQty ?? 0, unit: item.unit, type: item.type || "supply" });
+      map.set(item.id, {
+        minQty: item.minQty ?? 0,
+        unit: item.unit,
+        type: item.type || "supply",
+        strength: item.strength ?? null,
+        genericName: item.genericName ?? null,
+        brand: item.brand ?? null,
+      });
     });
     return map;
   }, [lookups?.items]);
@@ -37,11 +56,37 @@ export default function InventoryOverview() {
       minQty: meta?.minQty ?? 0,
       unit: meta?.unit ?? "",
       type: meta?.type ?? "supply",
+      strength: meta?.strength ?? null,
+      genericName: meta?.genericName ?? null,
+      brand: meta?.brand ?? null,
     };
   });
 
-  const filteredLevels =
-    typeFilter === "all" ? levels : levels.filter((row) => row.type === typeFilter);
+  const filteredLevels = levels.filter((row) => {
+    if (typeFilter !== "all" && row.type !== typeFilter) return false;
+    if (typeFilter === "medicine") {
+      if (genericFilter !== "all" && (row.genericName || "").toLowerCase() !== genericFilter) return false;
+      if (brandFilter !== "all" && (row.brand || "").toLowerCase() !== brandFilter) return false;
+    }
+    return true;
+  });
+
+  const groupedByGeneric = useMemo(() => {
+    if (typeFilter !== "medicine") return null;
+    const groups = new Map<string, typeof filteredLevels>();
+    filteredLevels.forEach((row) => {
+      const key = (row.genericName || "Unspecified generic").trim() || "Unspecified generic";
+      const list = groups.get(key) ?? [];
+      list.push(row);
+      groups.set(key, list);
+    });
+    return Array.from(groups.entries())
+      .map(([genericName, rows]) => ({
+        genericName,
+        rows: rows.sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => a.genericName.localeCompare(b.genericName));
+  }, [filteredLevels, typeFilter]);
 
   const lowStock = filteredLevels.filter((row) => row.minQty > 0 && row.onhand < row.minQty);
   const totalUnits = filteredLevels.reduce((sum, row) => sum + row.onhand, 0);
@@ -91,6 +136,53 @@ export default function InventoryOverview() {
     const batchType = batch.item?.type ?? "supply";
     return batchType === typeFilter;
   });
+
+  const medicineItems = (lookups?.items ?? []).filter((item) => (item.type || "supply") === "medicine");
+  const genericOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    medicineItems.forEach((item) => {
+      const raw = (item.genericName || "").trim();
+      if (!raw) return;
+      const key = raw.toLowerCase();
+      if (!map.has(key)) map.set(key, raw);
+    });
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [medicineItems]);
+
+  const brandOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    medicineItems.forEach((item) => {
+      const raw = (item.brand || "").trim();
+      if (!raw) return;
+      const key = raw.toLowerCase();
+      if (!map.has(key)) map.set(key, raw);
+    });
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [medicineItems]);
+
+  const renderBrandCell = (brand?: string | null) => {
+    const display = brand?.trim() || "-";
+    const value = brand?.trim().toLowerCase() || "";
+    if (!value) return <TableCell>{display}</TableCell>;
+    return (
+      <TableCell>
+        <Badge
+          variant="outline"
+          className="cursor-pointer hover:bg-muted"
+          onClick={() => {
+            setTypeFilter("medicine");
+            setBrandFilter(value);
+          }}
+        >
+          {display}
+        </Badge>
+      </TableCell>
+    );
+  };
 
   const expiringSoonCount = expiringBatches.filter((batch) => {
     const remaining = daysUntil(batch.expiryDate);
@@ -158,7 +250,16 @@ export default function InventoryOverview() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <Select
+              value={typeFilter}
+              onValueChange={(value) => {
+                setTypeFilter(value);
+                if (value !== "medicine") {
+                  setGenericFilter("all");
+                  setBrandFilter("all");
+                }
+              }}
+            >
               <SelectTrigger className="bg-background">
                 <SelectValue placeholder="Filter type" />
               </SelectTrigger>
@@ -169,6 +270,36 @@ export default function InventoryOverview() {
                 <SelectItem value="equipment">Equipment</SelectItem>
               </SelectContent>
             </Select>
+            {typeFilter === "medicine" ? (
+              <>
+                <Select value={genericFilter} onValueChange={setGenericFilter}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Generic" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All generics</SelectItem>
+                    {genericOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={brandFilter} onValueChange={setBrandFilter}>
+                  <SelectTrigger className="bg-background">
+                    <SelectValue placeholder="Brand" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All brands</SelectItem>
+                    {brandOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            ) : null}
             <Select value={expiryWindowDays} onValueChange={setExpiryWindowDays}>
               <SelectTrigger className="bg-background">
                 <SelectValue placeholder="Expires within" />
@@ -202,57 +333,137 @@ export default function InventoryOverview() {
                     <TableHead>Item</TableHead>
                     <TableHead className="w-32">SKU</TableHead>
                     <TableHead className="w-24">Type</TableHead>
+                    {typeFilter === "medicine" ? (
+                      <>
+                        <TableHead className="w-32">Generic</TableHead>
+                        <TableHead className="w-28">Brand</TableHead>
+                        <TableHead className="w-24">Strength</TableHead>
+                      </>
+                    ) : null}
                     <TableHead className="w-32 text-right">On-hand</TableHead>
                     <TableHead className="w-32 text-right">Min level</TableHead>
                     <TableHead className="w-28">Status</TableHead>
                                       </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredLevels.map((row) => (
-                    <TableRow key={row.itemId}>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">{row.name}</span>
-                          <span className="text-xs text-muted-foreground">{row.unit || "unit"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{row.sku}</TableCell>
-                      <TableCell className="capitalize">{row.type || "supply"}</TableCell>
-                      <TableCell className="text-right">{row.onhand.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">{row.minQty ? row.minQty.toLocaleString() : "-"}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-2">
-                          {row.minQty > 0 ? (
-                            row.onhand <= row.minQty ? (
-                              <Badge variant="destructive">Restock</Badge>
-                            ) : (
-                              <Badge variant="outline">Healthy</Badge>
-                            )
-                          ) : (
-                            <Badge variant="secondary">No threshold</Badge>
-                          )}
-                          {(() => {
-                            const flagged = flaggedByItem.get(row.itemId);
-                            if (flagged === "EXPIRED") {
-                              return <Badge variant="destructive">Expired</Badge>;
-                            }
-                            if (flagged === "QUARANTINED") {
-                              return <Badge variant="secondary">Quarantined</Badge>;
-                            }
-                            const remaining = expiringByItem.get(row.itemId);
-                            if (remaining == null || remaining > expiryWindow) return null;
-                            const variant = remaining <= 7 ? "destructive" : remaining <= 14 ? "secondary" : "outline";
-                            const label = remaining <= 0 ? "Expired" : remaining <= 7 ? "Expiring soon" : "Expiring";
-                            return (
-                              <Badge variant={variant as "outline" | "secondary" | "destructive"}>
-                                {label}
-                              </Badge>
-                            );
-                          })()}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {groupedByGeneric
+                    ? groupedByGeneric.flatMap((group) => {
+                        const header = (
+                          <TableRow key={`generic-${group.genericName}`}>
+                            <TableCell colSpan={typeFilter === "medicine" ? 9 : 6} className="bg-muted/40">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="font-semibold">{group.genericName}</span>
+                                <Badge variant="outline">{group.rows.length} items</Badge>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                        const rows = group.rows.map((row) => (
+                          <TableRow key={row.itemId}>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <span className="font-medium text-foreground">{row.name}</span>
+                                <span className="text-xs text-muted-foreground">{row.unit || "unit"}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{row.sku}</TableCell>
+                            <TableCell className="capitalize">{row.type || "supply"}</TableCell>
+                            {typeFilter === "medicine" ? (
+                              <>
+                                <TableCell>{row.genericName || "-"}</TableCell>
+                                {renderBrandCell(row.brand)}
+                                <TableCell>{row.strength || "-"}</TableCell>
+                              </>
+                            ) : null}
+                            <TableCell className="text-right">{row.onhand.toLocaleString()}</TableCell>
+                            <TableCell className="text-right">{row.minQty ? row.minQty.toLocaleString() : "-"}</TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-2">
+                                {row.minQty > 0 ? (
+                                  row.onhand <= row.minQty ? (
+                                    <Badge variant="destructive">Restock</Badge>
+                                  ) : (
+                                    <Badge variant="outline">Healthy</Badge>
+                                  )
+                                ) : (
+                                  <Badge variant="secondary">No threshold</Badge>
+                                )}
+                                {(() => {
+                                  const flagged = flaggedByItem.get(row.itemId);
+                                  if (flagged === "EXPIRED") {
+                                    return <Badge variant="destructive">Expired</Badge>;
+                                  }
+                                  if (flagged === "QUARANTINED") {
+                                    return <Badge variant="secondary">Quarantined</Badge>;
+                                  }
+                                  const remaining = expiringByItem.get(row.itemId);
+                                  if (remaining == null || remaining > expiryWindow) return null;
+                                  const variant = remaining <= 7 ? "destructive" : remaining <= 14 ? "secondary" : "outline";
+                                  const label = remaining <= 0 ? "Expired" : remaining <= 7 ? "Expiring soon" : "Expiring";
+                                  return (
+                                    <Badge variant={variant as "outline" | "secondary" | "destructive"}>
+                                      {label}
+                                    </Badge>
+                                  );
+                                })()}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ));
+                        return [header, ...rows];
+                      })
+                    : filteredLevels.map((row) => (
+                        <TableRow key={row.itemId}>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium text-foreground">{row.name}</span>
+                              <span className="text-xs text-muted-foreground">{row.unit || "unit"}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{row.sku}</TableCell>
+                          <TableCell className="capitalize">{row.type || "supply"}</TableCell>
+                          {typeFilter === "medicine" ? (
+                            <>
+                              <TableCell>{row.genericName || "-"}</TableCell>
+                          {renderBrandCell(row.brand)}
+                              <TableCell>{row.strength || "-"}</TableCell>
+                            </>
+                          ) : null}
+                          <TableCell className="text-right">{row.onhand.toLocaleString()}</TableCell>
+                          <TableCell className="text-right">{row.minQty ? row.minQty.toLocaleString() : "-"}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-2">
+                              {row.minQty > 0 ? (
+                                row.onhand <= row.minQty ? (
+                                  <Badge variant="destructive">Restock</Badge>
+                                ) : (
+                                  <Badge variant="outline">Healthy</Badge>
+                                )
+                              ) : (
+                                <Badge variant="secondary">No threshold</Badge>
+                              )}
+                              {(() => {
+                                const flagged = flaggedByItem.get(row.itemId);
+                                if (flagged === "EXPIRED") {
+                                  return <Badge variant="destructive">Expired</Badge>;
+                                }
+                                if (flagged === "QUARANTINED") {
+                                  return <Badge variant="secondary">Quarantined</Badge>;
+                                }
+                                const remaining = expiringByItem.get(row.itemId);
+                                if (remaining == null || remaining > expiryWindow) return null;
+                                const variant = remaining <= 7 ? "destructive" : remaining <= 14 ? "secondary" : "outline";
+                                const label = remaining <= 0 ? "Expired" : remaining <= 7 ? "Expiring soon" : "Expiring";
+                                return (
+                                  <Badge variant={variant as "outline" | "secondary" | "destructive"}>
+                                    {label}
+                                  </Badge>
+                                );
+                              })()}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
                 </TableBody>
               </Table>
             </div>

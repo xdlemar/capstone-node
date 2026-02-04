@@ -1,5 +1,8 @@
 const router = require("express").Router();
 const { prisma } = require("../prisma");
+const { requireRole } = require("../auth");
+
+const managerAccess = requireRole("MANAGER", "ADMIN");
 
 function toBigInt(value, field) {
   if (value === undefined || value === null || value === "") return null;
@@ -56,7 +59,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.post("/:id/resolve", async (req, res, next) => {
+router.post("/:id/resolve", managerAccess, async (req, res, next) => {
   try {
     const id = toBigInt(req.params.id, "id");
     if (!id) return res.status(400).json({ error: "id required" });
