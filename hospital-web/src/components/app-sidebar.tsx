@@ -105,6 +105,7 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     items: [
       { title: "Overview", url: "/vendor/overview", roles: ["VENDOR"] },
       { title: "Orders", url: "/vendor/orders", roles: ["VENDOR"] },
+      { title: "Order history", url: "/vendor/orders/history", roles: ["VENDOR"] },
       { title: "Shipments", url: "/vendor/shipments", roles: ["VENDOR"] },
     ],
   },

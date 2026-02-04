@@ -53,6 +53,9 @@ router.get("/pos", async (req, res) => {
     if (!vendorIds.length) return res.status(403).json({ error: "Vendor access not configured" });
 
     const statusFilter = parseStatusFilter(req.query.status);
+    const includeDelivered =
+      String(req.query.includeDelivered || "").toLowerCase() === "true" ||
+      String(req.query.includeDelivered || "") === "1";
     const where = {
       vendorId: { in: vendorIds },
       ...(statusFilter ? { status: { in: statusFilter } } : {}),
@@ -87,6 +90,7 @@ router.get("/pos", async (req, res) => {
     res.json(
       orders
         .filter((po) => {
+          if (includeDelivered) return true;
           const deliveryStatus = deliveryStatusMap.get(po.id.toString());
           return deliveryStatus !== "DELIVERED";
         })
@@ -95,6 +99,7 @@ router.get("/pos", async (req, res) => {
           poNo: po.poNo,
           status: po.status,
           orderedAt: po.orderedAt,
+          deliveryStatus: deliveryStatusMap.get(po.id.toString()) ?? null,
           vendor: { id: po.vendor.id.toString(), name: po.vendor.name },
           lineCount: po.lines.length,
           totalQty: po.lines.reduce((sum, line) => sum + Number(line.qty || 0), 0),

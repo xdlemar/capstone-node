@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useDocumentDetail } from "@/hooks/useDocumentSearch";
 import { useProcurementReceiptDetail } from "@/hooks/useProcurementReceiptDetail";
 import { api } from "@/lib/api";
+import { hvhLogoUrl } from "@/lib/branding";
 
 export default function DocumentDetailPage() {
   const params = useParams();
@@ -90,16 +91,51 @@ export default function DocumentDetailPage() {
     }
   };
 
+  const handlePrintFile = async () => {
+    if (!canViewFile) {
+      toast({ variant: "destructive", title: "No file yet", description: "This record is still pending upload." });
+      return;
+    }
+    try {
+      const { data } = await api.get("/dtrs/uploads/s3-url", { params: { storageKey: document.storageKey } });
+      const url = data?.url;
+      if (!url) throw new Error("Missing download URL");
+      const win = window.open(url, "_blank", "noopener,noreferrer");
+      if (!win) {
+        toast({ variant: "destructive", title: "Popup blocked", description: "Allow popups to print the file." });
+        return;
+      }
+      win.addEventListener("load", () => {
+        win.focus();
+        win.print();
+      });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Unable to print file",
+        description: err?.response?.data?.error ?? err?.message ?? "Unexpected error",
+      });
+    }
+  };
+
   return (
     <section className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between no-print">
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight">{document.title}</h1>
           <p className="text-muted-foreground">Detailed timeline and metadata for this document.</p>
         </div>
         <div className="flex items-center gap-2">
+          {document.module === "PROCUREMENT" && document.receiptId ? (
+            <Button variant="outline" onClick={() => window.print()}>
+              Print receipt
+            </Button>
+          ) : null}
           <Button variant="outline" disabled={!canViewFile} onClick={handleViewFile}>
             {canViewFile ? "View file" : "Pending upload"}
+          </Button>
+          <Button variant="outline" disabled={!canViewFile} onClick={handlePrintFile}>
+            Print file
           </Button>
           <Button variant="outline" onClick={() => navigate(-1)}>
             Back
@@ -107,7 +143,7 @@ export default function DocumentDetailPage() {
         </div>
       </div>
 
-      <Card className="border bg-card shadow-sm">
+      <Card className="border bg-card shadow-sm no-print">
         <CardHeader className="space-y-2">
           <CardTitle>Document metadata</CardTitle>
           <CardDescription>ID {document.id}</CardDescription>
@@ -158,7 +194,7 @@ export default function DocumentDetailPage() {
       </Card>
 
       {document.module === "PROCUREMENT" && document.receiptId ? (
-        <Card className="border bg-card shadow-sm">
+        <Card className="border bg-card shadow-sm print-area">
           <CardHeader>
             <CardTitle>Receipt details</CardTitle>
             <CardDescription>Structured procurement context captured at receiving.</CardDescription>
@@ -168,6 +204,18 @@ export default function DocumentDetailPage() {
               <Skeleton className="h-32" />
             ) : receiptDetailQuery.data ? (
               <div className="space-y-4">
+                <div className="print-only border-b pb-4">
+                  <div className="flex items-center gap-4">
+                    <img src={hvhLogoUrl} alt="HVH Hospital" className="h-14 w-14 object-contain" />
+                    <div>
+                      <p className="text-lg font-semibold">HVH Hospital</p>
+                      <p className="text-sm text-muted-foreground">Receipt Summary</p>
+                      <p className="text-xs text-muted-foreground">
+                        Generated: {new Date().toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 <div className="grid gap-3 md:grid-cols-2 text-sm text-muted-foreground">
                   <div className="space-y-1">
                     <p className="text-xs uppercase text-muted-foreground">Purchase order</p>
@@ -226,10 +274,26 @@ export default function DocumentDetailPage() {
               </Alert>
             )}
           </CardContent>
+          <div className="print-only px-6 pb-6">
+            <div className="mt-6 grid gap-6 md:grid-cols-3 text-sm text-muted-foreground">
+              <div>
+                <p className="font-medium text-foreground">Prepared by</p>
+                <div className="mt-4 border-t pt-2">Signature / Name</div>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Verified by</p>
+                <div className="mt-4 border-t pt-2">Signature / Name</div>
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Approved by</p>
+                <div className="mt-4 border-t pt-2">Signature / Name</div>
+              </div>
+            </div>
+          </div>
         </Card>
       ) : null}
 
-      <Card className="border bg-card shadow-sm">
+      <Card className="border bg-card shadow-sm no-print">
         <CardHeader>
           <CardTitle>Versions</CardTitle>
           <CardDescription>Latest version first.</CardDescription>
@@ -268,6 +332,15 @@ export default function DocumentDetailPage() {
         </CardContent>
       </Card>
 
+      <style>
+        {`@media print {
+          .no-print { display: none !important; }
+          .print-area { display: block !important; }
+          .print-only { display: block !important; }
+          body { background: white; }
+        }
+        .print-only { display: none; }`}
+      </style>
     </section>
   );
 }

@@ -298,6 +298,11 @@ export function ReceiptCard({ className }: { className?: string }) {
   const queryClient = useQueryClient();
   const { map: itemMap, query: inventoryQuery } = useItemFormatter();
   const [hiddenPoNos, setHiddenPoNos] = useState<Set<string>>(() => new Set());
+  const [vendorReceipt, setVendorReceipt] = useState<{
+    receipt: { id: string; createdAt: string; updatedAt: string; createdBy: string | null };
+    lines: Array<{ itemId: string; qty: number; lotNo: string; expiryDate: string }>;
+  } | null>(null);
+  const [vendorReceiptError, setVendorReceiptError] = useState<string | null>(null);
   const form = useForm<ReceiptValues>({
     resolver: zodResolver(receiptSchema),
     defaultValues: { poNo: "", drNo: "", invoiceNo: "", toLocId: "", lines: [] },
@@ -322,17 +327,6 @@ export function ReceiptCard({ className }: { className?: string }) {
         lotNo: line.lotNo || undefined,
         expiryDate: line.expiryDate || undefined,
       }));
-
-      // Require lot number for medicines
-      let hasErrors = false;
-      linePayload.forEach((line, index) => {
-        const item = itemMap.get(line.itemId);
-        if (item?.type === "medicine" && !line.lotNo) {
-          form.setError(`lines.${index}.lotNo` as any, { message: "Lot No. required for medicines" });
-          hasErrors = true;
-        }
-      });
-      if (hasErrors) return;
 
       if (linePayload.length) payload.lines = linePayload;
 
@@ -379,8 +373,15 @@ export function ReceiptCard({ className }: { className?: string }) {
   useEffect(() => {
     if (!selectedPo) {
       replaceReceiptLines([]);
+      setVendorReceipt(null);
+      setVendorReceiptError(null);
       return;
     }
+
+    let cancelled = false;
+    setVendorReceipt(null);
+    setVendorReceiptError(null);
+
     const lines = safeLines(selectedPo.lines).map((line) => ({
       itemId: line.itemId,
       qty: line.qty,
@@ -388,7 +389,59 @@ export function ReceiptCard({ className }: { className?: string }) {
       expiryDate: "",
     }));
     replaceReceiptLines(lines as any);
+
+    const hydrateVendorReceipt = async () => {
+      try {
+        const { data } = await api.get(`/procurement/vendor-receipts/by-po/${encodeURIComponent(selectedPo.poNo)}`);
+        if (cancelled) return;
+        if (data?.receipt && Array.isArray(data.lines)) {
+          setVendorReceipt(data);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          const message = err?.response?.data?.error || err.message || "Failed to load vendor receipt";
+          setVendorReceiptError(message);
+        }
+      }
+    };
+
+    hydrateVendorReceipt();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedPo?.poNo]);
+
+  useEffect(() => {
+    if (!selectedPo || !vendorReceipt) return;
+    const vendorLineMap = new Map(vendorReceipt.lines.map((line) => [line.itemId, line]));
+    const lines = safeLines(selectedPo.lines).map((line) => {
+      const vendorLine = vendorLineMap.get(line.itemId);
+      return {
+        itemId: line.itemId,
+        qty: vendorLine?.qty ?? line.qty,
+        lotNo: vendorLine?.lotNo ?? "",
+        expiryDate: vendorLine?.expiryDate ? vendorLine.expiryDate.slice(0, 10) : "",
+      };
+    });
+    replaceReceiptLines(lines as any);
+  }, [selectedPo?.poNo, vendorReceipt?.receipt?.id]);
+
+  const watchedLines = form.watch("lines");
+  const mismatchSummary = useMemo(() => {
+    if (!vendorReceipt?.lines?.length || !watchedLines?.length) return null;
+    const vendorLineMap = new Map(vendorReceipt.lines.map((line) => [line.itemId, line]));
+    const mismatches = watchedLines.filter((line) => {
+      const vendorLine = vendorLineMap.get(line.itemId);
+      if (!vendorLine) return true;
+      const qtyMatch = Number(line.qty) === Number(vendorLine.qty);
+      const lotMatch = (line.lotNo || "").trim() === (vendorLine.lotNo || "").trim();
+      const expiryMatch = (line.expiryDate || "").slice(0, 10) === vendorLine.expiryDate.slice(0, 10);
+      return !(qtyMatch && lotMatch && expiryMatch);
+    });
+    if (!mismatches.length) return null;
+    return `${mismatches.length} line(s) differ from the vendor receipt.`;
+  }, [vendorReceipt, watchedLines]);
 
   const renderLineLabel = (line: { itemId: string; qty: number; unit: string; notes?: string | null }) => {
     const item = itemMap.get(line.itemId);
@@ -522,6 +575,23 @@ export function ReceiptCard({ className }: { className?: string }) {
               {selectedPo ? (
                 <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
                   <h3 className="text-sm font-semibold">Receipt line items</h3>
+                  {vendorReceipt ? (
+                    <p className="text-xs text-muted-foreground">
+                      Vendor receipt captured at shipment scheduling. Adjust if actual delivery differs.
+                    </p>
+                  ) : null}
+                  {vendorReceiptError ? (
+                    <Alert variant="destructive" className="mt-3">
+                      <AlertTitle>Vendor receipt unavailable</AlertTitle>
+                      <AlertDescription>{vendorReceiptError}</AlertDescription>
+                    </Alert>
+                  ) : null}
+                  {mismatchSummary ? (
+                    <Alert className="mt-3">
+                      <AlertTitle>Mismatch detected</AlertTitle>
+                      <AlertDescription>{mismatchSummary}</AlertDescription>
+                    </Alert>
+                  ) : null}
                   <Table className="mt-3">
                     <TableHeader>
                       <TableRow>
@@ -536,7 +606,20 @@ export function ReceiptCard({ className }: { className?: string }) {
                       {receiptLineFields.map((field, index) => (
                         <TableRow key={field.id}>
                           <TableCell>{renderLineLabel({ itemId: field.itemId, qty: field.qty, unit: "" })}</TableCell>
-                          <TableCell className="text-right">{field.qty}</TableCell>
+                          <TableCell className="text-right">
+                            <FormField
+                              control={form.control}
+                              name={`lines.${index}.qty`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input type="number" min="1" step="1" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </TableCell>
                           <TableCell>{itemMap.get(field.itemId)?.unit || ""}</TableCell>
                           <TableCell>
                             <FormField
@@ -545,7 +628,7 @@ export function ReceiptCard({ className }: { className?: string }) {
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input placeholder="Lot No." {...field} />
+                                    <Input placeholder="LOT-XXXX" {...field} />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>

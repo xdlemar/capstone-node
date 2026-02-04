@@ -8,6 +8,33 @@ const { requireRole } = require("../auth");
 const DEFAULT_RECEIPT_LOC_ID = process.env.DEFAULT_RECEIPT_LOC_ID || "1";
 const staffAccess = requireRole("STAFF", "MANAGER", "ADMIN");
 
+function formatDateYYYYMMDD(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+async function getLotSeqMap(itemIds, date) {
+  const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  const seqMap = new Map();
+
+  for (const itemId of itemIds) {
+    const count = await prisma.receiptLine.count({
+      where: {
+        itemId,
+        Receipt: {
+          receivedAt: { gte: start, lt: end },
+        },
+      },
+    });
+    seqMap.set(itemId.toString(), count + 1);
+  }
+
+  return { seqMap, dateStr: formatDateYYYYMMDD(date) };
+}
+
 function toBigInt(val, field) {
   if (val === undefined || val === null || val === "") {
     throw Object.assign(new Error(`${field} is required`), {
@@ -153,11 +180,12 @@ router.post("/receipts", staffAccess, async (req, res) => {
               code: "VALIDATION_ERROR",
             });
           }
+          const lotNo = typeof l.lotNo === "string" ? l.lotNo.trim() : "";
           return {
             itemId,
             toLocId,
             qty: qtyNumber,
-            lotNo: l.lotNo || null,
+            lotNo: lotNo || null,
             expiryDate: toDate(l.expiryDate, `lines[${lineNo}].expiryDate`),
           };
         })
@@ -177,13 +205,31 @@ router.post("/receipts", staffAccess, async (req, res) => {
           }));
         })();
 
+    const uniqueItemIds = Array.from(new Set(normalizedLines.map((line) => line.itemId.toString()))).map((id) =>
+      BigInt(id)
+    );
+    const { seqMap, dateStr } = await getLotSeqMap(uniqueItemIds, new Date());
+
+    const linesWithLot = normalizedLines.map((line) => {
+      if (line.lotNo) {
+        return line;
+      }
+      const key = line.itemId.toString();
+      const nextSeq = seqMap.get(key) || 1;
+      seqMap.set(key, nextSeq + 1);
+      return {
+        ...line,
+        lotNo: `LOT-${dateStr}-${key}-${String(nextSeq).padStart(3, "0")}`,
+      };
+    });
+
     const receipt = await prisma.receipt.create({
       data: {
         poId: po.id,
         drNo: drNo || null,
         invoiceNo: invoiceNo || null,
         lines: {
-          create: normalizedLines.map((line) => ({
+          create: linesWithLot.map((line) => ({
             itemId: line.itemId,
             toLocId: line.toLocId,
             qty: line.qty,

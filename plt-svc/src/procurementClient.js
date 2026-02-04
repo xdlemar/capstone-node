@@ -54,6 +54,33 @@ async function fetchJson(path) {
   return payload;
 }
 
+async function postJson(path, body) {
+  const resp = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${getServiceToken()}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await resp.text().catch(() => "");
+  let payload = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = null;
+    }
+  }
+
+  if (!resp.ok) {
+    throw new Error(`[procurementClient] ${resp.status} ${text}`);
+  }
+
+  return payload;
+}
+
 async function getPoApprovalById(poId) {
   return fetchJson(`/internal/po/${poId}/approval`);
 }
@@ -62,4 +89,8 @@ async function getPoApprovalByNo(poNo) {
   return fetchJson(`/internal/po/by-no/${encodeURIComponent(poNo)}/approval`);
 }
 
-module.exports = { getPoApprovalById, getPoApprovalByNo };
+async function upsertVendorReceiptDraft({ poId, vendorId, createdBy, lines }) {
+  return postJson("/internal/vendor-receipts", { poId, vendorId, createdBy, lines });
+}
+
+module.exports = { getPoApprovalById, getPoApprovalByNo, upsertVendorReceiptDraft };

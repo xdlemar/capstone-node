@@ -131,6 +131,7 @@ model PO {
   PR          PR?          @relation(fields: [prId], references: [id])
   lines       POLine[]
   receipts    Receipt[]
+  vendorReceipt VendorReceipt?
   attachments Attachment[]
 }
 
@@ -180,6 +181,28 @@ model ReceiptLine {
   expiryDate DateTime?
 
   Receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+}
+
+model VendorReceipt {
+  id        BigInt   @id @default(autoincrement())
+  poId      BigInt   @unique
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  PO    PO    @relation(fields: [poId], references: [id], onDelete: Cascade)
+  lines VendorReceiptLine[]
+}
+
+model VendorReceiptLine {
+  id              BigInt   @id @default(autoincrement())
+  vendorReceiptId BigInt
+  itemId          BigInt
+  qty             Int
+  lotNo           String
+  expiryDate      DateTime
+
+  VendorReceipt VendorReceipt @relation(fields: [vendorReceiptId], references: [id], onDelete: Cascade)
 }
 
 /**

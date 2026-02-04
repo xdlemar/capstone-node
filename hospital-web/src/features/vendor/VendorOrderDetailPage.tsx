@@ -40,6 +40,16 @@ export default function VendorOrderDetailPage() {
   const [departedAt, setDepartedAt] = useState("");
   const [lastKnown, setLastKnown] = useState("");
   const [notes, setNotes] = useState("");
+  const [receiptLines, setReceiptLines] = useState<
+    Array<{
+      itemId: string;
+      itemName?: string | null;
+      itemSku?: string | null;
+      qty: number;
+      lotNo: string;
+      expiryDate: string;
+    }>
+  >([]);
 
   useEffect(() => {
     if (!scheduleOpen) {
@@ -48,6 +58,7 @@ export default function VendorOrderDetailPage() {
       setDepartedAt("");
       setLastKnown("");
       setNotes("");
+      setReceiptLines([]);
       setTrackingLoading(false);
       return;
     }
@@ -81,6 +92,19 @@ export default function VendorOrderDetailPage() {
     };
   }, [scheduleOpen, trackingNo, toast]);
 
+  useEffect(() => {
+    if (!scheduleOpen || !orderQuery.data) return;
+    const nextLines = orderQuery.data.lines.map((line) => ({
+      itemId: line.itemId,
+      itemName: line.itemName ?? null,
+      itemSku: line.itemSku ?? null,
+      qty: Number(line.qty ?? 0),
+      lotNo: "",
+      expiryDate: "",
+    }));
+    setReceiptLines(nextLines);
+  }, [scheduleOpen, orderQuery.data]);
+
   const approveMutation = useMutation({
     mutationFn: async (orderId: string) => {
       await api.patch(`/procurement/vendor/pos/${orderId}/ack`);
@@ -99,12 +123,29 @@ export default function VendorOrderDetailPage() {
   const scheduleMutation = useMutation({
     mutationFn: async () => {
       if (!orderQuery.data) return;
+      if (!receiptLines.length) {
+        throw new Error("Receipt lines are required.");
+      }
+      const missing = receiptLines.find(
+        (line) => !line.lotNo.trim() || !line.expiryDate || !Number.isFinite(line.qty) || line.qty <= 0
+      );
+      if (missing) {
+        throw new Error("Lot number, expiry date, and quantity are required for every line.");
+      }
+
+      const normalizedReceiptLines = receiptLines.map((line) => ({
+        itemId: line.itemId,
+        qty: line.qty,
+        lotNo: line.lotNo.trim(),
+        expiryDate: new Date(line.expiryDate).toISOString(),
+      }));
       const payload: Record<string, unknown> = {
         poId: orderQuery.data.id,
         trackingNo: trackingNo || undefined,
         lastKnown: lastKnown || undefined,
         notes: notes || undefined,
         status: "DISPATCHED",
+        receiptLines: normalizedReceiptLines,
       };
       if (eta) payload.eta = new Date(eta).toISOString();
       if (departedAt) payload.departedAt = new Date(departedAt).toISOString();
@@ -345,6 +386,79 @@ export default function VendorOrderDetailPage() {
                 onChange={(event) => setNotes(event.target.value)}
                 placeholder="Handling notes (optional)"
               />
+            </div>
+            <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+              <h3 className="text-sm font-semibold">Receipt line items</h3>
+              <p className="text-xs text-muted-foreground">
+                Provide lot number and expiry date for each item to pre-fill hospital receiving.
+              </p>
+              <Table className="mt-3">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="w-24 text-right">Qty</TableHead>
+                    <TableHead className="w-40">Lot No.</TableHead>
+                    <TableHead className="w-40">Expiry date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {receiptLines.map((line, index) => {
+                    const name = line.itemName ?? `Item #${line.itemId}`;
+                    return (
+                      <TableRow key={`${line.itemId}-${index}`}>
+                        <TableCell className="font-medium">
+                          {name}
+                          {line.itemSku ? (
+                            <span className="block text-xs text-muted-foreground">{line.itemSku}</span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={line.qty}
+                            onChange={(event) => {
+                              const next = Number(event.target.value);
+                              setReceiptLines((prev) =>
+                                prev.map((entry, idx) =>
+                                  idx === index ? { ...entry, qty: Number.isFinite(next) ? next : 0 } : entry
+                                )
+                              );
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={line.lotNo}
+                            onChange={(event) => {
+                              const next = event.target.value;
+                              setReceiptLines((prev) =>
+                                prev.map((entry, idx) => (idx === index ? { ...entry, lotNo: next } : entry))
+                              );
+                            }}
+                            placeholder="LOT-XXXX"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="date"
+                            value={line.expiryDate}
+                            onChange={(event) => {
+                              const next = event.target.value;
+                              setReceiptLines((prev) =>
+                                prev.map((entry, idx) =>
+                                  idx === index ? { ...entry, expiryDate: next } : entry
+                                )
+                              );
+                            }}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
           </div>
           <DialogFooter>

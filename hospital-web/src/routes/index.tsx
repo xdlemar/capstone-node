@@ -7,6 +7,7 @@ import UnauthorizedPage from "@/features/auth/UnauthorizedPage";
 import VendorOverviewPage from "@/features/vendor/VendorOverviewPage";
 import VendorOrdersPage from "@/features/vendor/VendorOrdersPage";
 import VendorOrderDetailPage from "@/features/vendor/VendorOrderDetailPage";
+import VendorOrderHistoryPage from "@/features/vendor/VendorOrderHistoryPage";
 import VendorShipmentsPage from "@/features/vendor/VendorShipmentsPage";
 import ProcurementRequisitionsPage from "@/features/procurement/ProcurementRequisitionsPage";
 import ProcurementPurchaseOrdersPage from "@/features/procurement/ProcurementPurchaseOrdersPage";
@@ -77,6 +78,7 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate to="overview" replace /> },
               { path: "overview", element: <VendorOverviewPage /> },
               { path: "orders", element: <VendorOrdersPage /> },
+              { path: "orders/history", element: <VendorOrderHistoryPage /> },
               { path: "orders/:id", element: <VendorOrderDetailPage /> },
               { path: "shipments", element: <VendorShipmentsPage /> },
             ],

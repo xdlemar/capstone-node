@@ -61,11 +61,17 @@ const STATUS_FILTERS = [
   { value: "filed", label: "Filed" },
   { value: "pending", label: "Pending upload" },
 ] as const;
+const RECEIPT_PRINT_RANGES = [
+  { value: "daily", label: "Today" },
+  { value: "weekly", label: "This week" },
+  { value: "monthly", label: "This month" },
+] as const;
 
 const PAGE_SIZE = 10;
 
 type SortOption = (typeof SORT_OPTIONS)[number]["value"];
 type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
+type ReceiptPrintRange = (typeof RECEIPT_PRINT_RANGES)[number]["value"];
 
 type StatusTotals = {
   all: number;
@@ -168,6 +174,7 @@ export default function DocumentsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortBy, setSortBy] = useState<SortOption>("created-desc");
   const [page, setPage] = useState(1);
+  const [receiptRange, setReceiptRange] = useState<ReceiptPrintRange>("weekly");
 
   const summaryQuery = useDocumentSummary({ enabled: isManager });
   const documentsQuery = useDocumentsList({
@@ -234,6 +241,26 @@ export default function DocumentsPage() {
     return sorted;
   }, [documents, sortBy, statusFilter]);
 
+  const receiptDocs = useMemo(() => {
+    if (moduleFilter === "ALL") return [];
+    const now = new Date();
+    const start = new Date(now);
+    if (receiptRange === "daily") {
+      start.setHours(0, 0, 0, 0);
+    } else if (receiptRange === "weekly") {
+      start.setDate(now.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
+    } else {
+      start.setDate(now.getDate() - 29);
+      start.setHours(0, 0, 0, 0);
+    }
+    return documents.filter((doc) => {
+      if (doc.module !== moduleFilter) return false;
+      const created = new Date(doc.createdAt).getTime();
+      return created >= start.getTime() && created <= now.getTime();
+    });
+  }, [documents, moduleFilter, receiptRange]);
+
   useEffect(() => {
     setPage(1);
   }, [moduleFilter, searchValue, statusFilter, sortBy, documents.length]);
@@ -260,6 +287,96 @@ export default function DocumentsPage() {
     setSearchValue("");
     setStatusFilter("all");
     setPage(1);
+  };
+
+  const handlePrintReceipts = () => {
+    if (moduleFilter === "ALL") return;
+    if (receiptDocs.length === 0) {
+      toast({ title: "Nothing to print", description: "No procurement receipts found for this range." });
+      return;
+    }
+    const rangeLabel = RECEIPT_PRINT_RANGES.find((range) => range.value === receiptRange)?.label ?? receiptRange;
+    const moduleLabel = moduleFilter;
+    const statusCounts = receiptDocs.reduce(
+      (acc, doc) => {
+        const status = computeStatus(doc.storageKey);
+        if (status === DOCUMENT_STATUS.FILED) acc.filed += 1;
+        else acc.pending += 1;
+        acc.total += 1;
+        return acc;
+      },
+      { total: 0, filed: 0, pending: 0 }
+    );
+
+    const tagCounts = receiptDocs.reduce((acc, doc) => {
+      (doc.tags ?? []).forEach((tag) => {
+        acc[tag] = (acc[tag] ?? 0) + 1;
+      });
+      return acc;
+    }, {} as Record<string, number>);
+
+    const tagSummary = Object.keys(tagCounts)
+      .sort()
+      .map((tag) => `${tag}: ${tagCounts[tag]}`)
+      .join(" · ");
+
+    const rows = receiptDocs
+      .map((doc) => {
+        const tags = doc.tags?.join(", ") ?? "-";
+        const references = [doc.poId && `PO: ${doc.poId}`, doc.receiptId && `Receipt: ${doc.receiptId}`]
+          .filter(Boolean)
+          .join(" · ");
+        return `<tr>
+          <td>${doc.title}</td>
+          <td>${tags}</td>
+          <td>${references || "-"}</td>
+          <td>${formatDate(doc.createdAt)}</td>
+          <td>${computeStatus(doc.storageKey)}</td>
+        </tr>`;
+      })
+      .join("");
+
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) {
+      toast({ variant: "destructive", title: "Popup blocked", description: "Allow popups to print the report." });
+      return;
+    }
+    win.document.write(`
+      <html>
+        <head>
+          <title>${moduleLabel} documents - ${rangeLabel}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+            h1 { font-size: 20px; margin-bottom: 6px; }
+            p { margin: 0 0 12px 0; color: #475569; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+            th { background: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h1>${moduleLabel} Documents (${rangeLabel})</h1>
+          <p>Generated: ${new Date().toLocaleString()}</p>
+          <p>Total: ${statusCounts.total} · Filed: ${statusCounts.filed} · Pending: ${statusCounts.pending}</p>
+          ${tagSummary ? `<p>By tag: ${tagSummary}</p>` : ""}
+          <table>
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Tags</th>
+                <th>References</th>
+                <th>Created</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
   };
 
   const handleCopyKey = async (key?: string | null) => {
@@ -351,6 +468,25 @@ export default function DocumentsPage() {
                   ))}
                 </SelectContent>
               </Select>
+                {moduleFilter !== "ALL" ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select value={receiptRange} onValueChange={(value: ReceiptPrintRange) => setReceiptRange(value)}>
+                      <SelectTrigger className="w-36">
+                        <SelectValue placeholder="Range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RECEIPT_PRINT_RANGES.map((range) => (
+                          <SelectItem key={range.value} value={range.value}>
+                            {range.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button type="button" variant="outline" onClick={handlePrintReceipts}>
+                      Print {moduleFilter.toLowerCase()} docs
+                    </Button>
+                  </div>
+                ) : null}
                 <div className="flex gap-2">
                   <Input
                     placeholder="Search title, tag, or storage key"

@@ -1,7 +1,7 @@
 const router = require("express").Router();
 const crypto = require("crypto");
 const { prisma } = require("../prisma");
-const { getPoApprovalById } = require("../procurementClient");
+const { getPoApprovalById, upsertVendorReceiptDraft } = require("../procurementClient");
 
 const ALLOWED = {
   DRAFT: ["DISPATCHED", "CANCELLED"],
@@ -128,6 +128,48 @@ function normalizeStatus(value) {
   return allowed.includes(status) ? status : null;
 }
 
+function normalizeReceiptLines(input) {
+  const lines = Array.isArray(input) ? input : [];
+  if (!lines.length) {
+    throw Object.assign(new Error("receiptLines are required"), {
+      status: 400,
+      code: "VALIDATION_ERROR",
+    });
+  }
+
+  return lines.map((line, idx) => {
+    const lineNo = idx + 1;
+    const itemId = toBigInt(line?.itemId, `receiptLines[${lineNo}].itemId`);
+    const qtyNumber = typeof line?.qty === "number" ? line.qty : Number(line?.qty);
+    if (!Number.isFinite(qtyNumber) || qtyNumber <= 0) {
+      throw Object.assign(new Error(`receiptLines[${lineNo}].qty must be positive`), {
+        status: 400,
+        code: "VALIDATION_ERROR",
+      });
+    }
+    const lotNo = typeof line?.lotNo === "string" ? line.lotNo.trim() : "";
+    if (!lotNo) {
+      throw Object.assign(new Error(`receiptLines[${lineNo}].lotNo is required`), {
+        status: 400,
+        code: "VALIDATION_ERROR",
+      });
+    }
+    const expiryDate = toDate(line?.expiryDate, `receiptLines[${lineNo}].expiryDate`);
+    if (!expiryDate) {
+      throw Object.assign(new Error(`receiptLines[${lineNo}].expiryDate is required`), {
+        status: 400,
+        code: "VALIDATION_ERROR",
+      });
+    }
+    return {
+      itemId: itemId.toString(),
+      qty: qtyNumber,
+      lotNo,
+      expiryDate: expiryDate.toISOString(),
+    };
+  });
+}
+
 router.post("/shipments", async (req, res, next) => {
   try {
     const userId = normalizeUserId(req.user?.sub);
@@ -152,6 +194,7 @@ router.post("/shipments", async (req, res, next) => {
     const eta = toDate(req.body?.eta, "eta");
     const departedAt = toDate(req.body?.departedAt, "departedAt");
     const status = normalizeStatus(req.body?.status) || "DISPATCHED";
+    const receiptLines = normalizeReceiptLines(req.body?.receiptLines);
 
     const approval = await getPoApprovalById(poId);
     if (!approval) {
@@ -203,9 +246,25 @@ router.post("/shipments", async (req, res, next) => {
       },
     });
 
+    try {
+      await upsertVendorReceiptDraft({
+        poId: poId.toString(),
+        vendorId: vendorId.toString(),
+        createdBy: userId,
+        lines: receiptLines,
+      });
+    } catch (err) {
+      await prisma.delivery.delete({ where: { id: delivery.id } }).catch(() => {});
+      throw Object.assign(new Error("Failed to save vendor receipt details"), {
+        status: 502,
+        cause: err,
+      });
+    }
+
     res.status(201).json(delivery);
   } catch (e) {
     if (e?.status === 400) return res.status(400).json({ error: e.message });
+    if (e?.status === 502) return res.status(502).json({ error: e.message });
     next(e);
   }
 });

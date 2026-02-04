@@ -7,6 +7,7 @@ export type VendorOrderSummary = {
   poNo: string;
   status: string;
   orderedAt: string;
+  deliveryStatus?: string | null;
   vendor: { id: string; name: string };
   lineCount: number;
   totalQty: number;
@@ -47,6 +48,19 @@ export function useVendorOrders() {
     queryKey: ["vendor", "orders"],
     queryFn: async () => {
       const { data } = await api.get<VendorOrderSummary[]>("/procurement/vendor/pos");
+      return data;
+    },
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useVendorOrderHistory() {
+  return useQuery<VendorOrderSummary[]>({
+    queryKey: ["vendor", "orders", "history"],
+    queryFn: async () => {
+      const { data } = await api.get<VendorOrderSummary[]>(
+        "/procurement/vendor/pos?includeDelivered=true"
+      );
       return data;
     },
     staleTime: 1000 * 60,
