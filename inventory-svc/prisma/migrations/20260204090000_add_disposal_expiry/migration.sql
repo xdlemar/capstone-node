@@ -1,4 +1,4 @@
-﻿-- CreateEnum
+-- CreateEnum
 CREATE TYPE "public"."BatchStatus" AS ENUM ('ACTIVE', 'EXPIRING', 'EXPIRED', 'QUARANTINED', 'DISPOSED');
 
 -- CreateEnum
