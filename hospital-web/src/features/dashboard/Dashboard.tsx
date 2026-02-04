@@ -452,6 +452,15 @@ export default function DashboardPage() {
                     {card.change}
                   </Badge>
                   <p className="text-sm text-muted-foreground">{card.helper}</p>
+                  {card.linkTo ? (
+                    <Link
+                      to={card.linkTo}
+                      className="inline-flex items-center gap-1 text-sm font-medium text-primary"
+                    >
+                      {card.linkLabel ?? "View details"}
+                      <ArrowUpRight className="size-4" />
+                    </Link>
+                  ) : null}
                 </CardContent>
               </Card>
             );

@@ -9,13 +9,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useInventoryForecast } from "@/hooks/useInventoryForecast";
 import { useInventoryLevels } from "@/hooks/useInventoryLevels";
 import { useInventoryLookups } from "@/hooks/useInventoryLookups";
+import { useInventoryExpiringBatches } from "@/hooks/useInventoryExpiringBatches";
 
 export default function InventoryOverview() {
   const { data: lookups } = useInventoryLookups();
   const [locationFilter, setLocationFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [expiryWindowDays, setExpiryWindowDays] = useState<string>("30");
   const levelsQuery = useInventoryLevels(locationFilter === "all" ? undefined : locationFilter);
   const forecastQuery = useInventoryForecast(locationFilter === "all" ? undefined : locationFilter);
+  const expiringQuery = useInventoryExpiringBatches({ windowDays: Number(expiryWindowDays) || 30, take: 50 });
 
   const itemMap = useMemo(() => {
     const map = new Map<string, { minQty: number; unit: string; type: string }>();
@@ -64,6 +67,44 @@ export default function InventoryOverview() {
 
   const formatWhole = (value: number) => Math.round(value).toLocaleString();
 
+  const formatDate = (value: string | null) => {
+    if (!value) return "-";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "-";
+    return parsed.toLocaleDateString();
+  };
+
+  const daysUntil = (value: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    const diffMs = parsed.getTime() - Date.now();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  };
+
+  const expiryWindow = Number(expiryWindowDays) || 30;
+
+  const expiringBatches = (expiringQuery.data ?? []).filter((batch) => {
+    if (typeFilter === "all") return true;
+    const batchType = batch.item?.type ?? "supply";
+    return batchType === typeFilter;
+  });
+
+  const expiringSoonCount = expiringBatches.filter((batch) => {
+    const remaining = daysUntil(batch.expiryDate);
+    return remaining != null && remaining <= Math.min(7, expiryWindow);
+  }).length;
+
+  const expiringByItem = new Map<string, number>();
+  expiringBatches.forEach((batch) => {
+    const remaining = daysUntil(batch.expiryDate);
+    if (remaining == null) return;
+    const current = expiringByItem.get(batch.itemId);
+    if (current == null || remaining < current) {
+      expiringByItem.set(batch.itemId, remaining);
+    }
+  });
+
   return (
     <section className="space-y-6">
       <header className="space-y-3">
@@ -81,7 +122,7 @@ export default function InventoryOverview() {
         </div>
       </header>
 
-      <Card>
+      <Card id="expiring-batches">
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="space-y-1">
             <CardTitle className="text-lg">Current balances</CardTitle>
@@ -113,6 +154,17 @@ export default function InventoryOverview() {
                 <SelectItem value="medicine">Medicine</SelectItem>
                 <SelectItem value="supply">Supply</SelectItem>
                 <SelectItem value="equipment">Equipment</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={expiryWindowDays} onValueChange={setExpiryWindowDays}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Expires within" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">Expires in 7 days</SelectItem>
+                <SelectItem value="14">Expires in 14 days</SelectItem>
+                <SelectItem value="30">Expires in 30 days</SelectItem>
+                <SelectItem value="60">Expires in 60 days</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -156,18 +208,100 @@ export default function InventoryOverview() {
                       <TableCell className="text-right">{row.onhand.toLocaleString()}</TableCell>
                       <TableCell className="text-right">{row.minQty ? row.minQty.toLocaleString() : "-"}</TableCell>
                       <TableCell>
-                        {row.minQty > 0 ? (
-                          row.onhand <= row.minQty ? (
-                            <Badge variant="destructive">Restock</Badge>
+                        <div className="flex flex-wrap gap-2">
+                          {row.minQty > 0 ? (
+                            row.onhand <= row.minQty ? (
+                              <Badge variant="destructive">Restock</Badge>
+                            ) : (
+                              <Badge variant="outline">Healthy</Badge>
+                            )
                           ) : (
-                            <Badge variant="outline">Healthy</Badge>
-                          )
-                        ) : (
-                          <Badge variant="secondary">No threshold</Badge>
-                        )}
+                            <Badge variant="secondary">No threshold</Badge>
+                          )}
+                          {(() => {
+                            const remaining = expiringByItem.get(row.itemId);
+                            if (remaining == null || remaining > expiryWindow) return null;
+                            const variant = remaining <= 7 ? "destructive" : remaining <= 14 ? "secondary" : "outline";
+                            const label = remaining <= 0 ? "Expired" : remaining <= 7 ? "Expiring soon" : "Expiring";
+                            return (
+                              <Badge variant={variant as "outline" | "secondary" | "destructive"}>
+                                {label}
+                              </Badge>
+                            );
+                          })()}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card id="expiring-batches">
+        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-lg">Expiring batches (next {expiryWindow} days)</CardTitle>
+            <CardDescription>
+              Batches with stock on hand and an upcoming expiry date across all storage areas.
+            </CardDescription>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={expiringSoonCount > 0 ? "destructive" : "secondary"}>
+              {expiringSoonCount} expiring in 7 days
+            </Badge>
+            <Badge variant="outline">{expiringBatches.length} total</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {expiringQuery.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading expiring batches.</p>
+          ) : expiringBatches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No batches are expiring in the next {expiryWindow} days.</p>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="w-28">Lot</TableHead>
+                    <TableHead className="w-32">Expires</TableHead>
+                    <TableHead className="w-24 text-right">Days left</TableHead>
+                    <TableHead className="w-28 text-right">On-hand</TableHead>
+                    <TableHead className="w-28">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {expiringBatches.slice(0, 20).map((batch) => {
+                    const remaining = daysUntil(batch.expiryDate);
+                    const statusVariant =
+                      remaining != null && remaining <= 7
+                        ? "destructive"
+                        : remaining != null && remaining <= 14
+                          ? "secondary"
+                          : "outline";
+                    return (
+                      <TableRow key={batch.id}>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium text-foreground">{batch.item?.name ?? "Unknown item"}</span>
+                            <span className="text-xs text-muted-foreground">{batch.item?.sku ?? "-"}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{batch.lotNo ?? "-"}</TableCell>
+                        <TableCell>{formatDate(batch.expiryDate)}</TableCell>
+                        <TableCell className="text-right">{remaining ?? "-"}</TableCell>
+                        <TableCell className="text-right">{batch.qtyOnHand.toLocaleString()}</TableCell>
+                        <TableCell>
+                          <Badge variant={statusVariant as "outline" | "secondary" | "destructive"}>
+                            {remaining == null ? "Unknown" : remaining <= 0 ? "Expired" : remaining <= 7 ? "Critical" : remaining <= 14 ? "Soon" : "Upcoming"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
