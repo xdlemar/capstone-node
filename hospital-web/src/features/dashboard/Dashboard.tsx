@@ -15,6 +15,8 @@ import {
   Users2,
   Coins,
   PiggyBank,
+  Pin,
+  PinOff,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -54,6 +56,8 @@ const MODULE_LABELS: Record<DashboardUnavailableKey, string> = {
   users: "User directory",
 };
 
+const PIN_STORAGE_KEY = "dashboard.pins";
+
 function formatCurrency(value?: number | null) {
   return currencyFormatter.format(value ?? 0);
 }
@@ -68,10 +72,11 @@ function formatCount(value?: number, fallback = "0") {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { data: dashboardResult, isLoading } = useDashboardData();
+  const { data: dashboardResult, isLoading, refetch, isFetching } = useDashboardData();
 
   const dashboardData = dashboardResult?.data;
   const unavailable = dashboardResult?.unavailable ?? [];
+  const fetchedAt = dashboardResult?.fetchedAt;
 
   const roleSet = new Set(user?.roles ?? []);
 
@@ -81,6 +86,41 @@ export default function DashboardPage() {
   const logistics = dashboardData?.logistics;
   const documents = dashboardData?.documents;
   const usersSummary = dashboardData?.users;
+
+  const isUnavailable = (key: DashboardUnavailableKey) => unavailable.includes(key);
+  const unavailableLabel = (key: DashboardUnavailableKey) => MODULE_LABELS[key] ?? key;
+  const pinLimit = roleSet.has("ADMIN") ? 6 : roleSet.has("MANAGER") ? 5 : 4;
+
+  const [pinnedWorkspaces, setPinnedWorkspaces] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(PIN_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const persistPins = (next: string[]) => {
+    setPinnedWorkspaces(next);
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(PIN_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+
+  const togglePin = (id: string) => {
+    const next = pinnedWorkspaces.includes(id)
+      ? pinnedWorkspaces.filter((pin) => pin !== id)
+      : [id, ...pinnedWorkspaces].slice(0, pinLimit);
+    persistPins(next);
+  };
+
+  const resetPins = () => persistPins([]);
 
   const heroActions = [
     roleSetHas(roleSet, CTA_ROLES.inventory) && (
@@ -129,51 +169,81 @@ export default function DashboardPage() {
   const kpiCards = [
     {
       title: "Open purchase requests",
-      value: formatCount(procurement?.openRequests),
-      change: `${formatCount(procurement?.pendingApprovals)} pending approval`,
+      value: isUnavailable("procurement") ? "—" : formatCount(procurement?.openRequests),
+      change: isUnavailable("procurement")
+        ? "Unavailable"
+        : `${formatCount(procurement?.pendingApprovals)} pending approval`,
       helper: "Procurement pipeline",
       icon: ClipboardList,
       roles: ["STAFF", "MANAGER", "ADMIN"],
     },
     {
       title: "Inventory alerts",
-      value: formatCount((inventory?.lowStock ?? 0) + (inventory?.expiringSoon ?? 0)),
-      change: `${formatCount(inventory?.expiringBatches)} batches expiring soon`,
+      value: isUnavailable("inventory")
+        ? "—"
+        : formatCount((inventory?.lowStock ?? 0) + (inventory?.expiringSoon ?? 0)),
+      change: isUnavailable("inventory")
+        ? "Unavailable"
+        : `${formatCount(inventory?.expiringBatches)} batches expiring soon`,
       helper: "Covers low stock & expiries",
       icon: Boxes,
       roles: ["MANAGER", "ADMIN"],
     },
     {
       title: "Scheduled maintenance",
-      value: formatCount(assets?.maintenanceDueSoon),
-      change: `${formatCount(assets?.openWorkOrders)} work orders in progress`,
+      value: isUnavailable("assets") ? "—" : formatCount(assets?.maintenanceDueSoon),
+      change: isUnavailable("assets")
+        ? "Unavailable"
+        : `${formatCount(assets?.openWorkOrders)} work orders in progress`,
       helper: "Equipment lifecycle",
       icon: Stethoscope,
       roles: ["STAFF", "MANAGER", "ADMIN"],
     },
     {
       title: "Pending approvals",
-      value: formatCount(procurement?.pendingApprovals),
-      change: `${formatCount(procurement?.openPurchaseOrders)} open purchase orders`,
+      value: isUnavailable("procurement") ? "—" : formatCount(procurement?.pendingApprovals),
+      change: isUnavailable("procurement")
+        ? "Unavailable"
+        : `${formatCount(procurement?.openPurchaseOrders)} open purchase orders`,
       helper: "Review & release",
       icon: BadgeCheck,
       roles: ["MANAGER", "ADMIN"],
     },
     {
       title: "Documents uploaded",
-      value: formatCount(documents?.recentUploads),
-      change: `${formatCount(documents?.awaitingSignatures)} awaiting signature`,
+      value: isUnavailable("documents") ? "—" : formatCount(documents?.recentUploads),
+      change: isUnavailable("documents")
+        ? "Unavailable"
+        : `${formatCount(documents?.awaitingSignatures)} awaiting signature`,
       helper: "Compliance hub",
       icon: FileText,
       roles: ["MANAGER", "ADMIN"],
     },
     {
       title: "Team on duty",
-      value: formatCount(usersSummary?.activeUsers),
-      change: `+${formatCount(usersSummary?.newThisWeek)} this week`,
+      value: isUnavailable("users") ? "—" : formatCount(usersSummary?.activeUsers),
+      change: isUnavailable("users")
+        ? "Unavailable"
+        : `+${formatCount(usersSummary?.newThisWeek)} this week`,
       helper: "User access",
       icon: Users2,
       roles: ["ADMIN"],
+    },
+    {
+      title: "Awaiting signatures",
+      value: isUnavailable("documents") ? "—" : formatCount(documents?.awaitingSignatures),
+      change: isUnavailable("documents") ? "Unavailable" : "Signature backlog",
+      helper: "Compliance hub",
+      icon: FileText,
+      roles: ["MANAGER", "ADMIN"],
+    },
+    {
+      title: "Delayed deliveries",
+      value: isUnavailable("logistics") ? "—" : formatCount(logistics?.delayedDeliveries),
+      change: isUnavailable("logistics") ? "Unavailable" : "Routes at risk",
+      helper: "Project logistics",
+      icon: Truck,
+      roles: ["MANAGER", "ADMIN"],
     },
   ];
 
@@ -207,17 +277,68 @@ export default function DashboardPage() {
   const checklist = [
     {
       title: "Review requisitions needing approval",
-      detail: `${formatCount(procurement?.pendingApprovals)} awaiting approval`,
+      detail: isUnavailable("procurement")
+        ? "Unavailable"
+        : `${formatCount(procurement?.pendingApprovals)} awaiting approval`,
     },
     {
       title: "Confirm inbound deliveries",
-      detail: `${formatCount(logistics?.deliveriesInTransit)} routes in transit`,
+      detail: isUnavailable("logistics")
+        ? "Unavailable"
+        : `${formatCount(logistics?.deliveriesInTransit)} routes in transit`,
     },
     {
       title: "Share weekly compliance digest",
-      detail: `${formatCount(documents?.recentUploads)} new files this week`,
+      detail: isUnavailable("documents")
+        ? "Unavailable"
+        : `${formatCount(documents?.recentUploads)} new files this week`,
     },
   ];
+
+  const nextBestAction = (() => {
+    if (isUnavailable("procurement") && isUnavailable("inventory") && isUnavailable("logistics")) {
+      return {
+        title: "Retry dashboard data",
+        description: "Several services are unavailable right now.",
+        actionLabel: "Retry",
+        onClick: () => refetch(),
+      };
+    }
+    if (!isUnavailable("procurement") && (procurement?.pendingApprovals ?? 0) > 0) {
+      return {
+        title: "Review pending approvals",
+        description: `${formatCount(procurement?.pendingApprovals)} requisitions awaiting approval`,
+        href: "/procurement/approvals",
+      };
+    }
+    const inventoryAlertsCount = (inventory?.lowStock ?? 0) + (inventory?.expiringSoon ?? 0);
+    if (!isUnavailable("inventory") && inventoryAlertsCount > 0) {
+      return {
+        title: "Resolve inventory alerts",
+        description: `${formatCount(inventoryAlertsCount)} items need attention`,
+        href: "/inventory/stock-levels",
+      };
+    }
+    if (!isUnavailable("logistics") && (logistics?.delayedDeliveries ?? 0) > 0) {
+      return {
+        title: "Investigate delayed deliveries",
+        description: `${formatCount(logistics?.delayedDeliveries)} delayed routes`,
+        href: "/plt/deliveries",
+      };
+    }
+    if (!isUnavailable("documents") && (documents?.awaitingSignatures ?? 0) > 0) {
+      return {
+        title: "Finalize signatures",
+        description: `${formatCount(documents?.awaitingSignatures)} documents awaiting sign-off`,
+        href: "/dtrs/missing",
+      };
+    }
+    return {
+      title: "Review operations overview",
+      description: "Everything looks steady. Review core modules for routine checks.",
+      href: "/dashboard",
+    };
+  })();
 
   if (isLoading && !dashboardData) {
     return (
@@ -257,14 +378,51 @@ export default function DashboardPage() {
 
       {unavailable.length > 0 && (
         <div className="rounded-lg border border-amber-400/60 bg-amber-50/70 px-4 py-3 shadow-sm">
-          <p className="text-sm font-semibold text-amber-900">Some summaries are temporarily unavailable:</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-800">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-900">Some summaries are temporarily unavailable</p>
+              <p className="text-xs text-amber-800">
+                {fetchedAt ? `Last checked: ${new Date(fetchedAt).toLocaleString()}` : "Check again shortly."}
+              </p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+              {isFetching ? "Retrying..." : "Retry"}
+            </Button>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
             {unavailable.map((key) => (
-              <li key={key}>{MODULE_LABELS[key] ?? key}</li>
+              <Badge key={key} variant="outline">
+                {unavailableLabel(key)}
+              </Badge>
             ))}
-          </ul>
+          </div>
         </div>
       )}
+
+      <Card className="border bg-card shadow-md">
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle>Next best action</CardTitle>
+            <CardDescription>Suggested focus based on current signals</CardDescription>
+          </div>
+          {"href" in nextBestAction ? (
+            <Button asChild variant="secondary" className="gap-2">
+              <Link to={nextBestAction.href}>
+                {nextBestAction.title}
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </Button>
+          ) : (
+            <Button type="button" variant="secondary" className="gap-2" onClick={nextBestAction.onClick}>
+              {nextBestAction.actionLabel}
+              <ArrowUpRight className="size-4" />
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">{nextBestAction.description}</p>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {kpiCards
@@ -309,25 +467,35 @@ export default function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex h-28 items-end gap-2">
-              {operationsSeries.map((value, index) => (
-                <div key={index} className="flex-1">
-                  <div
-                    className="rounded-t-full bg-gradient-to-t from-primary/60 via-primary/40 to-primary/20"
-                    style={{ height: `${Math.min(100, Math.round(value))}%` }}
-                    aria-hidden
-                  />
-                </div>
-              ))}
-            </div>
+            {isUnavailable("inventory") ? (
+              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                Inventory metrics unavailable. Retry once inventory service is online.
+              </div>
+            ) : (
+              <div className="flex h-28 items-end gap-2">
+                {operationsSeries.map((value, index) => (
+                  <div key={index} className="flex-1">
+                    <div
+                      className="rounded-t-full bg-gradient-to-t from-primary/60 via-primary/40 to-primary/20"
+                      style={{ height: `${Math.min(100, Math.round(value))}%` }}
+                      aria-hidden
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <p className="text-sm text-muted-foreground">Deliveries in transit</p>
-                <p className="text-lg font-semibold text-emerald-600">{formatCount(logistics?.deliveriesInTransit)}</p>
+                <p className="text-lg font-semibold text-emerald-600">
+                  {isUnavailable("logistics") ? "—" : formatCount(logistics?.deliveriesInTransit)}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Delayed deliveries</p>
-                <p className="text-lg font-semibold text-rose-600">{formatCount(logistics?.delayedDeliveries)}</p>
+                <p className="text-lg font-semibold text-rose-600">
+                  {isUnavailable("logistics") ? "—" : formatCount(logistics?.delayedDeliveries)}
+                </p>
               </div>
             </div>
             {logisticsCostProjects.length > 0 && (
@@ -371,7 +539,9 @@ export default function DashboardPage() {
           <CardContent className="space-y-4">
             {liveAlerts.length === 0 && (
               <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                No critical alerts at the moment.
+                {isUnavailable("inventory") && isUnavailable("logistics")
+                  ? "Alerts unavailable while services recover."
+                  : "No critical alerts at the moment."}
               </div>
             )}
             {liveAlerts.map((alert) => (
@@ -410,12 +580,26 @@ export default function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="border bg-card shadow-md lg:col-span-2">
           <CardHeader>
-            <CardTitle>Quick workspaces</CardTitle>
-            <CardDescription>Jump to the modules you use most often</CardDescription>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle>Quick workspaces</CardTitle>
+                <CardDescription>Jump to the modules you use most often</CardDescription>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>
+                  Pins: {pinnedWorkspaces.length}/{pinLimit}
+                </span>
+                <Button type="button" variant="outline" size="sm" onClick={resetPins} disabled={!pinnedWorkspaces.length}>
+                  Reset pins
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             {[
               {
+                id: "procurement",
+                serviceKey: "procurement" as DashboardUnavailableKey,
                 title: "Procurement workspace",
                 description: `${formatCount(procurement?.openRequests)} open requests in review`,
                 href: "/procurement/requisitions",
@@ -423,6 +607,8 @@ export default function DashboardPage() {
                 roles: ["STAFF", "MANAGER", "ADMIN"],
               },
               {
+                id: "inventory",
+                serviceKey: "inventory" as DashboardUnavailableKey,
                 title: "Inventory insights",
                 description: `${formatCount(inventory?.lowStock)} low stock alerts`,
                 href: "/inventory/stock-levels",
@@ -430,6 +616,8 @@ export default function DashboardPage() {
                 roles: ["STAFF", "MANAGER", "ADMIN"],
               },
               {
+                id: "equipment",
+                serviceKey: "assets" as DashboardUnavailableKey,
                 title: "Equipment maintenance",
                 description: `${formatCount(assets?.openWorkOrders)} work orders scheduled`,
                 href: "/alms",
@@ -437,6 +625,8 @@ export default function DashboardPage() {
                 roles: ["STAFF", "MANAGER", "ADMIN"],
               },
               {
+                id: "logistics",
+                serviceKey: "logistics" as DashboardUnavailableKey,
                 title: "Logistics routes",
                 description: `${formatCount(logistics?.deliveriesInTransit)} routes in transit`,
                 href: "/plt",
@@ -444,6 +634,8 @@ export default function DashboardPage() {
                 roles: ["MANAGER", "ADMIN"],
               },
               {
+                id: "documents",
+                serviceKey: "documents" as DashboardUnavailableKey,
                 title: "Document library",
                 description: `${formatCount(documents?.totalDocuments)} files available (role-scoped)`,
                 href: "/dtrs",
@@ -451,6 +643,8 @@ export default function DashboardPage() {
                 roles: ["STAFF", "MANAGER", "ADMIN"],
               },
               {
+                id: "users",
+                serviceKey: "users" as DashboardUnavailableKey,
                 title: "User administration",
                 description: `${formatCount(usersSummary?.totalUsers)} registered users`,
                 href: "/admin",
@@ -459,22 +653,50 @@ export default function DashboardPage() {
               },
             ]
               .filter((link) => roleSetHas(roleSet, link.roles))
+              .sort((a, b) => {
+                const aPinned = pinnedWorkspaces.includes(a.id);
+                const bPinned = pinnedWorkspaces.includes(b.id);
+                if (aPinned === bPinned) return 0;
+                return aPinned ? -1 : 1;
+              })
               .map((link) => {
                 const Icon = link.icon;
+                const isPinned = pinnedWorkspaces.includes(link.id);
+                const isDown = isUnavailable(link.serviceKey);
                 return (
                   <Link
                     key={link.title}
                     to={link.href}
                     className="group rounded-xl border bg-muted/40 p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
                   >
-                    <div className="flex items-start gap-3">
-                      <span className="rounded-lg bg-primary/10 p-2 text-primary">
-                        <Icon className="size-4" />
-                      </span>
-                      <div>
-                        <p className="font-medium text-foreground group-hover:text-primary">{link.title}</p>
-                        <p className="text-sm text-muted-foreground">{link.description}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <span className="rounded-lg bg-primary/10 p-2 text-primary">
+                          <Icon className="size-4" />
+                        </span>
+                        <div>
+                          <p className="font-medium text-foreground group-hover:text-primary">{link.title}</p>
+                          <p className="text-sm text-muted-foreground">{link.description}</p>
+                          {isDown ? (
+                            <Badge variant="outline" className="mt-1 text-[10px]">
+                              Unavailable
+                            </Badge>
+                          ) : null}
+                        </div>
                       </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          togglePin(link.id);
+                        }}
+                        title={isPinned ? "Unpin workspace" : "Pin workspace"}
+                      >
+                        {isPinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+                      </Button>
                     </div>
                   </Link>
                 );

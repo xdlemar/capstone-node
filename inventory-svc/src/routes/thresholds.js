@@ -4,13 +4,16 @@ const r = Router();
 
 /**
  * Set or update a threshold.
- * Body: { itemId, locationId (optional), minQty }
- * If locationId is null, acts as a global threshold for that item.
+ * Body: { itemId, locationId, minQty }
+ * locationId is required; thresholds are per-location.
  */
 r.post("/", async (req, res) => {
   try {
     const itemId = BigInt(req.body.itemId);
-    const locationId = req.body.locationId != null ? BigInt(req.body.locationId) : null;
+    if (req.body.locationId == null) {
+      return res.status(400).json({ error: "locationId is required" });
+    }
+    const locationId = BigInt(req.body.locationId);
     const minQty = Number(req.body.minQty);
 
     // Upsert by (itemId, locationId) logical key

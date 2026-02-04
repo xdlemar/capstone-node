@@ -16,6 +16,11 @@ const schedules = [
     interval: ms(process.env.LOW_STOCK_INTERVAL_MS, 5 * 60 * 1000),
   },
   {
+    name: "inventory-expiry-alerts",
+    script: path.join(rootDir, "inventory-svc", "src", "jobs", "expiry.js"),
+    interval: ms(process.env.EXPIRY_ALERT_INTERVAL_MS, 6 * 60 * 60 * 1000),
+  },
+  {
     name: "plt-delivery-alerts",
     script: path.join(rootDir, "plt-svc", "src", "jobs", "checkDelays.js"),
     interval: ms(process.env.PLT_ALERT_INTERVAL_MS, 5 * 60 * 1000),

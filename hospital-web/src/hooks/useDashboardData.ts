@@ -108,6 +108,7 @@ export type DashboardUnavailableKey = keyof DashboardData;
 export type DashboardFetchResult = {
   data: DashboardData;
   unavailable: DashboardUnavailableKey[];
+  fetchedAt: string;
 };
 
 const SUMMARY_ENDPOINTS: Array<{
@@ -147,7 +148,7 @@ async function fetchDashboard(): Promise<DashboardFetchResult> {
     return acc;
   }, {});
 
-  return { data, unavailable };
+  return { data, unavailable, fetchedAt: new Date().toISOString() };
 }
 
 export function useDashboardData() {
