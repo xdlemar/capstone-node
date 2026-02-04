@@ -48,6 +48,17 @@ const CTA_ROLES = {
   admin: ["ADMIN"],
 };
 
+type KpiCard = {
+  title: string;
+  value: string;
+  change: string;
+  helper: string;
+  icon: typeof Boxes;
+  roles: string[];
+  linkLabel?: string;
+  linkTo?: string;
+};
+
 const MODULE_LABELS: Record<DashboardUnavailableKey, string> = {
   procurement: "Procurement summary",
   inventory: "Inventory metrics",
@@ -171,7 +182,7 @@ export default function DashboardPage() {
     <div className="text-sm text-white/70">No quick actions available for your role yet.</div>
   );
 
-  const kpiCards = [
+  const kpiCards: KpiCard[] = [
     {
       title: "Open purchase requests",
       value: isUnavailable("procurement") ? "—" : formatCount(procurement?.openRequests),
