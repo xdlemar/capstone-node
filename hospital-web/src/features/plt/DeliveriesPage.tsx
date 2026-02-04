@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { AlertCircle, Clock, MapPin, Package, ShieldAlert } from "lucide-react";
+import { AlertCircle, Clock, MapPin, Package } from "lucide-react";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
