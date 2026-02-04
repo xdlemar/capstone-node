@@ -17,6 +17,11 @@ import { api } from "@/lib/api";
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", { dateStyle: "medium" });
 const currencyFormatter = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
+const lotDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 function statusVariant(status: string) {
   const normalized = status.toUpperCase();
@@ -42,6 +47,7 @@ export default function VendorOrderDetailPage() {
   const [departedAt, setDepartedAt] = useState("");
   const [lastKnown, setLastKnown] = useState("");
   const [notes, setNotes] = useState("");
+  const [lotSeed] = useState(() => Date.now());
   const [receiptLines, setReceiptLines] = useState<
     Array<{
       itemId: string;
@@ -96,16 +102,17 @@ export default function VendorOrderDetailPage() {
 
   useEffect(() => {
     if (!scheduleOpen || !orderQuery.data) return;
+    const baseDate = lotDateFormatter.format(new Date()).replace(/-/g, "");
     const nextLines = orderQuery.data.lines.map((line) => ({
       itemId: line.itemId,
       itemName: line.itemName ?? null,
       itemSku: line.itemSku ?? null,
       qty: Number(line.qty ?? 0),
-      lotNo: "",
+      lotNo: `LOT-${baseDate}-${line.itemId}-${lotSeed}`,
       expiryDate: "",
     }));
     setReceiptLines(nextLines);
-  }, [scheduleOpen, orderQuery.data]);
+  }, [scheduleOpen, orderQuery.data, lotSeed]);
 
   const approveMutation = useMutation({
     mutationFn: async (orderId: string) => {
@@ -399,7 +406,7 @@ export default function VendorOrderDetailPage() {
       </Card>
 
       <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[820px]">
           <DialogHeader>
             <DialogTitle>Schedule shipment</DialogTitle>
             <DialogDescription>Add tracking details so the hospital can plan receiving.</DialogDescription>

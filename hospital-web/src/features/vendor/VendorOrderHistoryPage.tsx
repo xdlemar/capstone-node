@@ -47,11 +47,18 @@ export default function VendorOrderHistoryPage() {
   const [status, setStatus] = useState("ALL");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [sortKey, setSortKey] = useState("orderedDesc");
 
   const filtered = useMemo(() => {
     const rows = historyQuery.data ?? [];
-    return rows.filter((order) => {
-      if (status !== "ALL" && order.status !== status) return false;
+    const filteredRows = rows.filter((order) => {
+      if (status !== "ALL") {
+        if (status === "RECEIVED") {
+          if ((order.deliveryStatus || "").toUpperCase() !== "DELIVERED") return false;
+        } else if (order.status !== status) {
+          return false;
+        }
+      }
       const orderedAt = new Date(order.orderedAt).getTime();
       if (startDate) {
         const start = new Date(startDate);
@@ -65,7 +72,16 @@ export default function VendorOrderHistoryPage() {
       }
       return true;
     });
-  }, [historyQuery.data, status, startDate, endDate]);
+    const sorted = [...filteredRows];
+    if (sortKey === "orderedAsc") {
+      sorted.sort((a, b) => new Date(a.orderedAt).getTime() - new Date(b.orderedAt).getTime());
+    } else if (sortKey === "orderedDesc") {
+      sorted.sort((a, b) => new Date(b.orderedAt).getTime() - new Date(a.orderedAt).getTime());
+    } else if (sortKey === "delivery") {
+      sorted.sort((a, b) => (a.deliveryStatus || "").localeCompare(b.deliveryStatus || ""));
+    }
+    return sorted;
+  }, [historyQuery.data, status, startDate, endDate, sortKey]);
 
   return (
     <section className="space-y-6">
@@ -92,7 +108,7 @@ export default function VendorOrderHistoryPage() {
           <CardTitle>Filters</CardTitle>
           <CardDescription>Refine the history list by status and ordered date.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-3">
+        <CardContent className="grid gap-4 md:grid-cols-4">
           <div className="grid gap-2">
             <Label>Status</Label>
             <Select value={status} onValueChange={setStatus}>
@@ -115,6 +131,32 @@ export default function VendorOrderHistoryPage() {
           <div className="grid gap-2">
             <Label>To</Label>
             <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label>Sort</Label>
+            <Select value={sortKey} onValueChange={setSortKey}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="orderedDesc">Newest first</SelectItem>
+                <SelectItem value="orderedAsc">Oldest first</SelectItem>
+                <SelectItem value="delivery">Delivery status</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="md:col-span-4 flex justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setStatus("ALL");
+                setStartDate("");
+                setEndDate("");
+                setSortKey("orderedDesc");
+              }}
+            >
+              Reset filters
+            </Button>
           </div>
         </CardContent>
       </Card>

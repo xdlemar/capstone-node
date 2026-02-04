@@ -42,12 +42,28 @@ function toInputValue(value?: string | null) {
 
 export default function VendorShipmentsPage() {
   const shipmentsQuery = useVendorShipments();
+  const [sortKey, setSortKey] = useState("etaAsc");
   const shipments = shipmentsQuery.data ?? [];
 
   const activeCount = useMemo(
     () => shipments.filter((shipment) => shipment.status !== "DELIVERED" && shipment.status !== "CANCELLED").length,
     [shipments]
   );
+
+  const sortedShipments = useMemo(() => {
+    const rows = [...shipments];
+    const byEta = (a: VendorShipment, b: VendorShipment) => {
+      const aTime = a.eta ? new Date(a.eta).getTime() : Number.POSITIVE_INFINITY;
+      const bTime = b.eta ? new Date(b.eta).getTime() : Number.POSITIVE_INFINITY;
+      return aTime - bTime;
+    };
+    if (sortKey === "etaAsc") return rows.sort(byEta);
+    if (sortKey === "etaDesc") return rows.sort((a, b) => byEta(b, a));
+    if (sortKey === "status") {
+      return rows.sort((a, b) => a.status.localeCompare(b.status));
+    }
+    return rows;
+  }, [shipments, sortKey]);
 
   return (
     <section className="space-y-6">
@@ -77,12 +93,27 @@ export default function VendorShipmentsPage() {
           <CardTitle className="flex items-center gap-2 text-lg">
             <Package className="h-5 w-5" /> Shipment board
           </CardTitle>
-          <CardDescription>Only shipments tied to your vendor account are shown here.</CardDescription>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <CardDescription>Only shipments tied to your vendor account are shown here.</CardDescription>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Sort by</span>
+              <Select value={sortKey} onValueChange={setSortKey}>
+                <SelectTrigger className="h-8 w-[160px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="etaAsc">ETA (soonest)</SelectItem>
+                  <SelectItem value="etaDesc">ETA (latest)</SelectItem>
+                  <SelectItem value="status">Status</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {shipmentsQuery.isLoading ? (
             <div className="text-sm text-muted-foreground">Loading shipments...</div>
-          ) : shipments.length ? (
+          ) : sortedShipments.length ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -94,7 +125,7 @@ export default function VendorShipmentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {shipments.map((shipment) => (
+                {sortedShipments.map((shipment) => (
                   <TableRow key={shipment.id}>
                     <TableCell className="font-medium">{shipment.trackingNo || "-"}</TableCell>
                     <TableCell>
@@ -127,6 +158,7 @@ function ShipmentUpdateDialog({ shipment }: { shipment: VendorShipment }) {
   const [lastKnown, setLastKnown] = useState(shipment.lastKnown ?? "");
   const [message, setMessage] = useState("");
 
+  const isLocked = shipment.status === "DELIVERED" || shipment.status === "CANCELLED";
   const allowedStatuses = DELIVERY_TRANSITIONS[shipment.status] ?? [];
   const statusOptions = ["NO_CHANGE", ...allowedStatuses];
 
@@ -159,8 +191,8 @@ function ShipmentUpdateDialog({ shipment }: { shipment: VendorShipment }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline">
-          Update
+        <Button size="sm" variant="outline" disabled={isLocked}>
+          {isLocked ? "Locked" : "Update"}
         </Button>
       </DialogTrigger>
       <DialogContent>
@@ -242,7 +274,7 @@ function ShipmentUpdateDialog({ shipment }: { shipment: VendorShipment }) {
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={() => mutation.mutate()} disabled={!hasChanges || mutation.isPending}>
+          <Button onClick={() => mutation.mutate()} disabled={!hasChanges || mutation.isPending || isLocked}>
             {mutation.isPending ? "Updating..." : "Save update"}
           </Button>
         </DialogFooter>
