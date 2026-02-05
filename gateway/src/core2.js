@@ -542,6 +542,8 @@ router.get("/items-export", async (req, res) => {
       strength: it.strength,
       minQty: Number(it.minQty || 0),
       type: it.type,
+      genericName: it.genericName || null,
+      brand: it.brand || null,
     }));
 
     res.json({ ok: true, total: payload.length, items: payload });
