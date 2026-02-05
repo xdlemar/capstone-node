@@ -29,6 +29,8 @@ import { useToast } from "@/hooks/use-toast";
 import { api } from "@/lib/api";
 import { WORK_ORDER_TRANSITIONS, type WorkOrderStatus } from "@/hooks/useAlmsData";
 
+const TECHNICIANS = ["Jun Guiller", "Maria Santos", "Leo Cruz"];
+
 const statusSchema = z.object({
   status: z.enum(["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"], {
     required_error: "Select a status",
@@ -131,9 +133,20 @@ export function WorkOrderStatusDialog({ workOrderId, workOrderNo, currentStatus,
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Technician</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Name" {...field} />
-                  </FormControl>
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select technician" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {TECHNICIANS.map((tech) => (
+                        <SelectItem key={tech} value={tech}>
+                          {tech}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
