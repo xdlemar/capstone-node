@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
-import { usePltDeliveries, usePltSummary, type DeliveryRecord } from "@/hooks/usePltData";
+import { usePltDeliveries, usePltSummary } from "@/hooks/usePltData";
 
 import { UpdateDeliveryStatusDialog } from "./components/DeliveryDialogs";
 

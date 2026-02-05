@@ -47,6 +47,9 @@ coverage/
 # Cache
 .cache/
 
+# Core2 legacy PHP system
+core2-core2.health-ease-hospital.com/
+
 #keypie
 .github/workflows/deploy.yml
 .github/workflows/ci.yml
