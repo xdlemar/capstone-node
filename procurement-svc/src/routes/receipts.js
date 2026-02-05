@@ -436,17 +436,26 @@ router.get("/receipts/:id/detail", staffAccess, async (req, res) => {
     const lines = receipt.lines.map((line) => {
       const itemId = line.itemId.toString();
       const item = itemMap.get(itemId);
+      const qty = Number(line.qty || 0);
+      const qtyDamaged = Number(line.qtyDamaged || 0);
+      const qtyGood = Math.max(0, qty - qtyDamaged);
       return {
         id: line.id.toString(),
         itemId,
         itemName: item?.name ?? null,
         itemSku: item?.sku ?? null,
         unit: poLineUnitMap.get(itemId) || item?.unit || null,
-        qty: line.qty,
+        qty,
+        qtyDamaged,
+        qtyGood,
+        lotNo: line.lotNo ?? null,
+        expiryDate: line.expiryDate ?? null,
       };
     });
 
     const totalQty = lines.reduce((sum, line) => sum + Number(line.qty || 0), 0);
+    const totalDamaged = lines.reduce((sum, line) => sum + Number(line.qtyDamaged || 0), 0);
+    const totalGood = lines.reduce((sum, line) => sum + Number(line.qtyGood || 0), 0);
 
     res.json({
       receipt: {
@@ -468,6 +477,8 @@ router.get("/receipts/:id/detail", staffAccess, async (req, res) => {
       totals: {
         lineCount: lines.length,
         totalQty,
+        totalDamaged,
+        totalGood,
       },
       lines,
     });

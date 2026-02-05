@@ -20,6 +20,8 @@ export type ProcurementReceiptDetail = {
   totals: {
     lineCount: number;
     totalQty: number;
+    totalDamaged: number;
+    totalGood: number;
   };
   lines: Array<{
     id: string;
@@ -28,6 +30,10 @@ export type ProcurementReceiptDetail = {
     itemSku: string | null;
     unit: string | null;
     qty: number;
+    qtyDamaged: number;
+    qtyGood: number;
+    lotNo: string | null;
+    expiryDate: string | null;
   }>;
 };
 

@@ -442,7 +442,7 @@ export default function DocumentsPage() {
 
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-6 w-full">
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Document workspace</h1>
         <p className="text-muted-foreground max-w-3xl">
@@ -567,18 +567,18 @@ export default function DocumentsPage() {
             </p>
           ) : (
             <div className="space-y-3">
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
+              <div className="w-full overflow-x-auto rounded-md border">
+                <Table className="min-w-[1100px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="min-w-[200px]">Title</TableHead>
                       <TableHead className="min-w-[110px]">Module</TableHead>
                       <TableHead className="min-w-[160px]">References</TableHead>
                       <TableHead className="min-w-[160px]">Tags</TableHead>
-                      <TableHead className="w-32">Status</TableHead>
-                      <TableHead className="w-48">Uploaded</TableHead>
-                      <TableHead className="min-w-[200px]">Storage key</TableHead>
-                      <TableHead className="w-28 text-right">Actions</TableHead>
+                      <TableHead className="w-28">Status</TableHead>
+                      <TableHead className="w-40">Uploaded</TableHead>
+                      <TableHead className="min-w-[160px]">Storage key</TableHead>
+                      <TableHead className="w-32 text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

@@ -242,6 +242,8 @@ export default function DocumentDetailPage() {
                     <p className="text-xs uppercase text-muted-foreground">Summary</p>
                     <p>Line items: {receiptDetailQuery.data.totals.lineCount}</p>
                     <p>Total qty: {receiptDetailQuery.data.totals.totalQty}</p>
+                    <p>Damaged qty: {receiptDetailQuery.data.totals.totalDamaged}</p>
+                    <p>Good qty: {receiptDetailQuery.data.totals.totalGood}</p>
                   </div>
                 </div>
                 <div className="rounded-md border overflow-x-auto">
@@ -250,8 +252,12 @@ export default function DocumentDetailPage() {
                       <TableRow>
                         <TableHead>Item</TableHead>
                         <TableHead>SKU</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead className="text-right">Received</TableHead>
+                        <TableHead className="text-right">Damaged</TableHead>
+                        <TableHead className="text-right">Good</TableHead>
                         <TableHead>Unit</TableHead>
+                        <TableHead>Lot</TableHead>
+                        <TableHead>Expiry</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -260,7 +266,13 @@ export default function DocumentDetailPage() {
                           <TableCell>{line.itemName ?? `Item #${line.itemId}`}</TableCell>
                           <TableCell className="text-muted-foreground">{line.itemSku ?? "-"}</TableCell>
                           <TableCell className="text-right">{line.qty}</TableCell>
+                          <TableCell className="text-right">{line.qtyDamaged}</TableCell>
+                          <TableCell className="text-right">{line.qtyGood}</TableCell>
                           <TableCell>{line.unit ?? "-"}</TableCell>
+                          <TableCell>{line.lotNo ?? "-"}</TableCell>
+                          <TableCell>
+                            {line.expiryDate ? new Date(line.expiryDate).toLocaleDateString() : "-"}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
