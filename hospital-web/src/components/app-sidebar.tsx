@@ -32,9 +32,9 @@ const NAV_ITEMS: Array<NavSection & { roles: string[] }> = [
     roles: ["STAFF", "MANAGER", "ADMIN"],
     items: [
       { title: "Purchase requests", url: "/procurement/requisitions", roles: ["STAFF", "MANAGER", "ADMIN"] },
+      { title: "Approvals", url: "/procurement/approvals", roles: ["MANAGER", "ADMIN"] },
       { title: "Purchase orders", url: "/procurement/purchase-orders", roles: ["STAFF", "MANAGER", "ADMIN"] },
       { title: "Receiving", url: "/procurement/receiving", roles: ["STAFF", "MANAGER", "ADMIN"] },
-      { title: "Approvals", url: "/procurement/approvals", roles: ["MANAGER", "ADMIN"] },
       { title: "Vendors", url: "/procurement/vendors", roles: ["ADMIN"] },
       { title: "Insights", url: "/procurement/insights", roles: ["MANAGER", "ADMIN"] },
     ],

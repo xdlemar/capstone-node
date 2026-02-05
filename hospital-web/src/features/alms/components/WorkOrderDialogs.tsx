@@ -132,7 +132,7 @@ export function WorkOrderStatusDialog({ workOrderId, workOrderNo, currentStatus,
                 <FormItem>
                   <FormLabel>Technician</FormLabel>
                   <FormControl>
-                    <Input placeholder="Optional" {...field} />
+                    <Input placeholder="Name" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
