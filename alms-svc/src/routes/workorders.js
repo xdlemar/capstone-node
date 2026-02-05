@@ -1,5 +1,6 @@
 const router = require("express").Router();
 const { prisma } = require("../prisma");
+const { createDocument } = require("../dtrsClient");
 
 function hasManagerRights(user) {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
@@ -35,6 +36,17 @@ function toBigInt(value, field) {
       code: "VALIDATION_ERROR",
     });
   }
+}
+
+function buildMaintenanceDocTitle(workOrder, asset) {
+  const woNo = workOrder?.woNo || `WO-${workOrder?.id ?? "UNKNOWN"}`;
+  const assetCode = asset?.assetCode || asset?.code || "";
+  const assetName = asset?.name || "";
+  const parts = [woNo];
+  if (assetCode || assetName) {
+    parts.push([assetCode, assetName].filter(Boolean).join(" - "));
+  }
+  return `Maintenance work order ${parts.join(" | ")}`;
 }
 
 // CREATE
@@ -142,6 +154,29 @@ router.patch("/:id/status", ensureManager, async (req, res, next) => {
         });
       }
       await prisma.asset.update({ where: { id: cur.assetId }, data: { status: "ACTIVE" } });
+
+      try {
+        const asset = await prisma.asset.findUnique({ where: { id: cur.assetId } });
+        await createDocument({
+          module: "MAINTENANCE",
+          title: buildMaintenanceDocTitle(nextState, asset),
+          notes: [
+            `Status: COMPLETED`,
+            nextState.type ? `Type: ${nextState.type}` : null,
+            nextState.technician ? `Technician: ${nextState.technician}` : null,
+            nextState.cost != null ? `Cost: ${nextState.cost}` : null,
+            nextState.completedAt ? `Completed: ${nextState.completedAt.toISOString()}` : null,
+            message ? `Notes: ${message}` : null,
+          ]
+            .filter(Boolean)
+            .join(" | "),
+          woId: String(id),
+          assetId: asset?.id ? String(asset.id) : undefined,
+          tags: ["MAINTENANCE", "WORK_ORDER", "COMPLETED"],
+        });
+      } catch (err) {
+        console.warn("[alms-svc] failed to create DTRS maintenance doc", err?.message || err);
+      }
     } else if (status === "CANCELLED") {
       await prisma.asset.update({ where: { id: cur.assetId }, data: { status: "ACTIVE" } });
     } else if (status === "IN_PROGRESS" || status === "SCHEDULED") {
