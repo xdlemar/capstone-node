@@ -365,9 +365,17 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Imaging" {...field} />
-                  </FormControl>
+                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="Utility">Utility</SelectItem>
+                      <SelectItem value="Equipment">Equipment</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
