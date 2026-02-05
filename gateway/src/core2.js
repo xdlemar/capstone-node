@@ -434,4 +434,153 @@ router.post("/items-sync", async (req, res) => {
   }
 });
 
+// Core2 -> Logistics2 dispense (reduce pharmacy stock)
+// POST /api/core2/dispense
+// { issueNo, fromLocId|fromLocName, toLocId|toLocName?, notes?, lines: [{ itemId|sku|name, qty, notes? }] }
+router.post("/dispense", async (req, res) => {
+  try {
+    const auth = verifyHmac(req);
+    if (!auth.ok) return res.status(401).json({ ok: false, error: auth.error });
+
+    const body = req.body || {};
+    const issueNo = requireString(body.issueNo || `CORE2-DISP-${Date.now()}`, "issueNo");
+    const lines = Array.isArray(body.lines) ? body.lines : [];
+    if (!lines.length) {
+      return res.status(400).json({ ok: false, error: "lines[] required" });
+    }
+
+    const inventoryBase = process.env.INVENTORY_URL || "http://127.0.0.1:4001";
+    const lookup = await getJson(`${inventoryBase}/lookups/inventory`);
+    const items = Array.isArray(lookup?.items) ? lookup.items : [];
+    const locations = Array.isArray(lookup?.locations) ? lookup.locations : [];
+
+    const bySku = new Map(items.map((it) => [normalizeKey(it.sku), it]));
+    const byName = new Map(items.map((it) => [normalizeKey(it.name), it]));
+
+    const resolvedLines = [];
+    const missing = [];
+    for (const line of lines) {
+      const qty = line?.qty;
+      const notes = line?.notes ?? null;
+      let item = null;
+      if (line?.itemId) {
+        item = items.find((it) => String(it.id) === String(line.itemId)) || null;
+      } else if (line?.sku) {
+        item = bySku.get(normalizeKey(line.sku)) || null;
+      } else if (line?.name) {
+        item = byName.get(normalizeKey(line.name)) || null;
+      }
+
+      if (!item) {
+        missing.push({ line });
+        continue;
+      }
+
+      resolvedLines.push({
+        itemId: item.id,
+        qty,
+        notes,
+      });
+    }
+
+    if (missing.length) {
+      return res.status(422).json({
+        ok: false,
+        error: "Some items were not found in Inventory. Use sku/name that exists in Log2.",
+        missing,
+      });
+    }
+
+    const fromLocRaw = body.fromLocId || body.fromLocName || process.env.CORE2_DEFAULT_TO_LOC || "";
+    const toLocRaw = body.toLocId || body.toLocName || fromLocRaw;
+
+    const fromLocId = resolveLocationId(fromLocRaw, locations);
+    const toLocId = resolveLocationId(toLocRaw, locations) || fromLocId;
+
+    if (!fromLocId) {
+      return res.status(400).json({
+        ok: false,
+        error: "fromLocId/fromLocName required (or set CORE2_DEFAULT_TO_LOC)",
+      });
+    }
+
+    const payload = {
+      issueNo,
+      fromLocId,
+      toLocId,
+      notes: body.notes || "Core2 dispense",
+      lines: resolvedLines,
+    };
+
+    const issue = await callJson(`${inventoryBase}/issues`, payload, ["ADMIN"]);
+
+    res.json({ ok: true, issueNo, issue });
+  } catch (err) {
+    const status = err?.status && Number.isFinite(err.status) ? err.status : 500;
+    res.status(status).json({ ok: false, error: err?.message || "Internal error", details: err?.body });
+  }
+});
+
+// Logistics2 -> Core2 item export
+// GET /api/core2/items-export?type=medicine
+router.get("/items-export", async (req, res) => {
+  try {
+    const auth = verifyHmac(req);
+    if (!auth.ok) return res.status(401).json({ ok: false, error: auth.error });
+
+    const inventoryBase = process.env.INVENTORY_URL || "http://127.0.0.1:4001";
+    const lookup = await getJson(`${inventoryBase}/lookups/inventory`);
+    const items = Array.isArray(lookup?.items) ? lookup.items : [];
+
+    const type = String(req.query?.type || "").trim().toLowerCase();
+    const filtered = type ? items.filter((it) => String(it.type || "").toLowerCase() === type) : items;
+
+    const payload = filtered.map((it) => ({
+      sku: it.sku,
+      name: it.name,
+      unit: it.unit,
+      strength: it.strength,
+      minQty: Number(it.minQty || 0),
+      type: it.type,
+    }));
+
+    res.json({ ok: true, total: payload.length, items: payload });
+  } catch (err) {
+    const status = err?.status && Number.isFinite(err.status) ? err.status : 500;
+    res.status(status).json({ ok: false, error: err?.message || "Internal error", details: err?.body });
+  }
+});
+
+// Logistics2 -> Core2 stock export (location-specific)
+// GET /api/core2/stock-export?locationId=4
+router.get("/stock-export", async (req, res) => {
+  try {
+    const auth = verifyHmac(req);
+    if (!auth.ok) return res.status(401).json({ ok: false, error: auth.error });
+
+    const locationId = req.query?.locationId ? String(req.query.locationId) : "";
+    const inventoryBase = process.env.INVENTORY_URL || "http://127.0.0.1:4001";
+    const url = locationId
+      ? `${inventoryBase}/reports/levels?locationId=${encodeURIComponent(locationId)}`
+      : `${inventoryBase}/reports/levels`;
+
+    const rows = await getJson(url);
+    const items = Array.isArray(rows) ? rows : [];
+
+    res.json({
+      ok: true,
+      total: items.length,
+      items: items.map((it) => ({
+        itemId: it.itemId,
+        sku: it.sku,
+        name: it.name,
+        onHand: Number(it.onhand || 0),
+      })),
+    });
+  } catch (err) {
+    const status = err?.status && Number.isFinite(err.status) ? err.status : 500;
+    res.status(status).json({ ok: false, error: err?.message || "Internal error", details: err?.body });
+  }
+});
+
 module.exports = router;
