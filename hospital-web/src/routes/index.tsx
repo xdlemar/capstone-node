@@ -28,10 +28,8 @@ import AlmsOverview from "@/features/alms/AlmsOverview";
 import AssetsPage from "@/features/alms/AssetsPage";
 import WorkOrdersPage from "@/features/alms/WorkOrdersPage";
 import SchedulesPage from "@/features/alms/SchedulesPage";
-import FinancialPage from "@/features/alms/FinancialPage";
 import PltOverview from "@/features/plt/PltOverview";
 import DeliveriesPage from "@/features/plt/DeliveriesPage";
-import ProjectsPage from "@/features/plt/ProjectsPage";
 import LogisticsAlertsPage from "@/features/plt/AlertsPage";
 import RoutesPage from "@/features/plt/RoutesPage";
 import DocumentsPage from "@/features/dtrs/DocumentsPage";
@@ -202,14 +200,6 @@ export const router = createBrowserRouter([
                   </RoleGate>
                 ),
               },
-              {
-                path: "financial",
-                element: (
-                  <RoleGate allowed={ADMIN_SET}>
-                    <FinancialPage />
-                  </RoleGate>
-                ),
-              },
               { path: "overview", element: <AlmsOverview /> },
             ],
           },
@@ -227,14 +217,6 @@ export const router = createBrowserRouter([
                 element: (
                   <RoleGate allowed={STAFF_SET}>
                     <DeliveriesPage />
-                  </RoleGate>
-                ),
-              },
-              {
-                path: "projects",
-                element: (
-                  <RoleGate allowed={MANAGER_SET}>
-                    <ProjectsPage />
                   </RoleGate>
                 ),
               },

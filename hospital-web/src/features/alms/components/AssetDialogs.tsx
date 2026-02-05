@@ -60,7 +60,6 @@ const assetSchema = z.object({
   status: z.enum(["ACTIVE", "UNDER_MAINTENANCE", "RETIRED", "DISPOSED"]),
   locationId: z.string().optional(),
   purchaseDate: z.string().optional(),
-  acquisitionCost: z.string().optional(),
   warrantyUntil: z.string().optional(),
   serialNo: z.string().optional(),
   notes: z.string().optional(),
@@ -252,7 +251,6 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
       status: "ACTIVE",
       locationId: locations[0]?.id ?? "",
       purchaseDate: "",
-      acquisitionCost: "",
       warrantyUntil: "",
       serialNo: "",
       notes: "",
@@ -268,7 +266,6 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
         status: "ACTIVE",
         locationId: locations[0]?.id ?? "",
         purchaseDate: "",
-        acquisitionCost: "",
         warrantyUntil: "",
         serialNo: "",
         notes: "",
@@ -290,7 +287,6 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
       };
       if (values.purchaseDate) payload.purchaseDate = new Date(values.purchaseDate).toISOString();
       if (values.warrantyUntil) payload.warrantyUntil = new Date(values.warrantyUntil).toISOString();
-      if (values.acquisitionCost) payload.acquisitionCost = values.acquisitionCost.trim();
       const { data } = await api.post("/alms/assets", payload);
       return data;
     },
@@ -309,7 +305,6 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
         status: "ACTIVE",
         locationId: locations[0]?.id ?? "",
         purchaseDate: "",
-        acquisitionCost: "",
         warrantyUntil: "",
         serialNo: "",
         notes: "",
@@ -454,25 +449,12 @@ export function RegisterAssetDialog({ locations, onCreated, disabled }: Register
             </div>
             <FormField
               control={form.control}
-              name="acquisitionCost"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Acquisition cost</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.01" placeholder="e.g., 150000" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
               name="serialNo"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Serial number</FormLabel>
                   <FormControl>
-                    <Input placeholder="Optional" {...field} />
+                    <Input placeholder="e.g., SERIAL-12345" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

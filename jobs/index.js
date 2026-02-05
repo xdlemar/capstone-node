@@ -35,6 +35,11 @@ const schedules = [
     script: path.join(rootDir, "alms-svc", "src", "jobs", "financialSnapshots.js"),
     interval: ms(process.env.ALMS_FINANCIAL_INTERVAL_MS, 24 * 60 * 60 * 1000),
   },
+  {
+    name: "alms-schedule-work-orders",
+    script: path.join(rootDir, "alms-svc", "src", "jobs", "scheduleWorkOrders.js"),
+    interval: ms(process.env.ALMS_SCHEDULE_INTERVAL_MS, 60 * 60 * 1000),
+  },
 ];
 
 function schedule({ name, script, interval }) {
