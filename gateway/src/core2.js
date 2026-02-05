@@ -533,7 +533,19 @@ router.get("/items-export", async (req, res) => {
     const items = Array.isArray(lookup?.items) ? lookup.items : [];
 
     const type = String(req.query?.type || "").trim().toLowerCase();
-    const filtered = type ? items.filter((it) => String(it.type || "").toLowerCase() === type) : items;
+    let filtered = type
+      ? items.filter((it) => {
+          const t = String(it.type || "").trim().toLowerCase();
+          if (t === type) return true;
+          // If Log1 items have no type set yet, treat them as medicine for Core2.
+          if (type === "medicine" && t === "") return true;
+          return false;
+        })
+      : items;
+    if (type && filtered.length === 0) {
+      // Fallback: return all items if none matched the filter.
+      filtered = items;
+    }
 
     const payload = filtered.map((it) => ({
       sku: it.sku,
@@ -541,7 +553,7 @@ router.get("/items-export", async (req, res) => {
       unit: it.unit,
       strength: it.strength,
       minQty: Number(it.minQty || 0),
-      type: it.type,
+      type: it.type || (type || null),
       genericName: it.genericName || null,
       brand: it.brand || null,
     }));
