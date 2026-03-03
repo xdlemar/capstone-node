@@ -1,6 +1,8 @@
 const { Router } = require("express");
+const jwt = require("jsonwebtoken");
 const { prisma } = require("../prisma");
 const { recordStockMove } = require("../services/stockMove");
+const { JWT_SECRET } = require("../auth");
 
 const r = Router();
 
@@ -53,6 +55,97 @@ function getUserIdentifier(user) {
   if (user.sub) return String(user.sub);
   if (user.email) return String(user.email);
   return null;
+}
+
+function isCore2Transfer(transfer) {
+  const transferNo = String(transfer?.transferNo || "").toUpperCase();
+  const requestedBy = String(transfer?.requestedBy || "").toLowerCase();
+  if (requestedBy === "core2-gateway") return true;
+  return (
+    transferNo.startsWith("CORE2-") ||
+    transferNo.startsWith("T-CORE2") ||
+    transferNo.startsWith("CORE2REQ") ||
+    transferNo.startsWith("CORE2-REQ")
+  );
+}
+
+function buildCore2PrNo(transferNo) {
+  const cleaned = String(transferNo || "").trim();
+  if (!cleaned) return `PR-CORE2-${Date.now()}`;
+  if (cleaned.toUpperCase().startsWith("PR-")) return cleaned;
+  return `PR-${cleaned}`;
+}
+
+function getServiceToken(rolesOverride) {
+  const roles = Array.isArray(rolesOverride) && rolesOverride.length ? rolesOverride : ["MANAGER"];
+  return jwt.sign({ sub: "inventory-svc", roles }, JWT_SECRET || "supersecret_dev_only", { expiresIn: "5m" });
+}
+
+async function callProcurement(path, payload, rolesOverride) {
+  const base = process.env.PROCUREMENT_URL || "http://127.0.0.1:4002";
+  const url = `${base.replace(/\/$/, "")}${path}`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      Authorization: `Bearer ${getServiceToken(rolesOverride)}`,
+    },
+    body: JSON.stringify(payload || {}),
+  });
+  const text = await resp.text().catch(() => "");
+  let json = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
+  if (!resp.ok) {
+    const err = new Error(`Procurement ${resp.status}`);
+    err.status = resp.status;
+    err.body = text;
+    err.isProcurement = true;
+    throw err;
+  }
+  return json;
+}
+
+async function createProcurementPrForTransfer(transfer) {
+  const prNo = buildCore2PrNo(transfer.transferNo);
+  const lines = transfer.lines || [];
+  const itemIds = lines.map((ln) => ln.itemId).filter(Boolean);
+  const items = await prisma.item.findMany({
+    where: { id: { in: itemIds } },
+    select: { id: true, unit: true, name: true },
+  });
+  const unitById = new Map(items.map((it) => [it.id.toString(), it.unit]));
+
+  const payload = {
+    prNo,
+    notes: transfer.notes || `Core2 transfer ${transfer.transferNo}`,
+    lines: lines.map((ln) => ({
+      itemId: ln.itemId.toString(),
+      qty: Number(ln.qty),
+      unit: unitById.get(ln.itemId.toString()) || "unit",
+      notes: ln.notes || undefined,
+    })),
+  };
+
+  let created = false;
+  try {
+    await callProcurement("/pr", payload, ["STAFF", "MANAGER", "ADMIN"]);
+    created = true;
+  } catch (err) {
+    if (err?.status !== 409) {
+      throw err;
+    }
+  }
+
+  // Ensure PR is approved so it appears in Purchase Orders dropdown.
+  await callProcurement(`/pr/${encodeURIComponent(prNo)}/approve`, {}, ["MANAGER", "ADMIN"]);
+
+  return { prNo, created };
 }
 
 function serializeTransfer(row) {
@@ -252,6 +345,35 @@ r.post("/:id/approve", async (req, res) => {
     const id = parseBigInt(req.params.id, "id");
     const reviewer = getUserIdentifier(req.user);
 
+    const existing = await prisma.transfer.findUnique({
+      where: { id },
+      include: { lines: true, fromLoc: true, toLoc: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Transfer not found" });
+    }
+    if (existing.status === "REJECTED") {
+      return res.status(409).json({ error: "Transfer already rejected" });
+    }
+    if (existing.status === "APPROVED") {
+      return res.json(serializeTransfer(existing));
+    }
+
+    if (isCore2Transfer(existing)) {
+      const prResult = await createProcurementPrForTransfer(existing);
+      const updated = await prisma.transfer.update({
+        where: { id },
+        data: {
+          status: "APPROVED",
+          reviewedBy: reviewer,
+          reviewedAt: new Date(),
+          rejectionReason: null,
+        },
+        include: { lines: true, fromLoc: true, toLoc: true },
+      });
+      return res.json({ ...serializeTransfer(updated), procurement: { prNo: prResult.prNo } });
+    }
+
     const updated = await prisma.$transaction(async (p) => {
       const transfer = await p.transfer.findUnique({
         where: { id },
@@ -287,6 +409,10 @@ r.post("/:id/approve", async (req, res) => {
 
     res.json(serializeTransfer(updated));
   } catch (err) {
+    if (err?.isProcurement) {
+      const details = err?.body ? ` ${err.body}` : "";
+      return res.status(502).json({ error: `Procurement sync failed.${details}`.trim() });
+    }
     if (err?.status === 404) return res.status(404).json({ error: err.message });
     if (err?.status === 409) return res.status(409).json({ error: err.message });
     if (err?.code === "FEFO_STOCK_OUT") return res.status(409).json({ error: "Insufficient stock (FEFO)" });
