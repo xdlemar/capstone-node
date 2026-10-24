@@ -12,7 +12,6 @@ The system also provides a separate supplier interface where suppliers can view 
 
 In addition to the core inventory management features, I independently trained an AI model using Microsoft Azure Machine Learning and worked on integrating it into the application. The model is intended to analyze inventory usage, estimate the remaining days before supplies run out, and recommend suitable reorder quantities based on consumption patterns.
 
-**Project status:** The core application has been developed. The AI-powered forecasting and reorder recommendation feature is still under development and is not yet ready for production use.
 
 ## ✨ Key Features
 
@@ -41,7 +40,6 @@ In addition to the core inventory management features, I independently trained a
 - Recommend reorder quantities based on inventory usage.
 - Aim to reduce stock shortages and avoid unnecessary overstocking.
 
-*The AI forecasting and recommendation feature is still under development and requires further testing and validation before production use.*
 
 ## 🏗️ System Architecture
 
